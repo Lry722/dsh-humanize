@@ -1,0 +1,74 @@
+# dsh-humanize
+
+> 让推理模型专注干活，让交付内容好好说人话。
+
+`dsh-humanize` 是一个面向 `deepseek-harness` 的轻量插件，旨在解决编码特化模型在复杂任务中不说人话的问题。
+
+---
+
+## 为什么需要它？
+
+主流编码模型在面对复杂工程推理时往往表现出色，但输出的文字往往偏向机器化黑话，人类读起来非常难受。
+
+如果尝试在主提示词中施加过多风格与修辞约束，又会不可避免地**分散模型的推理注意力**，降低复杂任务的效率。
+
+---
+
+## 核心构想
+
+`dsh-humanize` 的核心理念是**将“逻辑推理”与“文风润色”彻底解耦**：
+
+- **标记旁路**：在内容写入时，区分纯逻辑代码与面向人类阅读的部分，仅对人类可见内容触发轻量旁路审查。
+- **风格契约 (`PROSE.md`)**：引入类似 `AGENTS.md` 的层级规范文档，支持多级目录规则合并，作为行文可读性的统一标准。
+- **逐条溯源**：审查过程严格对照 `PROSE.md` 中的规范分点进行批注，精确定位表达不当之处。
+- **延迟应用**：主任务流不被审查阻塞。审查结果异步暂存，仅在用户需要查阅或触发上下文压缩时，按需合并润色。
+
+---
+
+## 安装
+
+```sh
+dsh plugin --profile web add link:/path/to/dsh-humanize
+```
+
+重启后生效。本地开发需要把 `@deepseek-ai/*` 依赖解析到 dsh 安装上，在插件目录里建一个指向 profile 模块目录的 `node_modules` 软链即可：
+
+```sh
+ln -s ~/.dsh/profiles/node_modules node_modules
+```
+
+## 配置
+
+在 profile 的 `cordis.patch.yml` 里给 `dsh-humanize` 条目传配置：
+
+```yaml
+- id: dsh-humanize
+  config:
+    reviewProvider: deepseek
+    reviewModel: deepseek-chat
+    mergeOnCompaction: true
+```
+
+- `reviewProvider` / `reviewModel`：审查用的模型，可以选比主模型便宜的模型。缺省时跟随会话当前使用的模型。
+- `reviewMaxTokens`：审查调用的输出上限，默认 4096。
+- `mergeOnCompaction`：上下文压缩结束时是否自动合并整个项目的暂存批注，默认 true。关闭后只在手动执行 `/humanize` 时合并。
+
+## 使用
+
+在被写文件的目录或上级目录放 `PROSE.md` 规范，用户全局规范放在 `~/.dsh/PROSE.md`。范围越小的规则优先级越高。
+
+模型写文件时必须声明 `human_facing`：面向人类阅读的内容传 true，纯代码或数据传 false。只有标记为 true 的写入会进入审查。
+
+批注暂存在 `~/.dsh/humanize/annotations/` 下，镜像被审查文件的路径，可以直接编辑。输入 `/humanize 路径` 合并指定文件或目录的批注，缺省路径为当前工作目录。合并完成后对应批注清空，处理过程在会话上下文里折叠为一条说明。
+
+输入 `/humanize-review 路径` 主动触发审查，不需要等待写入。只审查受 git 管理、且后缀在 PROSE.md 文件头 extensions 里声明的文件：
+
+```markdown
+---
+extensions:
+  - .md
+  - .txt
+---
+```
+
+各级声明取并集。审查在后台进行，进度和结果以通知形式出现在会话里。
