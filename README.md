@@ -39,19 +39,20 @@ ln -s ~/.dsh/profiles/node_modules node_modules
 
 ## 配置
 
-在 profile 的 `cordis.patch.yml` 里给 `dsh-humanize` 条目传配置：
+四个参数都可以在设置页的 dsh-humanize 命名空间下直接修改，实时生效：
+
+- `reviewProvider` / `reviewModel`：审查用的模型，可以选比主模型便宜的模型。缺省时跟随会话当前使用的模型。
+- `reviewMaxTokens`：审查调用的输出上限，默认 4096。
+- `mergeOnCompaction`：上下文压缩结束时是否自动合并整个项目的暂存批注，默认 true。关闭后只在手动执行 `/humanize` 时合并。
+
+也可以在 profile 的 `cordis.patch.yml` 里给 `dsh-humanize` 条目传配置，作为设置页之下的 base 层：
 
 ```yaml
 - id: dsh-humanize
   config:
     reviewProvider: deepseek
     reviewModel: deepseek-chat
-    mergeOnCompaction: true
 ```
-
-- `reviewProvider` / `reviewModel`：审查用的模型，可以选比主模型便宜的模型。缺省时跟随会话当前使用的模型。
-- `reviewMaxTokens`：审查调用的输出上限，默认 4096。
-- `mergeOnCompaction`：上下文压缩结束时是否自动合并整个项目的暂存批注，默认 true。关闭后只在手动执行 `/humanize` 时合并。
 
 ## 使用
 
