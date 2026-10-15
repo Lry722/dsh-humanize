@@ -171,7 +171,11 @@ window.__ModuleLoader__.load({
 
     function HumanizeCard(props) {
       const scope = props.scope
-      const snapshot = useSyncExternalStore(scope.subscribe, scope.getSnapshot)
+      // subscribe 和 getSnapshot 依赖实例的 this，包一层箭头函数再交给 React。
+      const snapshot = useSyncExternalStore(
+        (listener) => scope.subscribe(listener),
+        () => scope.getSnapshot(),
+      )
       if (snapshot.status !== 'ready' || snapshot.value === undefined) return null
       const value = snapshot.value
       const user = snapshot.user ?? {}
