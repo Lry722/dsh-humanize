@@ -236,37 +236,6 @@ window.__ModuleLoader__.load({
       )
     }
 
-    /** 数字字段。输入不是正整数时不提交，保持原值。 */
-    function NumberField(props) {
-      const [text, setText] = useState(String(props.value ?? ''))
-      useEffect(() => setText(String(props.value ?? '')), [props.value])
-      const commit = () => {
-        const parsed = Number.parseInt(text, 10)
-        if (Number.isNaN(parsed) || parsed <= 0) {
-          setText(String(props.value ?? ''))
-          return
-        }
-        if (parsed === props.value) return
-        void props.scope.set(props.field, parsed)
-      }
-      return h('div', { style: fieldStyle },
-        h('div', { style: labelRowStyle },
-          h('span', { style: labelStyle }, props.label),
-          h(ResetButton, { overridden: props.overridden, onReset: () => props.scope.unset(props.field) }),
-        ),
-        h('input', {
-          style: inputStyle,
-          value: text,
-          disabled: !props.writable,
-          inputMode: 'numeric',
-          onChange: (event) => setText(event.target.value),
-          onBlur: commit,
-          onKeyDown: (event) => { if (event.key === 'Enter') event.target.blur() },
-        }),
-        h('p', { style: hintStyle }, props.hint),
-      )
-    }
-
     /** 开关字段，立即提交。 */
     function BoolField(props) {
       return h('div', { style: fieldStyle },
@@ -330,12 +299,6 @@ window.__ModuleLoader__.load({
           h(ModelPicker, {
             scope, api: props.api, value, user,
             writable: snapshot.writable,
-          }),
-          h(NumberField, {
-            scope, label: '审查输出上限', field: 'reviewMaxTokens',
-            value: value.reviewMaxTokens, overridden: overridden('reviewMaxTokens'),
-            writable: snapshot.writable,
-            hint: '审查调用的输出 token 上限，缺省 4096。',
           }),
           h(BoolField, {
             scope, label: '上下文压缩时自动合并', field: 'mergeOnCompaction',
