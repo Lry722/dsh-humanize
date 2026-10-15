@@ -24,7 +24,14 @@ window.__ModuleLoader__.load({
       borderRadius: '12px',
       padding: '0 16px',
     }
-    const headStyle = { padding: '14px 0' }
+    const headRowStyle = {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px',
+      padding: '14px 0',
+      cursor: 'pointer',
+      userSelect: 'none',
+    }
     const titleStyle = {
       margin: 0,
       fontSize: '14px',
@@ -169,6 +176,23 @@ window.__ModuleLoader__.load({
       )
     }
 
+    /** 折叠箭头，跟随展开状态旋转。 */
+    function Chevron(props) {
+      return h('svg', {
+        width: 14, height: 14, viewBox: '0 0 14 14',
+        style: {
+          color: 'var(--dsw-alias-label-tertiary)',
+          transition: 'transform 150ms',
+          transform: props.expanded ? 'rotate(90deg)' : 'none',
+          flexShrink: 0,
+        },
+      }, h('path', {
+        d: 'M5 3.5 8.5 7 5 10.5',
+        fill: 'none', stroke: 'currentColor', strokeWidth: 1.5,
+        strokeLinecap: 'round', strokeLinejoin: 'round',
+      }))
+    }
+
     function HumanizeCard(props) {
       const scope = props.scope
       // subscribe 和 getSnapshot 依赖实例的 this，包一层箭头函数再交给 React。
@@ -176,39 +200,48 @@ window.__ModuleLoader__.load({
         (listener) => scope.subscribe(listener),
         () => scope.getSnapshot(),
       )
+      const [expanded, setExpanded] = useState(false)
       if (snapshot.status !== 'ready' || snapshot.value === undefined) return null
       const value = snapshot.value
       const user = snapshot.user ?? {}
       const overridden = (field) => Object.prototype.hasOwnProperty.call(user, field)
       return h('div', { style: cardStyle },
-        h('div', { style: headStyle },
-          h('h3', { style: titleStyle }, 'dsh-humanize'),
-          h('p', { style: descStyle }, '写入内容的行文审查。修改实时生效。'),
+        h('div', {
+          style: headRowStyle,
+          onClick: () => setExpanded(!expanded),
+        },
+          h('div', { style: { flex: 1, minWidth: 0 } },
+            h('h3', { style: titleStyle }, '行文审查'),
+            h('p', { style: descStyle }, '写入内容的行文审查与批注合并。'),
+          ),
+          h(Chevron, { expanded }),
         ),
-        h(TextField, {
-          scope, label: '审查模型 provider', field: 'reviewProvider',
-          value: value.reviewProvider, overridden: overridden('reviewProvider'),
-          writable: snapshot.writable, placeholder: '跟随会话当前模型',
-          hint: '审查用的模型 provider。留空时跟随会话当前使用的模型。',
-        }),
-        h(TextField, {
-          scope, label: '审查模型', field: 'reviewModel',
-          value: value.reviewModel, overridden: overridden('reviewModel'),
-          writable: snapshot.writable, placeholder: '跟随会话当前模型',
-          hint: '审查用的模型，可以选比主模型便宜的模型。留空时跟随会话当前使用的模型。',
-        }),
-        h(NumberField, {
-          scope, label: '审查输出上限', field: 'reviewMaxTokens',
-          value: value.reviewMaxTokens, overridden: overridden('reviewMaxTokens'),
-          writable: snapshot.writable,
-          hint: '审查调用的输出 token 上限，缺省 4096。',
-        }),
-        h(BoolField, {
-          scope, label: '上下文压缩时自动合并', field: 'mergeOnCompaction',
-          value: value.mergeOnCompaction, overridden: overridden('mergeOnCompaction'),
-          writable: snapshot.writable,
-          hint: '压缩结束时自动合并整个项目的暂存批注。关闭后只在手动执行 /humanize 时合并。',
-        }),
+        expanded && h('div', null,
+          h(TextField, {
+            scope, label: '审查模型 provider', field: 'reviewProvider',
+            value: value.reviewProvider, overridden: overridden('reviewProvider'),
+            writable: snapshot.writable, placeholder: '跟随会话当前模型',
+            hint: '审查用的模型 provider。留空时跟随会话当前使用的模型。',
+          }),
+          h(TextField, {
+            scope, label: '审查模型', field: 'reviewModel',
+            value: value.reviewModel, overridden: overridden('reviewModel'),
+            writable: snapshot.writable, placeholder: '跟随会话当前模型',
+            hint: '审查用的模型，可以选比主模型便宜的模型。留空时跟随会话当前使用的模型。',
+          }),
+          h(NumberField, {
+            scope, label: '审查输出上限', field: 'reviewMaxTokens',
+            value: value.reviewMaxTokens, overridden: overridden('reviewMaxTokens'),
+            writable: snapshot.writable,
+            hint: '审查调用的输出 token 上限，缺省 4096。',
+          }),
+          h(BoolField, {
+            scope, label: '上下文压缩时自动合并', field: 'mergeOnCompaction',
+            value: value.mergeOnCompaction, overridden: overridden('mergeOnCompaction'),
+            writable: snapshot.writable,
+            hint: '压缩结束时自动合并整个项目的暂存批注。关闭后只在手动执行 /humanize 时合并。',
+          }),
+        ),
       )
     }
 
