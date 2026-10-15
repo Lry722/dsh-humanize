@@ -15,7 +15,7 @@ window.__ModuleLoader__.load({
     const exports = module.exports
     const React = require('react')
     const h = React.createElement
-    const { useEffect, useState, useSyncExternalStore } = React
+    const { Fragment, useEffect, useState, useSyncExternalStore } = React
 
     const NS = 'dsh-humanize'
 
@@ -91,11 +91,121 @@ window.__ModuleLoader__.load({
       fontSize: '13px',
       color: 'var(--dsw-alias-label-primary)',
     }
+    const selectStyle = {
+      ...inputStyle,
+      cursor: 'pointer',
+    }
 
     /** 字段被用户覆盖时给出恢复缺省的入口，清除后落回 base 层。 */
     function ResetButton(props) {
       if (!props.overridden) return null
       return h('button', { type: 'button', style: resetStyle, onClick: props.onReset }, '恢复缺省')
+    }
+
+    /**
+     * 审查模型的两级选择。provider 选项来自宿主的模型目录，模型选项
+     * 跟随选中的 provider。目录加载失败时退化为手填文本框。两个字段
+     * 都留空时跟随会话当前使用的模型。
+     */
+    function ModelPicker(props) {
+      const { scope, value, user, writable, api } = props
+      const [groups, setGroups] = useState(null)
+      const [failed, setFailed] = useState(false)
+      useEffect(() => {
+        if (api === null) {
+          setFailed(true)
+          return
+        }
+        let alive = true
+        api.llm.models({}).then((res) => {
+          if (!alive) return
+          if (res.result && res.result.ok) setGroups(res.result.value.groups)
+          else setFailed(true)
+        }, () => { if (alive) setFailed(true) })
+        return () => { alive = false }
+      }, [])
+
+      if (failed) {
+        return h(Fragment, null,
+          h(TextField, {
+            scope, label: '审查模型 provider', field: 'reviewProvider',
+            value: value.reviewProvider, overridden: Object.prototype.hasOwnProperty.call(user, 'reviewProvider'),
+            writable, placeholder: '跟随会话当前模型',
+            hint: '模型目录加载失败，请手动填写 provider。留空时跟随会话当前使用的模型。',
+          }),
+          h(TextField, {
+            scope, label: '审查模型', field: 'reviewModel',
+            value: value.reviewModel, overridden: Object.prototype.hasOwnProperty.call(user, 'reviewModel'),
+            writable, placeholder: '跟随会话当前模型',
+            hint: '模型目录加载失败，请手动填写模型名。留空时跟随会话当前使用的模型。',
+          }),
+        )
+      }
+
+      const provider = value.reviewProvider ?? ''
+      const model = value.reviewModel ?? ''
+      const group = groups === null ? undefined : groups.find((g) => g.id === provider)
+      const providerKnown = provider === '' || groups === null || groups.some((g) => g.id === provider)
+
+      const pickProvider = (next) => {
+        if (next === '') scope.unset('reviewProvider')
+        else void scope.set('reviewProvider', next)
+        // 换 provider 后旧模型一般不存在于新目录，顺手清掉。
+        const nextGroup = groups === null ? undefined : groups.find((g) => g.id === next)
+        if (model !== '' && (nextGroup === undefined || !nextGroup.models.some((m) => m.id === model))) {
+          scope.unset('reviewModel')
+        }
+      }
+      const pickModel = (next) => {
+        if (next === '') scope.unset('reviewModel')
+        else void scope.set('reviewModel', next)
+      }
+
+      return h(Fragment, null,
+        h('div', { style: fieldStyle },
+          h('div', { style: labelRowStyle },
+            h('span', { style: labelStyle }, '审查模型 provider'),
+            h(ResetButton, {
+              overridden: Object.prototype.hasOwnProperty.call(user, 'reviewProvider'),
+              onReset: () => pickProvider(''),
+            }),
+          ),
+          h('select', {
+            style: selectStyle,
+            value: provider,
+            disabled: !writable || groups === null,
+            onChange: (event) => pickProvider(event.target.value),
+          },
+            h('option', { value: '' }, '跟随会话当前模型'),
+            groups !== null && groups.map((g) => h('option', { key: g.id, value: g.id }, g.name)),
+            !providerKnown && h('option', { value: provider }, provider + '（当前值，目录中不存在）'),
+          ),
+          h('p', { style: hintStyle }, groups === null ? '正在加载模型目录……' : '审查用的模型 provider。'),
+        ),
+        h('div', { style: fieldStyle },
+          h('div', { style: labelRowStyle },
+            h('span', { style: labelStyle }, '审查模型'),
+            h(ResetButton, {
+              overridden: Object.prototype.hasOwnProperty.call(user, 'reviewModel'),
+              onReset: () => pickModel(''),
+            }),
+          ),
+          h('select', {
+            style: selectStyle,
+            value: model,
+            disabled: !writable || provider === '' || group === undefined,
+            onChange: (event) => pickModel(event.target.value),
+          },
+            h('option', { value: '' }, '跟随会话当前模型'),
+            group !== undefined && group.models.map((m) => h('option', { key: m.id, value: m.id }, m.name)),
+            group !== undefined && model !== '' && !group.models.some((m) => m.id === model)
+              && h('option', { value: model }, model + '（当前值，目录中不存在）'),
+          ),
+          h('p', { style: hintStyle },
+            provider === '' ? '选择 provider 后可挑选模型。两者都留空时跟随会话当前使用的模型。' : '审查用的模型，可以选比主模型便宜的模型。',
+          ),
+        ),
+      )
     }
 
     /** 文本字段。失焦时提交，清空表示放弃覆盖，落回缺省行为。 */
@@ -217,17 +327,9 @@ window.__ModuleLoader__.load({
           h(Chevron, { expanded }),
         ),
         expanded && h('div', null,
-          h(TextField, {
-            scope, label: '审查模型 provider', field: 'reviewProvider',
-            value: value.reviewProvider, overridden: overridden('reviewProvider'),
-            writable: snapshot.writable, placeholder: '跟随会话当前模型',
-            hint: '审查用的模型 provider。留空时跟随会话当前使用的模型。',
-          }),
-          h(TextField, {
-            scope, label: '审查模型', field: 'reviewModel',
-            value: value.reviewModel, overridden: overridden('reviewModel'),
-            writable: snapshot.writable, placeholder: '跟随会话当前模型',
-            hint: '审查用的模型，可以选比主模型便宜的模型。留空时跟随会话当前使用的模型。',
+          h(ModelPicker, {
+            scope, api: props.api, value, user,
+            writable: snapshot.writable,
           }),
           h(NumberField, {
             scope, label: '审查输出上限', field: 'reviewMaxTokens',
@@ -250,10 +352,13 @@ window.__ModuleLoader__.load({
       // 不出现，条目配置照常生效。
       ctx.inject(['settingsScope'], (scoped) => {
         const scope = scoped.settingsScope.bind({ namespace: NS })
+        // 模型目录走 connection 的 api。没有 connection 时卡片仍注册，
+        // ModelPicker 加载失败后退化为手填文本框。
+        const api = scoped.get('connection') !== undefined ? scoped.get('connection').api : null
         scoped.slots.inject('settings.plugin.item', () => scoped.slots.register({
           name: 'settings.plugin.item',
           key: NS,
-        }, () => h(HumanizeCard, { scope })))
+        }, () => h(HumanizeCard, { scope, api })))
       })
     }
 
