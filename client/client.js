@@ -456,11 +456,11 @@ window.__ModuleLoader__.load({
       lineHeight: '24px',
     }
     const dockTrackStyle = {
-      flex: 'none',
-      width: '120px',
-      height: '4px',
+      flex: 'auto',
+      minWidth: '40px',
+      height: '6px',
       borderRadius: '999px',
-      background: 'var(--dsw-alias-border-l1)',
+      background: 'var(--dsw-alias-border-l2)',
       overflow: 'hidden',
     }
     const dockMetaStyle = {
