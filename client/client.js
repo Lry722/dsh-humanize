@@ -97,7 +97,7 @@ window.__ModuleLoader__.load({
       cursor: 'pointer',
     }
 
-    /** 字段被用户覆盖时给出恢复缺省的入口，清除后落回 base 层。 */
+    /** 字段被用户覆盖时给出恢复缺省的入口。 */
     function ResetButton(props) {
       if (!props.overridden) return null
       return h('button', { type: 'button', style: resetStyle, onClick: props.onReset }, '恢复缺省')
@@ -105,7 +105,7 @@ window.__ModuleLoader__.load({
 
     /**
      * 审查模型的两级选择。provider 选项来自宿主的模型目录，模型选项
-     * 跟随选中的 provider。目录加载失败时退化为手填文本框。两个字段
+     * 跟随选中的 provider。目录加载失败时退化为手动填写的文本框。两者
      * 都留空时跟随会话当前使用的模型。
      */
     function ModelPicker(props) {
@@ -116,13 +116,13 @@ window.__ModuleLoader__.load({
           h(TextField, {
             scope, label: '审查模型 provider', field: 'reviewProvider',
             value: value.reviewProvider, overridden: Object.prototype.hasOwnProperty.call(user, 'reviewProvider'),
-            writable, placeholder: '跟随会话当前模型',
+            writable, placeholder: '跟随会话当前使用的模型',
             hint: '模型目录加载失败，请手动填写 provider。留空时跟随会话当前使用的模型。',
           }),
           h(TextField, {
             scope, label: '审查模型', field: 'reviewModel',
             value: value.reviewModel, overridden: Object.prototype.hasOwnProperty.call(user, 'reviewModel'),
-            writable, placeholder: '跟随会话当前模型',
+            writable, placeholder: '跟随会话当前使用的模型',
             hint: '模型目录加载失败，请手动填写模型名。留空时跟随会话当前使用的模型。',
           }),
         )
@@ -136,8 +136,8 @@ window.__ModuleLoader__.load({
       const pickProvider = (next) => {
         if (next === '') scope.unset('reviewProvider')
         else void scope.set('reviewProvider', next)
-        // 换 provider 后旧模型一般不存在于新目录，顺手清掉，推理等级
-        // 是模型专属的，也一起清掉。
+        // 换 provider 后旧模型通常已不在新目录，清掉。推理等级是模型
+        // 专属的，一并清掉。
         const nextGroup = groups === null ? undefined : groups.find((g) => g.id === next)
         if (model !== '' && (nextGroup === undefined || !nextGroup.models.some((m) => m.id === model))) {
           scope.unset('reviewModel')
@@ -165,11 +165,11 @@ window.__ModuleLoader__.load({
             disabled: !writable || groups === null,
             onChange: (event) => pickProvider(event.target.value),
           },
-            h('option', { value: '' }, '跟随会话当前模型'),
+            h('option', { value: '' }, '跟随会话当前使用的模型'),
             groups !== null && groups.map((g) => h('option', { key: g.id, value: g.id }, g.name)),
-            !providerKnown && h('option', { value: provider }, provider + '（当前值，目录中不存在）'),
+            !providerKnown && h('option', { value: provider }, provider + '，当前值，目录中不存在'),
           ),
-          h('p', { style: hintStyle }, groups === null ? '正在加载模型目录……' : '审查用的模型 provider。'),
+          h('p', { style: hintStyle }, groups === null ? '正在加载模型目录，请稍候。' : '审查用的模型 provider。'),
         ),
         h('div', { style: fieldStyle },
           h('div', { style: labelRowStyle },
@@ -185,10 +185,10 @@ window.__ModuleLoader__.load({
             disabled: !writable || provider === '' || group === undefined,
             onChange: (event) => pickModel(event.target.value),
           },
-            h('option', { value: '' }, '跟随会话当前模型'),
+            h('option', { value: '' }, '跟随会话当前使用的模型'),
             group !== undefined && group.models.map((m) => h('option', { key: m.id, value: m.id }, m.name)),
             group !== undefined && model !== '' && !group.models.some((m) => m.id === model)
-              && h('option', { value: model }, model + '（当前值，目录中不存在）'),
+              && h('option', { value: model }, model + '，当前值，目录中不存在'),
           ),
           h('p', { style: hintStyle },
             provider === '' ? '选择 provider 后可挑选模型。两者都留空时跟随会话当前使用的模型。' : '审查用的模型，可以选比主模型便宜的模型。',
@@ -199,8 +199,8 @@ window.__ModuleLoader__.load({
 
     /**
      * 审查推理等级的选择。选项来自所选模型在目录里公布的等级列表。
-     * 跟随会话模型、目录加载失败、或者所选模型没公布等级时退化为
-     * 手填文本框。留空时跟随模型自身的默认。
+     * 跟随会话模型、目录加载失败、或者所选模型未公布可选推理等级时
+     * 退化为手动填写的文本框。留空时跟随模型自身的默认。
      */
     function EffortPicker(props) {
       const { scope, value, user, writable, groups, catalogFailed } = props
@@ -214,10 +214,10 @@ window.__ModuleLoader__.load({
         return h(TextField, {
           scope, label: '审查推理等级', field: 'reviewReasoningEffort',
           value: effort, overridden, writable,
-          placeholder: '跟随模型默认',
+          placeholder: '跟随模型自身的默认',
           hint: provider === '' || model === ''
-            ? '跟随会话模型时列不出可选等级，可手填。留空跟随模型自身的默认。'
-            : '所选模型未公布可选推理等级，可手填。留空跟随模型自身的默认。',
+            ? '跟随会话模型时无法列出可选推理等级，可手动填写。留空跟随模型自身的默认。'
+            : '所选模型未公布可选推理等级，可手动填写。留空跟随模型自身的默认。',
         })
       }
       const effortKnown = effort === '' || efforts.some((e) => e.id === effort)
@@ -235,15 +235,15 @@ window.__ModuleLoader__.load({
             else void scope.set('reviewReasoningEffort', event.target.value)
           },
         },
-          h('option', { value: '' }, '跟随模型默认'),
+          h('option', { value: '' }, '跟随模型自身的默认'),
           efforts.map((e) => h('option', { key: e.id, value: e.id }, e.name)),
-          !effortKnown && h('option', { value: effort }, effort + '（当前值，该模型不支持）'),
+          !effortKnown && h('option', { value: effort }, effort + '，当前值，该模型不支持'),
         ),
         h('p', { style: hintStyle }, '审查模型的推理等级，选项来自所选模型公布的等级列表。'),
       )
     }
 
-    /** 文本字段。失焦时提交，清空表示放弃覆盖，落回缺省行为。 */
+    /** 文本字段。失焦时提交，清空表示放弃覆盖，恢复缺省。 */
     function TextField(props) {
       const [text, setText] = useState(props.value ?? '')
       useEffect(() => setText(props.value ?? ''), [props.value])
@@ -411,13 +411,13 @@ window.__ModuleLoader__.load({
     /** 各阶段的进度条文案。 */
     function progressText(progress) {
       switch (progress.phase) {
-        case 'start': return `行文审查中 · 0/${progress.total}`
-        case 'progress': return `行文审查中 · ${progress.done}/${progress.total} · 已暂存 ${progress.annotations} 条批注`
+        case 'start': return `行文审查中，0/${progress.total}`
+        case 'progress': return `行文审查中，${progress.done}/${progress.total}，已暂存 ${progress.annotations} 条批注`
         case 'done': {
           const extras = []
           if (progress.noSpec > 0) extras.push(`${progress.noSpec} 个没有规范可对照`)
           if (progress.failed > 0) extras.push(`${progress.failed} 个失败`)
-          return `审查完成 · ${progress.total} 个文件 · 暂存批注 ${progress.annotations} 条${extras.length > 0 ? `（${extras.join('，')}）` : ''} · 用 /humanize 合并`
+          return `审查完成，${progress.total} 个文件，暂存批注 ${progress.annotations} 条${extras.length > 0 ? `，其中 ${extras.join('，')}` : ''}，用 /humanize 合并`
         }
         case 'empty': return '没有可审查的文件。只审查受 git 管理且后缀在规范链 extensions 声明范围内的文件。'
         case 'blocked': return progress.reason === 'merging' ? '批注合并进行中，完成后再审查。' : '已有一个审查任务在进行，等它结束后再派发。'
@@ -463,7 +463,7 @@ window.__ModuleLoader__.load({
       ctx.inject(['settingsScope'], (scoped) => {
         const scope = scoped.settingsScope.bind({ namespace: NS })
         // 模型目录和事件流走 connection 的 api。没有 connection 时卡片
-        // 仍注册，ModelPicker 加载失败后退化为手填文本框，进度条保持隐藏。
+        // 仍注册，ModelPicker 加载失败后退化为手动填写的文本框，进度条保持隐藏。
         const api = scoped.get('connection') !== undefined ? scoped.get('connection').api : null
         if (api !== null) startProgressPump(ctx, api, progressStore)
         scoped.slots.inject('settings.plugin.item', () => scoped.slots.register({
