@@ -473,8 +473,8 @@ window.__ModuleLoader__.load({
       return { pct: row.status === 'completed' ? 100 : null, meta: row.detail ?? '', done: row.status === 'completed' }
     }
 
-    // 外框照抄官方 todo 条的容器规范：宽度让出两侧边距，圆角卡片，
-    // tip 底色加一级描边，和 composer 卡片对齐。
+    // 外框照抄官方 todo 条的容器规范。宽度让出两侧边距，圆角卡片，
+    // tip 底色加一级描边，与 composer 卡片对齐。
     const dockRootStyle = {
       boxSizing: 'border-box',
       width: 'calc(100% - var(--dsh-composer-side-clearance) - var(--dsh-composer-side-clearance) - var(--dsh-composer-dock-inset) - var(--dsh-composer-dock-inset) - var(--dsh-composer-dock-inset) - var(--dsh-composer-dock-inset))',
