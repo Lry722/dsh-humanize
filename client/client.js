@@ -408,31 +408,70 @@ window.__ModuleLoader__.load({
       run().catch(() => {})
     }
 
-    /** 各阶段的进度条文案。 */
-    function progressText(progress) {
+    /** 各阶段进度条的展示形态。pct 为 null 时不画进度条。 */
+    function progressView(progress) {
       switch (progress.phase) {
-        case 'start': return `行文审查中，0/${progress.total}`
-        case 'progress': return `行文审查中，${progress.done}/${progress.total}，已暂存 ${progress.annotations} 条批注`
+        case 'start': return { pct: 0, meta: `0/${progress.total}` }
+        case 'progress': return { pct: progress.total > 0 ? (progress.done / progress.total) * 100 : 0, meta: `${progress.done}/${progress.total}，已暂存 ${progress.annotations} 条批注` }
         case 'done': {
           const extras = []
           if (progress.noSpec > 0) extras.push(`${progress.noSpec} 个没有规范可对照`)
           if (progress.failed > 0) extras.push(`${progress.failed} 个失败`)
-          return `审查完成，${progress.total} 个文件，暂存批注 ${progress.annotations} 条${extras.length > 0 ? `，其中 ${extras.join('，')}` : ''}，用 /humanize 合并`
+          return { pct: 100, meta: `完成，${progress.total} 个文件，暂存批注 ${progress.annotations} 条${extras.length > 0 ? `，其中 ${extras.join('，')}` : ''}，用 /humanize 合并` }
         }
-        case 'empty': return '没有可审查的文件。只审查受 git 管理且后缀在规范链 extensions 声明范围内的文件。'
-        case 'blocked': return progress.reason === 'merging' ? '批注合并进行中，完成后再审查。' : '已有一个审查任务在进行，等它结束后再派发。'
-        case 'failed': return `审查任务失败：${progress.message}`
-        default: return ''
+        case 'empty': return { pct: null, meta: '没有可审查的文件。只审查受 git 管理且后缀在规范链 extensions 声明范围内的文件。' }
+        case 'blocked': return { pct: null, meta: progress.reason === 'merging' ? '批注合并进行中，完成后再审查。' : '已有一个审查任务在进行，等它结束后再派发。' }
+        case 'failed': return { pct: null, meta: `审查任务失败：${progress.message}` }
+        default: return { pct: null, meta: '' }
       }
     }
 
     /** 终态停留这么久之后进度条消失。 */
     const PROGRESS_LINGER_MS = 6000
 
-    const dockStyle = {
-      fontSize: '12px',
+    // 外框照抄官方 todo 条的容器规范：宽度让出两侧边距，圆角卡片，
+    // tip 底色加一级描边，和 composer 卡片对齐。
+    const dockRootStyle = {
+      boxSizing: 'border-box',
+      width: 'calc(100% - var(--dsh-composer-side-clearance) - var(--dsh-composer-side-clearance) - var(--dsh-composer-dock-inset) - var(--dsh-composer-dock-inset) - var(--dsh-composer-dock-inset) - var(--dsh-composer-dock-inset))',
+      maxWidth: 'calc(var(--dsh-composer-card-max-width) - var(--dsh-composer-dock-inset) - var(--dsh-composer-dock-inset) - var(--dsh-composer-dock-inset) - var(--dsh-composer-dock-inset))',
+      border: '1px solid var(--dsw-alias-border-l1)',
+      background: 'var(--dsw-specific-tip)',
+      borderRadius: '12px',
+      margin: '0 auto',
+      overflow: 'hidden',
+      flex: 'none',
+    }
+    const dockRowStyle = {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '10px',
+      padding: '6px 12px',
+    }
+    const dockTitleStyle = {
+      color: 'var(--dsw-alias-label-primary)',
+      flex: 'none',
+      fontSize: '13px',
+      fontWeight: 500,
+      lineHeight: '24px',
+    }
+    const dockTrackStyle = {
+      flex: 'none',
+      width: '120px',
+      height: '4px',
+      borderRadius: '999px',
+      background: 'var(--dsw-alias-border-l1)',
+      overflow: 'hidden',
+    }
+    const dockMetaStyle = {
+      minWidth: 0,
+      flex: 'auto',
       color: 'var(--dsw-alias-label-tertiary)',
-      padding: '2px 4px',
+      fontSize: '13px',
+      lineHeight: '20px',
+      textOverflow: 'ellipsis',
+      whiteSpace: 'nowrap',
+      overflow: 'hidden',
     }
 
     /** 输入框上方的审查进度条。进行中的状态一直显示，终态停留几秒后消失。 */
@@ -448,7 +487,21 @@ window.__ModuleLoader__.load({
         return () => clearTimeout(timer)
       }, [progress])
       if (progress === null) return null
-      return h('div', { style: dockStyle }, progressText(progress))
+      const view = progressView(progress)
+      const children = [h('span', { key: 'title', style: dockTitleStyle }, '行文审查')]
+      if (view.pct !== null) {
+        children.push(h('div', { key: 'track', style: dockTrackStyle }, h('div', {
+          style: {
+            height: '100%',
+            borderRadius: '999px',
+            background: progress.phase === 'done' ? 'var(--dsw-alias-state-success-primary)' : 'var(--dsw-alias-state-business-primary)',
+            width: `${Math.max(0, Math.min(100, view.pct))}%`,
+            transition: 'width 200ms ease',
+          },
+        })))
+      }
+      children.push(h('span', { key: 'meta', style: dockMetaStyle }, view.meta))
+      return h('section', { style: dockRootStyle }, h('div', { style: dockRowStyle }, children))
     }
 
     function apply(ctx) {
