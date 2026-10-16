@@ -2,9 +2,11 @@
  * dsh-humanize 浏览器端：设置页的配置卡片，以及输入框上方的审查
  * 进度条。
  *
- * 卡片通过 settings.plugin.item 插槽按命名空间投递，读写走
- * settingsScope 服务，改动实时生效。进度条挂在 conversation.input.dock
- * 插槽，数据来自会话事件流里的 humanize/progress 事件。
+ * 卡片注册进 plugins.row.config，挂在 Plugins 页面本插件那一行的配置区，
+ * 读写走 configForms 服务，改动实时生效；模型目录走 remote.session。
+ * 进度条挂在 conversation.input.dock 插槽，数据来自 ctx.jobs：
+ * 宿主把 /humanize-review 批次注册成后台任务，roster 流经
+ * job-controller 实时推到浏览器。
  *
  * 手写为 __ModuleLoader__ 工厂格式，不引入构建步骤。唯一的外部依赖
  * 是模块表里的 react。
@@ -18,34 +20,11 @@ window.__ModuleLoader__.load({
     const h = React.createElement
     const { Fragment, useEffect, useState, useSyncExternalStore } = React
 
+    /** 设置命名空间：宿主条目的 id，也是 Plugins 页面里本插件行的 id。 */
     const NS = 'dsh-humanize'
+    /** Config 里承载可编辑设置的 volatile 节点名，写入路径以它为前缀。 */
+    const SETTINGS_KEY = 'settings'
 
-    const cardStyle = {
-      border: '1px solid var(--dsw-alias-border-l2)',
-      borderRadius: '12px',
-      padding: '0 16px',
-    }
-    const headRowStyle = {
-      display: 'flex',
-      alignItems: 'center',
-      gap: '8px',
-      padding: '14px 0',
-      cursor: 'pointer',
-      userSelect: 'none',
-    }
-    const titleStyle = {
-      margin: 0,
-      fontSize: '14px',
-      fontWeight: 600,
-      color: 'var(--dsw-alias-label-primary)',
-      lineHeight: 1.5,
-    }
-    const descStyle = {
-      margin: '2px 0 0',
-      fontSize: '12px',
-      color: 'var(--dsw-alias-label-tertiary)',
-      lineHeight: 1.5,
-    }
     const fieldStyle = {
       display: 'flex',
       flexDirection: 'column',
@@ -109,20 +88,21 @@ window.__ModuleLoader__.load({
      * 都留空时跟随会话当前使用的模型。
      */
     function ModelPicker(props) {
-      const { scope, value, user, writable, groups, catalogFailed } = props
-
+      const { value, user, writable, groups, catalogFailed, set, unset } = props
       if (catalogFailed) {
         return h(Fragment, null,
           h(TextField, {
-            scope, label: '审查模型 provider', field: 'reviewProvider',
-            value: value.reviewProvider, overridden: Object.prototype.hasOwnProperty.call(user, 'reviewProvider'),
-            writable, placeholder: '跟随会话当前使用的模型',
+            label: '审查模型 provider', value: value.reviewProvider,
+            overridden: Object.prototype.hasOwnProperty.call(user, 'reviewProvider'),
+            writable, set: (next) => set('reviewProvider', next), unset: () => unset('reviewProvider'),
+            placeholder: '跟随会话当前使用的模型',
             hint: '模型目录加载失败，请手动填写 provider。留空时跟随会话当前使用的模型。',
           }),
           h(TextField, {
-            scope, label: '审查模型', field: 'reviewModel',
-            value: value.reviewModel, overridden: Object.prototype.hasOwnProperty.call(user, 'reviewModel'),
-            writable, placeholder: '跟随会话当前使用的模型',
+            label: '审查模型', value: value.reviewModel,
+            overridden: Object.prototype.hasOwnProperty.call(user, 'reviewModel'),
+            writable, set: (next) => set('reviewModel', next), unset: () => unset('reviewModel'),
+            placeholder: '跟随会话当前使用的模型',
             hint: '模型目录加载失败，请手动填写模型名。留空时跟随会话当前使用的模型。',
           }),
         )
@@ -134,20 +114,20 @@ window.__ModuleLoader__.load({
       const providerKnown = provider === '' || groups === null || groups.some((g) => g.id === provider)
 
       const pickProvider = (next) => {
-        if (next === '') scope.unset('reviewProvider')
-        else void scope.set('reviewProvider', next)
+        if (next === '') unset('reviewProvider')
+        else set('reviewProvider', next)
         // 换 provider 后旧模型通常已不在新目录，清掉。推理等级是模型
         // 专属的，一并清掉。
         const nextGroup = groups === null ? undefined : groups.find((g) => g.id === next)
         if (model !== '' && (nextGroup === undefined || !nextGroup.models.some((m) => m.id === model))) {
-          scope.unset('reviewModel')
-          scope.unset('reviewReasoningEffort')
+          unset('reviewModel')
+          unset('reviewReasoningEffort')
         }
       }
       const pickModel = (next) => {
-        if (next === '') scope.unset('reviewModel')
-        else void scope.set('reviewModel', next)
-        scope.unset('reviewReasoningEffort')
+        if (next === '') unset('reviewModel')
+        else set('reviewModel', next)
+        unset('reviewReasoningEffort')
       }
 
       return h(Fragment, null,
@@ -203,7 +183,7 @@ window.__ModuleLoader__.load({
      * 退化为手动填写的文本框。留空时跟随模型自身的默认。
      */
     function EffortPicker(props) {
-      const { scope, value, user, writable, groups, catalogFailed } = props
+      const { value, user, writable, groups, catalogFailed, set, unset } = props
       const effort = value.reviewReasoningEffort ?? ''
       const overridden = Object.prototype.hasOwnProperty.call(user, 'reviewReasoningEffort')
       const provider = value.reviewProvider ?? ''
@@ -212,8 +192,9 @@ window.__ModuleLoader__.load({
       const efforts = info?.reasoning?.efforts
       if (catalogFailed || provider === '' || model === '' || efforts === undefined || efforts.length === 0) {
         return h(TextField, {
-          scope, label: '审查推理等级', field: 'reviewReasoningEffort',
+          label: '审查推理等级',
           value: effort, overridden, writable,
+          set: (next) => set('reviewReasoningEffort', next), unset: () => unset('reviewReasoningEffort'),
           placeholder: '跟随模型自身的默认',
           hint: provider === '' || model === ''
             ? '跟随会话模型时无法列出可选推理等级，可手动填写。留空跟随模型自身的默认。'
@@ -224,15 +205,15 @@ window.__ModuleLoader__.load({
       return h('div', { style: fieldStyle },
         h('div', { style: labelRowStyle },
           h('span', { style: labelStyle }, '审查推理等级'),
-          h(ResetButton, { overridden, onReset: () => scope.unset('reviewReasoningEffort') }),
+          h(ResetButton, { overridden, onReset: () => unset('reviewReasoningEffort') }),
         ),
         h('select', {
           style: selectStyle,
           value: effort,
           disabled: !writable,
           onChange: (event) => {
-            if (event.target.value === '') scope.unset('reviewReasoningEffort')
-            else void scope.set('reviewReasoningEffort', event.target.value)
+            if (event.target.value === '') unset('reviewReasoningEffort')
+            else set('reviewReasoningEffort', event.target.value)
           },
         },
           h('option', { value: '' }, '跟随模型自身的默认'),
@@ -250,13 +231,13 @@ window.__ModuleLoader__.load({
       const commit = () => {
         const trimmed = text.trim()
         if (trimmed === (props.value ?? '')) return
-        if (trimmed === '') props.scope.unset(props.field)
-        else void props.scope.set(props.field, trimmed)
+        if (trimmed === '') props.unset()
+        else props.set(trimmed)
       }
       return h('div', { style: fieldStyle },
         h('div', { style: labelRowStyle },
           h('span', { style: labelStyle }, props.label),
-          h(ResetButton, { overridden: props.overridden, onReset: () => props.scope.unset(props.field) }),
+          h(ResetButton, { overridden: props.overridden, onReset: () => props.unset() }),
         ),
         h('input', {
           style: inputStyle,
@@ -280,153 +261,152 @@ window.__ModuleLoader__.load({
               type: 'checkbox',
               checked: props.value ?? true,
               disabled: !props.writable,
-              onChange: (event) => void props.scope.set(props.field, event.target.checked),
+              onChange: (event) => props.set(event.target.checked),
             }),
             props.label,
           ),
-          h(ResetButton, { overridden: props.overridden, onReset: () => props.scope.unset(props.field) }),
+          h(ResetButton, { overridden: props.overridden, onReset: () => props.unset() }),
         ),
         h('p', { style: hintStyle }, props.hint),
       )
     }
 
-    /** 折叠箭头，跟随展开状态旋转。 */
-    function Chevron(props) {
-      return h('svg', {
-        width: 14, height: 14, viewBox: '0 0 14 14',
-        style: {
-          color: 'var(--dsw-alias-label-tertiary)',
-          transition: 'transform 150ms',
-          transform: props.expanded ? 'rotate(90deg)' : 'none',
-          flexShrink: 0,
-        },
-      }, h('path', {
-        d: 'M5 3.5 8.5 7 5 10.5',
-        fill: 'none', stroke: 'currentColor', strokeWidth: 1.5,
-        strokeLinecap: 'round', strokeLinejoin: 'round',
-      }))
-    }
-
+    /**
+     * 插件行的配置页。0.2.0 的设置界面把插件配置挂在 Plugins 页面里该插件
+     * 那一行上：页面把 `{ view, form }` 交给注册进 `plugins.row.config` 的
+     * 组件，form 提供快照和写入。读取走快照里的 value，写入是一次原子
+     * mutate，path 指向 Config 里那个 volatile 节点。
+     */
     function HumanizeCard(props) {
-      const scope = props.scope
-      // subscribe 和 getSnapshot 依赖实例的 this，包一层箭头函数再交给 React。
-      const snapshot = useSyncExternalStore(
-        (listener) => scope.subscribe(listener),
-        () => scope.getSnapshot(),
-      )
-      const [expanded, setExpanded] = useState(false)
+      const { form, view, modelCatalog } = props
       const [groups, setGroups] = useState(null)
       const [catalogFailed, setCatalogFailed] = useState(false)
       useEffect(() => {
-        if (props.api === null) {
+        // 模型目录走 remote.session.modelCatalog。方法在注入回调里就取好
+        // 传进来，避免在渲染期访问追踪型服务代理。没有 remote.session 时
+        // 退化为手动填写的文本框。
+        if (typeof modelCatalog !== 'function') {
           setCatalogFailed(true)
           return
         }
         let alive = true
-        props.api.llm.models({}).then((res) => {
+        modelCatalog().then((res) => {
           if (!alive) return
-          if (res.result && res.result.ok) setGroups(res.result.value.groups)
+          if (res.ok) setGroups(res.value.groups)
           else setCatalogFailed(true)
         }, () => { if (alive) setCatalogFailed(true) })
         return () => { alive = false }
       }, [])
-      if (snapshot.status !== 'ready' || snapshot.value === undefined) return null
-      const value = snapshot.value
-      const user = snapshot.user ?? {}
-      const overridden = (field) => Object.prototype.hasOwnProperty.call(user, field)
-      return h('div', { style: cardStyle },
-        h('div', {
-          style: headRowStyle,
-          onClick: () => setExpanded(!expanded),
-        },
-          h('div', { style: { flex: 1, minWidth: 0 } },
-            h('h3', { style: titleStyle }, '行文审查'),
-            h('p', { style: descStyle }, '写入内容的行文审查与批注合并。'),
-          ),
-          h(Chevron, { expanded }),
-        ),
-        expanded && h('div', null,
-          h(ModelPicker, {
-            scope, value, user, groups, catalogFailed,
-            writable: snapshot.writable,
-          }),
-          h(EffortPicker, {
-            scope, value, user, groups, catalogFailed,
-            writable: snapshot.writable,
-          }),
-          h(BoolField, {
-            scope, label: '上下文压缩时自动合并', field: 'mergeOnCompaction',
-            value: value.mergeOnCompaction, overridden: overridden('mergeOnCompaction'),
-            writable: snapshot.writable,
-            hint: '压缩结束时自动合并整个项目的暂存批注。关闭后只在手动执行 /humanize 时合并。',
-          }),
-        ),
+
+      // 行摘要：Plugins 列表里作为该行的说明文字。
+      if (view === 'summary') return h('p', { style: hintStyle }, '写入内容的行文审查与批注合并。')
+
+      const snapshot = form?.state
+      if (snapshot === undefined) return h('p', { style: hintStyle }, '设置服务不可用。')
+      if (snapshot.status === 'loading') return h('p', { style: hintStyle }, '正在加载设置…')
+      if (snapshot.status !== 'ready') return h('p', { style: hintStyle }, '设置服务不可用。')
+      const value = snapshot.value?.[SETTINGS_KEY] ?? {}
+      const user = snapshot.user?.[SETTINGS_KEY] ?? {}
+      const writable = snapshot.writable !== false
+      const set = (field, next) => {
+        void form.mutate([{ op: 'set', path: [SETTINGS_KEY, field], value: next }], snapshot.revision)
+      }
+      const unset = (field) => {
+        void form.mutate([{ op: 'unset', path: [SETTINGS_KEY, field] }], snapshot.revision)
+      }
+
+      return h('div', null,
+        h(ModelPicker, { value, user, writable, groups, catalogFailed, set, unset }),
+        h(EffortPicker, { value, user, writable, groups, catalogFailed, set, unset }),
+        h(BoolField, {
+          label: '上下文压缩时自动合并',
+          value: value.mergeOnCompaction,
+          overridden: Object.prototype.hasOwnProperty.call(user, 'mergeOnCompaction'),
+          writable,
+          set: (next) => set('mergeOnCompaction', next),
+          unset: () => unset('mergeOnCompaction'),
+          hint: '压缩结束时自动合并整个项目的暂存批注。关闭后只在手动执行 /humanize 时合并。',
+        }),
       )
     }
 
-    /** 审查进度 store。键是会话 id，值是最近一次进度事件的数据。 */
-    function createProgressStore() {
-      const batches = new Map()
-      const listeners = new Set()
-      const emit = () => {
-        for (const listener of listeners) listener()
+    /**
+     * 渲染期错误边界。插槽条目渲染抛错时会被静默摘掉，页面上什么都不剩；
+     * 这里把异常显示成文字，省得再对着空白页排查。
+     */
+    class DiagBoundary extends React.Component {
+      constructor(props) {
+        super(props)
+        this.state = { error: null }
       }
-      return {
-        subscribe(listener) {
-          listeners.add(listener)
-          return () => listeners.delete(listener)
-        },
-        get(sessionId) {
-          return batches.get(sessionId)
-        },
-        set(sessionId, data) {
-          batches.set(sessionId, data)
-          emit()
-        },
-        clear(sessionId) {
-          batches.delete(sessionId)
-          emit()
-        },
-      }
-    }
 
-    /** 订阅事件流，把 humanize/progress 事件写进 store。断开就停，刷新页面重新订阅。 */
-    function startProgressPump(ctx, api, store) {
-      const ac = new AbortController()
-      ctx.on('dispose', () => ac.abort())
-      const run = async () => {
-        const stream = api.events.mux({}, ac.signal)
-        for await (const item of stream) {
-          const frame = item !== null && typeof item === 'object' && 'payload' in item ? item.payload : item
-          if (frame === null || typeof frame !== 'object' || frame.type !== 'session/event') continue
-          const event = frame.event
-          if (event === null || typeof event !== 'object' || event.type !== 'humanize/progress') continue
-          if (event.data === null || typeof event.data !== 'object') continue
-          store.set(String(frame.sessionId), event.data)
+      static getDerivedStateFromError(error) {
+        return { error }
+      }
+
+      render() {
+        if (this.state.error !== null) {
+          return h('p', { style: hintStyle }, `行文审查设置渲染失败：${String(this.state.error?.message ?? this.state.error)}`)
         }
-      }
-      run().catch(() => {})
-    }
-
-    /** 各阶段进度条的展示形态。pct 为 null 时不画进度条。 */
-    function progressView(progress) {
-      switch (progress.phase) {
-        case 'start': return { pct: 0, meta: `0/${progress.total}` }
-        case 'progress': return { pct: progress.total > 0 ? (progress.done / progress.total) * 100 : 0, meta: `${progress.done}/${progress.total}，已暂存 ${progress.annotations} 条批注` }
-        case 'done': {
-          const extras = []
-          if (progress.noSpec > 0) extras.push(`${progress.noSpec} 个没有规范可对照`)
-          if (progress.failed > 0) extras.push(`${progress.failed} 个失败`)
-          return { pct: 100, meta: `完成，${progress.total} 个文件，暂存批注 ${progress.annotations} 条${extras.length > 0 ? `，其中 ${extras.join('，')}` : ''}，用 /humanize 合并` }
-        }
-        case 'empty': return { pct: null, meta: '没有可审查的文件。只审查受 git 管理且后缀在规范链 extensions 声明范围内的文件。' }
-        case 'failed': return { pct: null, meta: `审查任务失败：${progress.message}` }
-        default: return { pct: null, meta: '' }
+        return this.props.children
       }
     }
 
-    /** 终态停留这么久之后进度条消失。 */
-    const PROGRESS_LINGER_MS = 6000
+    /**
+     * 包页面内联的配置区。plugins.bundle.config 这个座位不传 form，组件
+     * 自己从 configForms 取。这里不用 hooks：页面本身订阅了 describe 镜像，
+     * 设置变化会让整页重渲染，重渲染时重新读取快照即可。
+     */
+    function ConfigSection(props) {
+      const { configForms, modelCatalog } = props
+      let state
+      let mutate = () => {}
+      try {
+        const form = configForms.get(NS)
+        state = form.getSnapshot()
+        mutate = (ops, revision) => form.mutate(ops, revision)
+      } catch (error) {
+        return h('p', { style: hintStyle }, `行文审查设置读取失败：${String(error?.message ?? error)}`)
+      }
+      return h(DiagBoundary, null,
+        h(HumanizeCard, { view: 'page', form: { state, mutate }, modelCatalog }))
+    }
+
+    /** 空 roster 的共享引用，避免 getSnapshot 每次新建数组。 */
+    const EMPTY_ROWS = []
+
+    /**
+     * 当前会话的审查任务行。宿主把 /humanize-review 批次注册成
+     * kind 为 humanize-review 的后台任务，进度行形如
+     * `done/total · 已暂存 N 条批注`，终态信息在 detail 上。
+     * 进行中只会有一个；结算记录停留期间可能和新批次并存，优先
+     * 取进行中的，否则取最新的一条。
+     */
+    function useReviewJob(jobs, sessionId) {
+      useEffect(() => jobs.watchRows(sessionId), [jobs, sessionId])
+      const snapshot = useSyncExternalStore(
+        (listener) => jobs.state.subscribe(listener),
+        () => jobs.state.getSnapshot(),
+      )
+      const rows = (snapshot.rows[sessionId] ?? EMPTY_ROWS).filter((row) => row.kind === 'humanize-review')
+      return rows.find((row) => row.status === 'running' || row.status === 'stopping')
+        ?? rows[rows.length - 1]
+        ?? null
+    }
+
+    /**
+     * 任务行的展示形态。pct 为 null 时不画进度条。进度从进度行的
+     * `done/total` 前缀解析，解析不出时按 0 处理。
+     */
+    function jobView(row) {
+      if (row.status === 'running' || row.status === 'stopping') {
+        const match = /(\d+)\/(\d+)/.exec(row.progress ?? '')
+        const done = match === null ? 0 : Number(match[1])
+        const total = match === null ? 0 : Number(match[2])
+        return { pct: total > 0 ? (done / total) * 100 : 0, meta: row.progress ?? '', done: false }
+      }
+      return { pct: row.status === 'completed' ? 100 : null, meta: row.detail ?? '', done: row.status === 'completed' }
+    }
 
     // 外框照抄官方 todo 条的容器规范：宽度让出两侧边距，圆角卡片，
     // tip 底色加一级描边，和 composer 卡片对齐。
@@ -477,24 +457,15 @@ window.__ModuleLoader__.load({
       overflow: 'hidden',
     }
 
-    /** 输入框上方的审查进度条。进行中的状态一直显示，终态停留几秒后消失。 */
+    /**
+     * 输入框上方的审查进度条。进行中的状态一直显示；终态停留由宿主
+     * 控制——结算记录在任务列表里停留几秒后被摘掉，进度条随之消失。
+     */
     function ProgressDock(props) {
-      const { store, sessionId } = props
-      const progress = useSyncExternalStore(
-        (listener) => store.subscribe(listener),
-        () => store.get(sessionId) ?? null,
-      )
-      useEffect(() => {
-        if (progress === null || progress.phase === 'start' || progress.phase === 'progress') return undefined
-        // 只清自己武装时的那一条。中间有更新的事件到达时，这个定时器
-        // 已经过期，什么都不做。
-        const timer = setTimeout(() => {
-          if (store.get(sessionId) === progress) store.clear(sessionId)
-        }, PROGRESS_LINGER_MS)
-        return () => clearTimeout(timer)
-      }, [progress])
-      if (progress === null) return null
-      const view = progressView(progress)
+      const { jobs, sessionId } = props
+      const row = useReviewJob(jobs, sessionId)
+      if (row === null || row === undefined) return null
+      const view = jobView(row)
       const rows = [h('div', { key: 'head', style: dockRowStyle },
         h('span', { style: dockTitleStyle }, '行文审查'),
         h('span', { style: dockMetaStyle }, view.meta),
@@ -504,7 +475,7 @@ window.__ModuleLoader__.load({
           style: {
             height: '100%',
             borderRadius: '999px',
-            background: progress.phase === 'done' ? 'var(--dsw-alias-state-success-primary)' : 'var(--dsw-alias-state-business-primary)',
+            background: view.done ? 'var(--dsw-alias-state-success-primary)' : 'var(--dsw-alias-state-business-primary)',
             width: `${Math.max(0, Math.min(100, view.pct))}%`,
             transition: 'width 200ms ease',
           },
@@ -514,24 +485,45 @@ window.__ModuleLoader__.load({
     }
 
     function apply(ctx) {
-      const progressStore = createProgressStore()
-      ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({
-        name: 'conversation.input.dock',
-        id: 'dsh-humanize-progress',
-        order: 30,
-      }, (owner) => h(ProgressDock, { store: progressStore, sessionId: String(owner.sessionId) })))
-      // settingsScope 标识宿主有插件配置页。老宿主没有这个服务时卡片
-      // 不出现，条目配置照常生效。
-      ctx.inject(['settingsScope'], (scoped) => {
-        const scope = scoped.settingsScope.bind({ namespace: NS })
-        // 模型目录和事件流走 connection 的 api。没有 connection 时卡片
-        // 仍注册，ModelPicker 加载失败后退化为手动填写的文本框，进度条保持隐藏。
-        const api = scoped.get('connection') !== undefined ? scoped.get('connection').api : null
-        if (api !== null) startProgressPump(ctx, api, progressStore)
-        scoped.slots.inject('settings.plugin.item', () => scoped.slots.register({
-          name: 'settings.plugin.item',
-          key: NS,
-        }, () => h(HumanizeCard, { scope, api })))
+      // jobs 服务提供任务 roster 流。没有它时进度条不注册，其余功能
+      // 照常。
+      ctx.inject(['jobs'], (jobCtx) => {
+        const jobs = jobCtx.jobs
+        jobCtx.slots.inject('conversation.input.dock', () => jobCtx.slots.register({
+          name: 'conversation.input.dock',
+          id: 'dsh-humanize-progress',
+          order: 30,
+        }, (owner) => h(ProgressDock, { jobs, sessionId: String(owner.sessionId) })))
+      })
+      // 设置页有两处座位：包页面上内联的配置区（按包名），以及包内那一行
+      // 点进去的配置页（按 <包名>#<行 id>）。两者写同一份设置。
+      ctx.inject(['configForms'], (formCtx) => {
+        // remote 是按命名空间追踪的代理：访问 remote.session 这一跳必须在
+        // inject 里声明 "remote.session"（只声明 "remote" 会在渲染期抛
+        // cannot get property "remote.session" without inject）。方法在这里
+        // 就取好绑定好，往下传普通函数，渲染期不再碰代理。
+        formCtx.inject(['remote', 'remote.session'], (remCtx) => {
+          const configForms = formCtx.configForms
+          const sessionRemote = remCtx.remote.session
+          const modelCatalog = typeof sessionRemote?.modelCatalog === 'function'
+            ? sessionRemote.modelCatalog.bind(sessionRemote)
+            : undefined
+          formCtx.effect(() => configForms.whileServed([NS], () => {
+            const bundle = formCtx.slots.register({
+              name: 'plugins.bundle.config',
+              key: NS,
+            }, () => h(ConfigSection, { configForms, modelCatalog }))
+            const row = formCtx.slots.register({
+              name: 'plugins.row.config',
+              key: `${NS}#${NS}`,
+            }, (props) => h(DiagBoundary, null,
+              h(HumanizeCard, { view: props.view, form: props.form, modelCatalog })))
+            return () => {
+              bundle()
+              row()
+            }
+          }), 'dsh-humanize: settings page')
+        })
       })
     }
 

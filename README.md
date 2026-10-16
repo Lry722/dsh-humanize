@@ -39,7 +39,7 @@ ln -s ~/.dsh/profiles/node_modules node_modules
 
 ## 配置
 
-四个参数都可以在设置页的行文审查卡片里直接修改，实时生效：
+设置页 →「插件」→ dsh-humanize 那一行的「配置」，四个参数直接修改，实时生效：
 
 - `reviewProvider` 与 `reviewModel`：审查用的模型，从宿主模型目录里下拉选择。默认跟随会话当前使用的模型。
 - `reviewReasoningEffort`：审查模型的推理等级，从所选模型公布的等级里下拉选择。默认采用模型自身的默认值。
@@ -52,8 +52,9 @@ ln -s ~/.dsh/profiles/node_modules node_modules
 ```yaml
 - id: dsh-humanize
   config:
-    reviewProvider: deepseek
-    reviewModel: deepseek-chat
+    settings:
+      reviewProvider: deepseek
+      reviewModel: deepseek-chat
 ```
 
 ## 使用
@@ -74,4 +75,4 @@ extensions:
 ---
 ```
 
-各层级声明合并生效。审查在后台进行，进度条显示在输入框上方，审查内容与会话上下文相互隔离。
+各层级声明合并生效。审查在后台进行，批次显示为一个后台任务：进度条在输入框上方实时更新，会话头部的任务列表里也能看到并可以取消。审查内容与会话上下文相互隔离。

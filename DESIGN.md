@@ -6,11 +6,26 @@
 
 DSH 插件是一个 npm 包。包内的 package.json 声明补丁文件的位置，补丁文件负责把插件挂进配置树。插件入口导出一个 apply 函数，通过 ctx 使用平台服务。
 
-本地开发时用 dsh plugin 命令以 link 方式装载，改动可以热重载。
+本地开发时用 dsh plugin 命令以 link 方式装载。
 
 ```sh
 dsh plugin --profile web add link:/home/lry722/dev/dsh-humanize
 ```
+
+link 装载本身不会热重载宿主插件：插件 link 在 profile 的 node_modules 下，而 dsh-hmr 的默认 ignore 排除 `**/node_modules`，shipped 的 web 组合又把 hmr 的 root 设为空。改完 lib 下的源码后，运行进程仍会用 ESM 缓存里的旧模块——插件管理器的 disable/enable 也不会重新导入。开发时需要在 profile 的 cordis.patch.yml 里把插件目录纳入 hmr 监听：
+
+```yaml
+- id: hmr
+  name: "@deepseek-ai/dsh-hmr"
+  config:
+    root:
+      - /home/lry722/dev/dsh-humanize
+    ignored:
+      - "**/node_modules"
+      - "**/.git/**"
+```
+
+hmr 检测到改动后，会把该插件的全部依赖加入重载集合、逐个清掉 ESM 与 CJS 缓存再重新导入，因此改 lib 下任意一个文件都会整图重载。浏览器端 client/ 下的改动仍需刷新页面（没有 dev:web watcher 时不会自动重建）。
 
 ## 整体流程
 
@@ -64,7 +79,7 @@ PATH 是文件时合并这一个文件，是目录时合并目录下所有有批
 
 PATH 是文件时审查这一个文件，是目录时递归展开。两种情况下都只审查受 git 管理且后缀在规范链 extensions 声明范围内的文件。各级的声明合并生效。
 
-审查在后台进行。进度写成会话日志里的自定义事件，由客户端渲染成输入框上方的进度条。这部分内容不进模型上下文。同一个 agent 同时只允许一个审查批次，批注合并进行中时拒绝派发。
+审查在后台进行。批次注册成 kind 为 humanize-review 的后台任务（ctx.jobs），进度行进任务 roster，由 job-controller 实时推到浏览器：客户端渲染成输入框上方的进度条，会话头部的任务列表也会显示并允许取消。这部分内容不进模型上下文——批次全程挂一个 jobs.wait，让结算被记为 awaited，抑制 dsh-tool-jobs 的完成通知。注意这个 wait 不能挂会提前 abort 的 signal：注册表在 done 的微任务里结算，abort 抢跑会把 wait 移出等待集合，awaited 失效，通知照样漏进主会话。结算记录在任务列表停留几秒后由插件摘掉。同一个 agent 同时只允许一个审查批次，批注合并进行中时拒绝派发。
 
 PROSE.md 的文件头是一个可选的 YAML 块：
 
@@ -82,6 +97,12 @@ extensions:
 
 支持设置是否开启该功能。关闭时只在手动执行 /humanize 命令时合并。
 
+## 设置页
+
+0.2.0 的 dsh-settings 没有命令式的 register(ns, schema)。插件导出 Config 声明设置，设置页只暴露标了 `volatile()` 的节点，命名空间是条目在补丁里声明的 id（dsh-humanize）。运行时该节点交给插件的是一个带 `get()` 的引用而不是普通值，读取要解引用；插件用访问器在使用时实时读，所以设置页改动不需要额外监听。
+
+浏览器端注册进 `plugins.row.config`，key 是 `<包名>#<行 id>`，用 `configForms.whileServed(['dsh-humanize'], ...)` 保证宿主真的服务这个命名空间时才出现。页面把 `{ view, form }` 交给组件：`view: 'summary'` 渲染行内说明，`view: 'page'` 渲染表单；读取走 `form.state`（value/base/user/revision/writable），写入是一次原子 `form.mutate(ops, revision)`，path 以 volatile 节点名开头。插件自带页面时声明 `settings.configure({ auto: false })`。
+
 ## 服务速查
 
 | 能力           | 入口                       | 所属包         |
@@ -94,6 +115,8 @@ extensions:
 | 斜杠命令       | ctx.commands.register 方法 | dsh-commands   |
 | 压缩时机       | compaction/end 事件        | dsh-compaction |
 | 文件读写       | ctx.fs 服务                | dsh-fs         |
+| 设置读写       | ctx.configForms 服务       | dsh-client-ui-settings |
+| 任务进度       | ctx.jobs.start 方法        | dsh-jobs       |
 
 ## 遗留事项
 
