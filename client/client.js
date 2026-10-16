@@ -442,11 +442,16 @@ window.__ModuleLoader__.load({
       overflow: 'hidden',
       flex: 'none',
     }
+    const dockBodyStyle = {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '8px',
+      padding: '6px 12px',
+    }
     const dockRowStyle = {
       display: 'flex',
       alignItems: 'center',
       gap: '10px',
-      padding: '6px 12px',
     }
     const dockTitleStyle = {
       color: 'var(--dsw-alias-label-primary)',
@@ -456,8 +461,7 @@ window.__ModuleLoader__.load({
       lineHeight: '24px',
     }
     const dockTrackStyle = {
-      flex: 'auto',
-      minWidth: '40px',
+      width: '100%',
       height: '6px',
       borderRadius: '999px',
       background: 'var(--dsw-alias-border-l2)',
@@ -488,9 +492,12 @@ window.__ModuleLoader__.load({
       }, [progress])
       if (progress === null) return null
       const view = progressView(progress)
-      const children = [h('span', { key: 'title', style: dockTitleStyle }, '行文审查')]
+      const rows = [h('div', { key: 'head', style: dockRowStyle },
+        h('span', { style: dockTitleStyle }, '行文审查'),
+        h('span', { style: dockMetaStyle }, view.meta),
+      )]
       if (view.pct !== null) {
-        children.push(h('div', { key: 'track', style: dockTrackStyle }, h('div', {
+        rows.push(h('div', { key: 'track', style: dockTrackStyle }, h('div', {
           style: {
             height: '100%',
             borderRadius: '999px',
@@ -500,8 +507,7 @@ window.__ModuleLoader__.load({
           },
         })))
       }
-      children.push(h('span', { key: 'meta', style: dockMetaStyle }, view.meta))
-      return h('section', { style: dockRootStyle }, h('div', { style: dockRowStyle }, children))
+      return h('section', { style: dockRootStyle }, h('div', { style: dockBodyStyle }, rows))
     }
 
     function apply(ctx) {
