@@ -269,7 +269,7 @@ window.__ModuleLoader__.load({
           setText(String(props.value ?? ''))
           return
         }
-        const next = Math.max(props.min, Math.min(props.max, Math.round(parsed)))
+        const next = Math.max(props.min ?? 0, Math.min(props.max ?? Infinity, Math.round(parsed)))
         setText(String(next))
         if (next === props.value) return
         props.set(next)
@@ -367,10 +367,9 @@ window.__ModuleLoader__.load({
           overridden: Object.prototype.hasOwnProperty.call(user, 'reviewConcurrency'),
           writable,
           min: 1,
-          max: 16,
           set: (next) => set('reviewConcurrency', next),
           unset: () => unset('reviewConcurrency'),
-          hint: '同时在途的审查调用数，1 到 16。缺省 3，调大更快但更容易撞上模型的速率限制。',
+          hint: '同时在途的审查调用数，最小 1。缺省 3。上限取决于模型提供方的速率限制，并发过高会让超限的文件记失败并进入重试。',
         }),
         h(NumberField, {
           label: '失败重试次数',

@@ -43,7 +43,7 @@ ln -s ~/.dsh/profiles/node_modules node_modules
 
 - `reviewProvider` 与 `reviewModel`：审查用的模型，从宿主模型目录里下拉选择。默认跟随会话当前使用的模型。
 - `reviewReasoningEffort`：审查模型的推理等级，从所选模型公布的等级里下拉选择。默认采用模型自身的默认值。
-- `reviewConcurrency`：并行批次大小，同时在途的审查调用数，1 到 16，默认 3。调大更快，但更容易撞上模型的速率限制。
+- `reviewConcurrency`：并行批次大小，同时在途的审查调用数，最小 1，默认 3，不设上限。实际并发不会超过待审文件数。上限取决于模型提供方的速率限制，超限的文件记失败并进入重试。
 - `reviewRetries`：失败重试次数，0 到 5，默认 1。失败的文件插回下一批，和还没处理过的文件凑成同一批（三并发下 A 失败时，下一批是 A 加后面两个），单个文件最多重试几次。
 - `mergeOnCompaction`：上下文压缩结束时是否自动合并整个项目的暂存批注，默认 true。设为 false 时只在手动执行 `/humanize` 时合并。
 
