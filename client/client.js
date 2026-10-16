@@ -420,7 +420,6 @@ window.__ModuleLoader__.load({
           return { pct: 100, meta: `完成，${progress.total} 个文件，暂存批注 ${progress.annotations} 条${extras.length > 0 ? `，其中 ${extras.join('，')}` : ''}，用 /humanize 合并` }
         }
         case 'empty': return { pct: null, meta: '没有可审查的文件。只审查受 git 管理且后缀在规范链 extensions 声明范围内的文件。' }
-        case 'blocked': return { pct: null, meta: progress.reason === 'merging' ? '批注合并进行中，完成后再审查。' : '已有一个审查任务在进行，等它结束后再派发。' }
         case 'failed': return { pct: null, meta: `审查任务失败：${progress.message}` }
         default: return { pct: null, meta: '' }
       }
@@ -487,7 +486,11 @@ window.__ModuleLoader__.load({
       )
       useEffect(() => {
         if (progress === null || progress.phase === 'start' || progress.phase === 'progress') return undefined
-        const timer = setTimeout(() => store.clear(sessionId), PROGRESS_LINGER_MS)
+        // 只清自己武装时的那一条。中间有更新的事件到达时，这个定时器
+        // 已经过期，什么都不做。
+        const timer = setTimeout(() => {
+          if (store.get(sessionId) === progress) store.clear(sessionId)
+        }, PROGRESS_LINGER_MS)
         return () => clearTimeout(timer)
       }, [progress])
       if (progress === null) return null
