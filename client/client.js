@@ -1,9 +1,10 @@
 /**
- * dsh-humanize 浏览器端：在设置页的插件配置区注册本插件的设置卡片。
+ * dsh-humanize 浏览器端：设置页的配置卡片，以及输入框上方的审查
+ * 进度条。
  *
- * 卡片通过 settings.plugin.item 插槽按命名空间投递，宿主只负责调度，
- * 卡片内容由插件自己绘制。读写走 settingsScope 服务绑定的命名空间，
- * 改动实时生效，不需要重启。
+ * 卡片通过 settings.plugin.item 插槽按命名空间投递，读写走
+ * settingsScope 服务，改动实时生效。进度条挂在 conversation.input.dock
+ * 插槽，数据来自会话事件流里的 humanize/progress 事件。
  *
  * 手写为 __ModuleLoader__ 工厂格式，不引入构建步骤。唯一的外部依赖
  * 是模块表里的 react。
@@ -363,14 +364,108 @@ window.__ModuleLoader__.load({
       )
     }
 
+    /** 审查进度 store。键是会话 id，值是最近一次进度事件的数据。 */
+    function createProgressStore() {
+      const batches = new Map()
+      const listeners = new Set()
+      const emit = () => {
+        for (const listener of listeners) listener()
+      }
+      return {
+        subscribe(listener) {
+          listeners.add(listener)
+          return () => listeners.delete(listener)
+        },
+        get(sessionId) {
+          return batches.get(sessionId)
+        },
+        set(sessionId, data) {
+          batches.set(sessionId, data)
+          emit()
+        },
+        clear(sessionId) {
+          batches.delete(sessionId)
+          emit()
+        },
+      }
+    }
+
+    /** 订阅事件流，把 humanize/progress 事件写进 store。断开就停，刷新页面重新订阅。 */
+    function startProgressPump(ctx, api, store) {
+      const ac = new AbortController()
+      ctx.on('dispose', () => ac.abort())
+      const run = async () => {
+        const stream = api.events.mux({}, ac.signal)
+        for await (const item of stream) {
+          const frame = item !== null && typeof item === 'object' && 'payload' in item ? item.payload : item
+          if (frame === null || typeof frame !== 'object' || frame.type !== 'session/event') continue
+          const event = frame.event
+          if (event === null || typeof event !== 'object' || event.type !== 'humanize/progress') continue
+          if (event.data === null || typeof event.data !== 'object') continue
+          store.set(String(frame.sessionId), event.data)
+        }
+      }
+      run().catch(() => {})
+    }
+
+    /** 各阶段的进度条文案。 */
+    function progressText(progress) {
+      switch (progress.phase) {
+        case 'start': return `行文审查中 · 0/${progress.total}`
+        case 'progress': return `行文审查中 · ${progress.done}/${progress.total} · 已暂存 ${progress.annotations} 条批注`
+        case 'done': {
+          const extras = []
+          if (progress.noSpec > 0) extras.push(`${progress.noSpec} 个没有规范可对照`)
+          if (progress.failed > 0) extras.push(`${progress.failed} 个失败`)
+          return `审查完成 · ${progress.total} 个文件 · 暂存批注 ${progress.annotations} 条${extras.length > 0 ? `（${extras.join('，')}）` : ''} · 用 /humanize 合并`
+        }
+        case 'empty': return '没有可审查的文件。只审查受 git 管理且后缀在规范链 extensions 声明范围内的文件。'
+        case 'blocked': return progress.reason === 'merging' ? '批注合并进行中，完成后再审查。' : '已有一个审查任务在进行，等它结束后再派发。'
+        case 'failed': return `审查任务失败：${progress.message}`
+        default: return ''
+      }
+    }
+
+    /** 终态停留这么久之后进度条消失。 */
+    const PROGRESS_LINGER_MS = 6000
+
+    const dockStyle = {
+      fontSize: '12px',
+      color: 'var(--dsw-alias-label-tertiary)',
+      padding: '2px 4px',
+    }
+
+    /** 输入框上方的审查进度条。进行中的状态一直显示，终态停留几秒后消失。 */
+    function ProgressDock(props) {
+      const { store, sessionId } = props
+      const progress = useSyncExternalStore(
+        (listener) => store.subscribe(listener),
+        () => store.get(sessionId) ?? null,
+      )
+      useEffect(() => {
+        if (progress === null || progress.phase === 'start' || progress.phase === 'progress') return undefined
+        const timer = setTimeout(() => store.clear(sessionId), PROGRESS_LINGER_MS)
+        return () => clearTimeout(timer)
+      }, [progress])
+      if (progress === null) return null
+      return h('div', { style: dockStyle }, progressText(progress))
+    }
+
     function apply(ctx) {
+      const progressStore = createProgressStore()
+      ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({
+        name: 'conversation.input.dock',
+        id: 'dsh-humanize-progress',
+        order: 30,
+      }, (owner) => h(ProgressDock, { store: progressStore, sessionId: String(owner.sessionId) })))
       // settingsScope 标识宿主有插件配置页。老宿主没有这个服务时卡片
       // 不出现，条目配置照常生效。
       ctx.inject(['settingsScope'], (scoped) => {
         const scope = scoped.settingsScope.bind({ namespace: NS })
-        // 模型目录走 connection 的 api。没有 connection 时卡片仍注册，
-        // ModelPicker 加载失败后退化为手填文本框。
+        // 模型目录和事件流走 connection 的 api。没有 connection 时卡片
+        // 仍注册，ModelPicker 加载失败后退化为手填文本框，进度条保持隐藏。
         const api = scoped.get('connection') !== undefined ? scoped.get('connection').api : null
+        if (api !== null) startProgressPump(ctx, api, progressStore)
         scoped.slots.inject('settings.plugin.item', () => scoped.slots.register({
           name: 'settings.plugin.item',
           key: NS,
