@@ -252,6 +252,49 @@ window.__ModuleLoader__.load({
       )
     }
 
+    /**
+     * 数字字段。失焦时提交，值夹到 [min, max] 内取整，清空恢复缺省。
+     */
+    function NumberField(props) {
+      const [text, setText] = useState(String(props.value ?? ''))
+      useEffect(() => setText(String(props.value ?? '')), [props.value])
+      const commit = () => {
+        const raw = text.trim()
+        if (raw === '') {
+          props.unset()
+          return
+        }
+        const parsed = Number(raw)
+        if (!Number.isFinite(parsed)) {
+          setText(String(props.value ?? ''))
+          return
+        }
+        const next = Math.max(props.min, Math.min(props.max, Math.round(parsed)))
+        setText(String(next))
+        if (next === props.value) return
+        props.set(next)
+      }
+      return h('div', { style: fieldStyle },
+        h('div', { style: labelRowStyle },
+          h('span', { style: labelStyle }, props.label),
+          h(ResetButton, { overridden: props.overridden, onReset: () => props.unset() }),
+        ),
+        h('input', {
+          style: inputStyle,
+          type: 'number',
+          min: props.min,
+          max: props.max,
+          step: 1,
+          value: text,
+          disabled: !props.writable,
+          onChange: (event) => setText(event.target.value),
+          onBlur: commit,
+          onKeyDown: (event) => { if (event.key === 'Enter') event.target.blur() },
+        }),
+        h('p', { style: hintStyle }, props.hint),
+      )
+    }
+
     /** 开关字段，立即提交。 */
     function BoolField(props) {
       return h('div', { style: fieldStyle },
@@ -318,6 +361,28 @@ window.__ModuleLoader__.load({
       return h('div', null,
         h(ModelPicker, { value, user, writable, groups, catalogFailed, set, unset }),
         h(EffortPicker, { value, user, writable, groups, catalogFailed, set, unset }),
+        h(NumberField, {
+          label: '并行批次大小',
+          value: value.reviewConcurrency ?? 3,
+          overridden: Object.prototype.hasOwnProperty.call(user, 'reviewConcurrency'),
+          writable,
+          min: 1,
+          max: 16,
+          set: (next) => set('reviewConcurrency', next),
+          unset: () => unset('reviewConcurrency'),
+          hint: '同时在途的审查调用数，1 到 16。缺省 3，调大更快但更容易撞上模型的速率限制。',
+        }),
+        h(NumberField, {
+          label: '失败重试次数',
+          value: value.reviewRetries ?? 1,
+          overridden: Object.prototype.hasOwnProperty.call(user, 'reviewRetries'),
+          writable,
+          min: 0,
+          max: 5,
+          set: (next) => set('reviewRetries', next),
+          unset: () => unset('reviewRetries'),
+          hint: '失败的文件自动进入下一轮重试，最多几轮，0 到 5。缺省 1。',
+        }),
         h(BoolField, {
           label: '上下文压缩时自动合并',
           value: value.mergeOnCompaction,

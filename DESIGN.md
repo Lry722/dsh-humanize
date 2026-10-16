@@ -79,7 +79,7 @@ PATH 是文件时合并这一个文件，是目录时合并目录下所有有批
 
 PATH 是文件时审查这一个文件，是目录时递归展开。两种情况下都只审查受 git 管理且后缀在规范链 extensions 声明范围内的文件。各级的声明合并生效。
 
-审查在后台进行。批次注册成 kind 为 humanize-review 的后台任务（ctx.jobs），进度行进任务 roster，由 job-controller 实时推到浏览器：客户端渲染成输入框上方的进度条，会话头部的任务列表也会显示并允许取消。这部分内容不进模型上下文——批次全程挂一个 jobs.wait，让结算被记为 awaited，抑制 dsh-tool-jobs 的完成通知。注意这个 wait 不能挂会提前 abort 的 signal：注册表在 done 的微任务里结算，abort 抢跑会把 wait 移出等待集合，awaited 失效，通知照样漏进主会话。结算记录在任务列表停留几秒后由插件摘掉。同一个 agent 同时只允许一个审查批次，批注合并进行中时拒绝派发。
+审查在后台进行。批次注册成 kind 为 humanize-review 的后台任务（ctx.jobs），进度行进任务 roster，由 job-controller 实时推到浏览器：客户端渲染成输入框上方的进度条，会话头部的任务列表也会显示并允许取消。批次按并行批次大小（reviewConcurrency，缺省 3）同时在途审查多个文件；失败的文件自动进入下一轮，最多重试 reviewRetries 轮（缺省 1），每轮只重试上一轮失败的，进度行的后缀标出重试轮次。终态说明列出仍然失败的文件和原因。这部分内容不进模型上下文——批次全程挂一个 jobs.wait，让结算被记为 awaited，抑制 dsh-tool-jobs 的完成通知。注意这个 wait 不能挂会提前 abort 的 signal：注册表在 done 的微任务里结算，abort 抢跑会把 wait 移出等待集合，awaited 失效，通知照样漏进主会话。结算记录在任务列表停留几秒后由插件摘掉。同一个 agent 同时只允许一个审查批次，批注合并进行中时拒绝派发。
 
 PROSE.md 的文件头是一个可选的 YAML 块：
 
