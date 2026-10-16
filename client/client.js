@@ -108,24 +108,9 @@ window.__ModuleLoader__.load({
      * 都留空时跟随会话当前使用的模型。
      */
     function ModelPicker(props) {
-      const { scope, value, user, writable, api } = props
-      const [groups, setGroups] = useState(null)
-      const [failed, setFailed] = useState(false)
-      useEffect(() => {
-        if (api === null) {
-          setFailed(true)
-          return
-        }
-        let alive = true
-        api.llm.models({}).then((res) => {
-          if (!alive) return
-          if (res.result && res.result.ok) setGroups(res.result.value.groups)
-          else setFailed(true)
-        }, () => { if (alive) setFailed(true) })
-        return () => { alive = false }
-      }, [])
+      const { scope, value, user, writable, groups, catalogFailed } = props
 
-      if (failed) {
+      if (catalogFailed) {
         return h(Fragment, null,
           h(TextField, {
             scope, label: '审查模型 provider', field: 'reviewProvider',
@@ -150,15 +135,18 @@ window.__ModuleLoader__.load({
       const pickProvider = (next) => {
         if (next === '') scope.unset('reviewProvider')
         else void scope.set('reviewProvider', next)
-        // 换 provider 后旧模型一般不存在于新目录，顺手清掉。
+        // 换 provider 后旧模型一般不存在于新目录，顺手清掉，推理等级
+        // 是模型专属的，也一起清掉。
         const nextGroup = groups === null ? undefined : groups.find((g) => g.id === next)
         if (model !== '' && (nextGroup === undefined || !nextGroup.models.some((m) => m.id === model))) {
           scope.unset('reviewModel')
+          scope.unset('reviewReasoningEffort')
         }
       }
       const pickModel = (next) => {
         if (next === '') scope.unset('reviewModel')
         else void scope.set('reviewModel', next)
+        scope.unset('reviewReasoningEffort')
       }
 
       return h(Fragment, null,
@@ -205,6 +193,52 @@ window.__ModuleLoader__.load({
             provider === '' ? '选择 provider 后可挑选模型。两者都留空时跟随会话当前使用的模型。' : '审查用的模型，可以选比主模型便宜的模型。',
           ),
         ),
+      )
+    }
+
+    /**
+     * 审查推理等级的选择。选项来自所选模型在目录里公布的等级列表。
+     * 跟随会话模型、目录加载失败、或者所选模型没公布等级时退化为
+     * 手填文本框。留空时跟随模型自身的默认。
+     */
+    function EffortPicker(props) {
+      const { scope, value, user, writable, groups, catalogFailed } = props
+      const effort = value.reviewReasoningEffort ?? ''
+      const overridden = Object.prototype.hasOwnProperty.call(user, 'reviewReasoningEffort')
+      const provider = value.reviewProvider ?? ''
+      const model = value.reviewModel ?? ''
+      const info = groups?.find((g) => g.id === provider)?.models.find((m) => m.id === model)
+      const efforts = info?.reasoning?.efforts
+      if (catalogFailed || provider === '' || model === '' || efforts === undefined || efforts.length === 0) {
+        return h(TextField, {
+          scope, label: '审查推理等级', field: 'reviewReasoningEffort',
+          value: effort, overridden, writable,
+          placeholder: '跟随模型默认',
+          hint: provider === '' || model === ''
+            ? '跟随会话模型时列不出可选等级，可手填。留空跟随模型自身的默认。'
+            : '所选模型未公布可选推理等级，可手填。留空跟随模型自身的默认。',
+        })
+      }
+      const effortKnown = effort === '' || efforts.some((e) => e.id === effort)
+      return h('div', { style: fieldStyle },
+        h('div', { style: labelRowStyle },
+          h('span', { style: labelStyle }, '审查推理等级'),
+          h(ResetButton, { overridden, onReset: () => scope.unset('reviewReasoningEffort') }),
+        ),
+        h('select', {
+          style: selectStyle,
+          value: effort,
+          disabled: !writable,
+          onChange: (event) => {
+            if (event.target.value === '') scope.unset('reviewReasoningEffort')
+            else void scope.set('reviewReasoningEffort', event.target.value)
+          },
+        },
+          h('option', { value: '' }, '跟随模型默认'),
+          efforts.map((e) => h('option', { key: e.id, value: e.id }, e.name)),
+          !effortKnown && h('option', { value: effort }, effort + '（当前值，该模型不支持）'),
+        ),
+        h('p', { style: hintStyle }, '审查模型的推理等级，选项来自所选模型公布的等级列表。'),
       )
     }
 
@@ -280,6 +314,21 @@ window.__ModuleLoader__.load({
         () => scope.getSnapshot(),
       )
       const [expanded, setExpanded] = useState(false)
+      const [groups, setGroups] = useState(null)
+      const [catalogFailed, setCatalogFailed] = useState(false)
+      useEffect(() => {
+        if (props.api === null) {
+          setCatalogFailed(true)
+          return
+        }
+        let alive = true
+        props.api.llm.models({}).then((res) => {
+          if (!alive) return
+          if (res.result && res.result.ok) setGroups(res.result.value.groups)
+          else setCatalogFailed(true)
+        }, () => { if (alive) setCatalogFailed(true) })
+        return () => { alive = false }
+      }, [])
       if (snapshot.status !== 'ready' || snapshot.value === undefined) return null
       const value = snapshot.value
       const user = snapshot.user ?? {}
@@ -297,7 +346,11 @@ window.__ModuleLoader__.load({
         ),
         expanded && h('div', null,
           h(ModelPicker, {
-            scope, api: props.api, value, user,
+            scope, value, user, groups, catalogFailed,
+            writable: snapshot.writable,
+          }),
+          h(EffortPicker, {
+            scope, value, user, groups, catalogFailed,
             writable: snapshot.writable,
           }),
           h(BoolField, {
