@@ -25,6 +25,7 @@
   "files": [
     "lib",
     "client",
+    "prompts",
     "cordis.patch.yml",
     "PROSE.md",
     "README.md",

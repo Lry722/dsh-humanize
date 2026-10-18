@@ -78,3 +78,13 @@ extensions:
 ```
 
 各层级声明合并生效。审查在后台进行，批次显示为一个后台任务：进度条在输入框上方实时更新，会话头部的任务列表里也能看到并可以取消。审查内容与会话上下文相互隔离。
+
+## 提示词
+
+发给模型的提示词不在代码里，统一放在包根的 `prompts/` 目录，直接编辑即可：
+
+- `prompts/review-system.md`：旁路审查调用的 system 提示词。
+- `prompts/merge-header.md`：`/humanize` 合并消息的开头指令。
+- `prompts/human-facing-field.md`：包装工具里 `human_facing` 参数的描述。
+
+每次审查或合并都会重新读取对应文件，改完保存即生效，不需要重启会话。
