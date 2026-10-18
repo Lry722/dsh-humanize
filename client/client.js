@@ -377,10 +377,10 @@ window.__ModuleLoader__.load({
           overridden: Object.prototype.hasOwnProperty.call(user, 'reviewRetries'),
           writable,
           min: 0,
-          max: 5,
+          max: 3,
           set: (next) => set('reviewRetries', next),
           unset: () => unset('reviewRetries'),
-          hint: '失败的文件会插回下一批重试（和未处理的文件凑成同一批），单个文件最多重试几次，0 到 5。缺省 1。',
+          hint: '失败的文件会插回下一批重试（和未处理的文件凑成同一批），单个文件最多重试几次，0 到 3。缺省 1。',
         }),
         h(BoolField, {
           label: '上下文压缩时自动合并',
