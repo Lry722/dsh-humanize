@@ -1,12 +1,9 @@
 /**
- * dsh-humanize 浏览器端设置卡片。包含通用表单控件（文本、数字、
- * 开关、重置）和业务字段（审查模型两级选择、推理等级、并发、重试、
- * 压缩合并开关）。
- *
- * 作为主 client.js 的懒加载 chunk：同样的 __ModuleLoader__ 工厂格式，
- * 多一个 chunk 字段。主入口用 require.async('./client.settings.js')
- * 拉取本文件，React.lazy 包装后交给插槽渲染。
+ * dsh-humanize 浏览器端设置卡片，在打开设置界面时按需加载。
+ * 通用表单控件包括文本、数字、开关和恢复默认值。业务字段包括
+ * 审查模型、推理等级、并行批次、重试和压缩合并。
  */
+// 懒加载 chunk，比主入口多一个 chunk 字段。
 window.__ModuleLoader__.load({
   id: 'dsh-humanize',
   chunk: 'client.settings.js',
@@ -16,7 +13,7 @@ window.__ModuleLoader__.load({
     const h = React.createElement
     const { Fragment, useEffect, useState } = React
 
-    /** 设置命名空间：宿主条目的 id，也是 Plugins 页面里本插件行的 id。 */
+    /** 设置命名空间，宿主条目的 id，也是 Plugins 页面里本插件行的 id。 */
     const NS = 'dsh-humanize'
     /** Config 里承载可编辑设置的 volatile 节点名，写入路径以它为前缀。 */
     const SETTINGS_KEY = 'settings'
@@ -72,27 +69,24 @@ window.__ModuleLoader__.load({
       cursor: 'pointer',
     }
 
-    /** 字段被用户覆盖时给出恢复缺省的入口。 */
+    /** 字段被用户覆盖时给出恢复默认值的入口。 */
     function ResetButton(props) {
       if (!props.overridden) return null
-      return h('button', { type: 'button', style: resetStyle, onClick: props.onReset }, '恢复缺省')
+      return h('button', { type: 'button', style: resetStyle, onClick: props.onReset }, '恢复默认值')
     }
 
-    /**
-     * 审查模型的两级选择。provider 选项来自宿主的模型目录，模型选项
-     * 跟随选中的 provider。目录加载失败时退化为手动填写的文本框。两者
-     * 都留空时跟随会话当前使用的模型。
-     */
+    /** 审查模型的两级选择，先选模型提供方，再选模型。 */
     function ModelPicker(props) {
       const { value, user, writable, groups, catalogFailed, set, unset } = props
+      // 目录加载失败时退化为手动填写的文本框。
       if (catalogFailed) {
         return h(Fragment, null,
           h(TextField, {
-            label: '审查模型 provider', value: value.reviewProvider,
+            label: '审查模型提供方', value: value.reviewProvider,
             overridden: Object.prototype.hasOwnProperty.call(user, 'reviewProvider'),
             writable, set: (next) => set('reviewProvider', next), unset: () => unset('reviewProvider'),
             placeholder: '跟随会话当前使用的模型',
-            hint: '模型目录加载失败，请手动填写 provider。留空时跟随会话当前使用的模型。',
+            hint: '模型目录加载失败，请手动填写模型提供方。留空时跟随会话当前使用的模型。',
           }),
           h(TextField, {
             label: '审查模型', value: value.reviewModel,
@@ -112,7 +106,7 @@ window.__ModuleLoader__.load({
       const pickProvider = (next) => {
         if (next === '') unset('reviewProvider')
         else set('reviewProvider', next)
-        // 换 provider 后旧模型通常已不在新目录，清掉。推理等级是模型
+        // 换模型提供方后旧模型通常已不在新目录，清掉。推理等级是模型
         // 专属的，一并清掉。
         const nextGroup = groups === null ? undefined : groups.find((g) => g.id === next)
         if (model !== '' && (nextGroup === undefined || !nextGroup.models.some((m) => m.id === model))) {
@@ -129,7 +123,7 @@ window.__ModuleLoader__.load({
       return h(Fragment, null,
         h('div', { style: fieldStyle },
           h('div', { style: labelRowStyle },
-            h('span', { style: labelStyle }, '审查模型 provider'),
+            h('span', { style: labelStyle }, '审查模型提供方'),
             h(ResetButton, {
               overridden: Object.prototype.hasOwnProperty.call(user, 'reviewProvider'),
               onReset: () => pickProvider(''),
@@ -145,7 +139,7 @@ window.__ModuleLoader__.load({
             groups !== null && groups.map((g) => h('option', { key: g.id, value: g.id }, g.name)),
             !providerKnown && h('option', { value: provider }, provider + '，当前值，目录中不存在'),
           ),
-          h('p', { style: hintStyle }, groups === null ? '正在加载模型目录，请稍候。' : '审查用的模型 provider。'),
+          h('p', { style: hintStyle }, groups === null ? '正在加载模型目录，请稍候。' : '审查用的模型提供方。'),
         ),
         h('div', { style: fieldStyle },
           h('div', { style: labelRowStyle },
@@ -167,17 +161,13 @@ window.__ModuleLoader__.load({
               && h('option', { value: model }, model + '，当前值，目录中不存在'),
           ),
           h('p', { style: hintStyle },
-            provider === '' ? '选择 provider 后可挑选模型。两者都留空时跟随会话当前使用的模型。' : '审查用的模型，可以选比主模型便宜的模型。',
+            provider === '' ? '选择模型提供方后可挑选模型。两者都留空时跟随会话当前使用的模型。' : '审查用的模型，可以选比主模型便宜的模型。',
           ),
         ),
       )
     }
 
-    /**
-     * 审查推理等级的选择。选项来自所选模型在目录里公布的等级列表。
-     * 跟随会话模型、目录加载失败、或者所选模型未公布可选推理等级时
-     * 退化为手动填写的文本框。留空时跟随模型自身的默认。
-     */
+    /** 审查推理等级的选择，选项来自所选模型在目录里公布的等级列表。 */
     function EffortPicker(props) {
       const { value, user, writable, groups, catalogFailed, set, unset } = props
       const effort = value.reviewReasoningEffort ?? ''
@@ -186,15 +176,17 @@ window.__ModuleLoader__.load({
       const model = value.reviewModel ?? ''
       const info = groups?.find((g) => g.id === provider)?.models.find((m) => m.id === model)
       const efforts = info?.reasoning?.efforts
+      // 跟随会话模型、目录加载失败、或所选模型未公布可选推理等级时，
+      // 退化为手动填写的文本框。留空时使用模型的默认推理等级。
       if (catalogFailed || provider === '' || model === '' || efforts === undefined || efforts.length === 0) {
         return h(TextField, {
           label: '审查推理等级',
           value: effort, overridden, writable,
           set: (next) => set('reviewReasoningEffort', next), unset: () => unset('reviewReasoningEffort'),
-          placeholder: '跟随模型自身的默认',
+          placeholder: '使用模型的默认推理等级',
           hint: provider === '' || model === ''
-            ? '跟随会话模型时无法列出可选推理等级，可手动填写。留空跟随模型自身的默认。'
-            : '所选模型未公布可选推理等级，可手动填写。留空跟随模型自身的默认。',
+            ? '跟随会话模型时无法列出可选推理等级，可手动填写。留空时使用模型的默认推理等级。'
+            : '所选模型未公布可选推理等级，可手动填写。留空时使用模型的默认推理等级。',
         })
       }
       const effortKnown = effort === '' || efforts.some((e) => e.id === effort)
@@ -212,7 +204,7 @@ window.__ModuleLoader__.load({
             else set('reviewReasoningEffort', event.target.value)
           },
         },
-          h('option', { value: '' }, '跟随模型自身的默认'),
+          h('option', { value: '' }, '使用模型的默认推理等级'),
           efforts.map((e) => h('option', { key: e.id, value: e.id }, e.name)),
           !effortKnown && h('option', { value: effort }, effort + '，当前值，该模型不支持'),
         ),
@@ -220,7 +212,7 @@ window.__ModuleLoader__.load({
       )
     }
 
-    /** 文本字段。失焦时提交，清空表示放弃覆盖，恢复缺省。 */
+    /** 文本字段。失焦时提交，清空后恢复默认值。 */
     function TextField(props) {
       const [text, setText] = useState(props.value ?? '')
       useEffect(() => setText(props.value ?? ''), [props.value])
@@ -249,7 +241,7 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * 数字字段。失焦时提交，值夹到 [min, max] 内取整，清空恢复缺省。
+     * 数字字段。失焦时提交，值夹到 [min, max] 内取整，清空后恢复默认值。
      */
     function NumberField(props) {
       const [text, setText] = useState(String(props.value ?? ''))
@@ -291,7 +283,6 @@ window.__ModuleLoader__.load({
       )
     }
 
-    /** 开关字段，立即提交。 */
     function BoolField(props) {
       return h('div', { style: fieldStyle },
         h('div', { style: labelRowStyle },
@@ -311,23 +302,26 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * 插件行的配置页。0.2.0 的设置界面把插件配置挂在 Plugins 页面里该插件
-     * 那一行上：页面把 `{ view, form }` 交给注册进 `plugins.row.config` 的
-     * 组件，form 提供快照和写入。读取走快照里的 value，写入是一次原子
-     * mutate，path 指向 Config 里那个 volatile 节点。
+     * 插件行的配置页。设置界面把插件配置挂在 Plugins 页面里该插件
+     * 那一行上，页面把 `{ view, form }` 交给注册进
+     * `plugins.row.config` 的组件。
+     *
+     * form 提供设置快照和写入入口。
+     *
+     * 读取走快照里的 value，写入是一次原子 mutate。
      */
     function HumanizeCard(props) {
       const { form, view, modelCatalog } = props
       const [groups, setGroups] = useState(null)
       const [catalogFailed, setCatalogFailed] = useState(false)
       useEffect(() => {
-        // 模型目录走 remote.session.modelCatalog。方法在注入回调里就取好
-        // 传进来，避免在渲染期访问追踪型服务代理。没有 remote.session 时
-        // 退化为手动填写的文本框。
+        // 没有 remote.session 时 modelCatalog 不存在，退化为手动填写的文本框。
         if (typeof modelCatalog !== 'function') {
           setCatalogFailed(true)
           return
         }
+        // 模型目录走 remote.session.modelCatalog。方法在注入回调里就取好
+        // 传进来，避免在渲染期访问追踪型服务代理。
         let alive = true
         modelCatalog().then((res) => {
           if (!alive) return
@@ -337,7 +331,7 @@ window.__ModuleLoader__.load({
         return () => { alive = false }
       }, [])
 
-      // 行摘要：Plugins 列表里作为该行的说明文字。
+      // 行摘要，Plugins 列表里作为该行的说明文字。
       if (view === 'summary') return h('p', { style: hintStyle }, '写入内容的行文审查与批注合并。')
 
       const snapshot = form?.state
@@ -348,9 +342,11 @@ window.__ModuleLoader__.load({
       const user = snapshot.user?.[SETTINGS_KEY] ?? {}
       const writable = snapshot.writable !== false
       const set = (field, next) => {
+        // path 指向 Config 里 SETTINGS_KEY 对应的 volatile 节点。
         void form.mutate([{ op: 'set', path: [SETTINGS_KEY, field], value: next }], snapshot.revision)
       }
       const unset = (field) => {
+        // path 指向 Config 里 SETTINGS_KEY 对应的 volatile 节点。
         void form.mutate([{ op: 'unset', path: [SETTINGS_KEY, field] }], snapshot.revision)
       }
 
@@ -365,7 +361,7 @@ window.__ModuleLoader__.load({
           min: 1,
           set: (next) => set('reviewConcurrency', next),
           unset: () => unset('reviewConcurrency'),
-          hint: '同时在途的审查调用数，最小 1。缺省 3。上限取决于模型提供方的速率限制，并发过高会让超限的文件记失败并进入重试。',
+          hint: '同时在途的审查调用数，最小 1，默认值是 3。上限取决于模型提供方的速率限制，并行批次过大时超限的文件会记为失败并进入重试。',
         }),
         h(NumberField, {
           label: '失败重试次数',
@@ -376,7 +372,7 @@ window.__ModuleLoader__.load({
           max: 3,
           set: (next) => set('reviewRetries', next),
           unset: () => unset('reviewRetries'),
-          hint: '失败的文件会插回下一批重试（和未处理的文件凑成同一批），单个文件最多重试几次，0 到 3。缺省 1。',
+          hint: '失败的文件会插回下一批，和未处理的文件凑成同一批。单个文件最多重试 0 到 3 次，默认值是 1。',
         }),
         h(BoolField, {
           label: '上下文压缩时自动合并',
@@ -391,7 +387,7 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * 渲染期错误边界。插槽条目渲染抛错时会被静默摘掉，页面上什么都不剩；
+     * 渲染期错误边界。插槽条目渲染抛错时会被静默摘掉，页面上什么都不剩。
      * 这里把异常显示成文字，省得再对着空白页排查。
      */
     class DiagBoundary extends React.Component {
@@ -412,15 +408,15 @@ window.__ModuleLoader__.load({
       }
     }
 
-    /** 插件行配置页的入口组件：错误边界包住 HumanizeCard。 */
+    /** 插件行配置页的入口组件。 */
     function RowCard(props) {
       return h(DiagBoundary, null, h(HumanizeCard, props))
     }
 
     /**
-     * 包页面内联的配置区。plugins.bundle.config 这个座位不传 form，组件
-     * 自己从 configForms 取。这里不用 hooks：页面本身订阅了 describe 镜像，
-     * 设置变化会让整页重渲染，重渲染时重新读取快照即可。
+     * 包页面内联的配置区。plugins.bundle.config 这个插槽不传 form，组件
+     * 自己从 configForms 取。这里保持普通函数组件。页面订阅了 describe
+     * 镜像，设置变化会触发整页重渲染。每次渲染都会重新读取快照。
      */
     function ConfigSection(props) {
       const { configForms, modelCatalog } = props

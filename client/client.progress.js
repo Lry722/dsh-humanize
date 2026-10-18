@@ -1,7 +1,7 @@
 /**
- * dsh-humanize 浏览器端进度条：输入框上方的审查进度条。
+ * dsh-humanize 浏览器端进度条，显示在输入框上方。
  *
- * 数据来自 ctx.jobs：宿主把 /humanize-review 批次注册成后台任务，
+ * 数据来自 ctx.jobs，宿主把 /humanize-review 批次注册成后台任务，
  * roster 流经 job-controller 实时推到浏览器。作为主 client.js 的
  * 懒加载 chunk，格式同 client.settings.js。
  */
@@ -19,10 +19,9 @@ window.__ModuleLoader__.load({
 
     /**
      * 当前会话的审查任务行。宿主把 /humanize-review 批次注册成
-     * kind 为 humanize-review 的后台任务，进度行形如
+     * kind 为 humanize-review 的后台任务，任务行形如
      * `done/total · 已暂存 N 条批注`，终态信息在 detail 上。
-     * 进行中只会有一个；结算记录停留期间可能和新批次并存，优先
-     * 取进行中的，否则取最新的一条。
+     * 进行中只会有一个。结算记录停留期间可能和新批次并存。
      */
     function useReviewJob(jobs, sessionId) {
       useEffect(() => jobs.watchRows(sessionId), [jobs, sessionId])
@@ -31,13 +30,14 @@ window.__ModuleLoader__.load({
         () => jobs.state.getSnapshot(),
       )
       const rows = (snapshot.rows[sessionId] ?? EMPTY_ROWS).filter((row) => row.kind === 'humanize-review')
+      // 优先取进行中的，否则取最新的一条。
       return rows.find((row) => row.status === 'running' || row.status === 'stopping')
         ?? rows[rows.length - 1]
         ?? null
     }
 
     /**
-     * 任务行的展示形态。pct 为 null 时不画进度条。进度从进度行的
+     * 任务行的展示形态。pct 有值时才画进度条。进度从任务行的
      * `done/total` 前缀解析，解析不出时按 0 处理。
      */
     function jobView(row) {
@@ -100,8 +100,8 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * 输入框上方的审查进度条。进行中的状态一直显示；终态停留由宿主
-     * 控制——结算记录在任务列表里停留几秒后被摘掉，进度条随之消失。
+     * 输入框上方的审查进度条。进行中的状态一直显示。终态停留由宿主
+     * 控制，结算记录在任务列表里停留几秒后被摘掉，进度条随之消失。
      */
     function ProgressDock(props) {
       const { jobs, sessionId } = props

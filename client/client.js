@@ -1,11 +1,12 @@
 /**
- * dsh-humanize 浏览器端入口：插槽装配。
+ * dsh-humanize 浏览器端入口，负责插槽装配。
  *
- * 设置卡片和进度条各拆成独立的懒加载 chunk（client.settings.js、
- * client.progress.js），本文件只做 require.async 懒加载和插槽注册，
- * 与官方 dsh-client-ui-sidebar-terminal 的 client.js + client.terminal.js
- * 同一模式。手写为 __ModuleLoader__ 工厂格式，不引入构建步骤。唯一的
- * 外部依赖是模块表里的 react。
+ * 设置卡片和进度条各自是独立的懒加载 chunk，分别在
+ * client.settings.js 和 client.progress.js。本文件只做
+ * require.async 懒加载和插槽注册。这个结构和官方
+ * dsh-client-ui-sidebar-terminal 的 client.js 加 client.terminal.js
+ * 是同一模式。手写为 __ModuleLoader__ 工厂格式，不引入构建步骤。
+ * 外部依赖只有模块表里的 react。
  */
 window.__ModuleLoader__.load({
   id: 'dsh-humanize',
@@ -16,7 +17,7 @@ window.__ModuleLoader__.load({
     const h = React.createElement
     const { Suspense, lazy } = React
 
-    /** 设置命名空间：宿主条目的 id，也是 Plugins 页面里本插件行的 id。 */
+    /** 设置命名空间，宿主条目的 id，也是 Plugins 页面里本插件行的 id。 */
     const NS = 'dsh-humanize'
 
     /** 懒加载设置 chunk，首次渲染设置页时才拉取。 */
@@ -26,8 +27,8 @@ window.__ModuleLoader__.load({
     const LazyProgressDock = lazy(async () => ({ default: (await require.async('./client.progress.js')).ProgressDock }))
 
     function apply(ctx) {
-      // jobs 服务提供任务 roster 流。没有它时进度条不注册，其余功能
-      // 照常。
+      // jobs 服务提供任务 roster 流。有 jobs 服务时才注册进度条，
+      // 其余功能照常运行。
       ctx.inject(['jobs'], (jobCtx) => {
         const jobs = jobCtx.jobs
         jobCtx.slots.inject('conversation.input.dock', () => jobCtx.slots.register({
@@ -37,13 +38,13 @@ window.__ModuleLoader__.load({
         }, (owner) => h(Suspense, { fallback: null },
           h(LazyProgressDock, { jobs, sessionId: String(owner.sessionId) }))))
       })
-      // 设置页有两处座位：包页面上内联的配置区（按包名），以及包内那一行
-      // 点进去的配置页（按 <包名>#<行 id>）。两者写同一份设置。
+      // 设置页有两处插槽。一处在包页面上内联，按包名匹配。另一处在
+      // 包内那一行点进去的配置页，按“包名#行 id”匹配。两者写同一份设置。
       ctx.inject(['configForms'], (formCtx) => {
-        // remote 是按命名空间追踪的代理：访问 remote.session 这一跳必须在
-        // inject 里声明 "remote.session"（只声明 "remote" 会在渲染期抛
-        // cannot get property "remote.session" without inject）。方法在这里
-        // 就取好绑定好，往下传普通函数，渲染期不再碰代理。
+        // remote 是按命名空间追踪的代理，访问 remote.session 这一跳必须在
+        // inject 里声明 "remote.session"。只声明 "remote" 的话，渲染期会抛
+        // cannot get property "remote.session" without inject。取好的方法
+        // 往下传，渲染期不碰代理。
         formCtx.inject(['remote', 'remote.session'], (remCtx) => {
           const configForms = formCtx.configForms
           const sessionRemote = remCtx.remote.session
