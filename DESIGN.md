@@ -75,21 +75,32 @@ PATH 是文件时合并这一个文件，是目录时合并目录下所有有批
 
 #### 主动审查
 
-注册 `/humanize-review PATH` 命令，主动触发对一个 PATH 的完整审查，不需要等待写入。
+注册 `/humanize-review PATH` 命令，立即触发对一个 PATH 的完整审查。
 
-PATH 是文件时审查这一个文件，是目录时递归展开。两种情况下都只审查受 git 管理且后缀在规范链 extensions 声明范围内的文件。各级的声明合并生效。
+PATH 是文件时审查这一个文件，是目录时递归展开。两种情况下都只审查受 git 管理且路径命中规范链 include 模式的文件。各级的声明合并生效，范围越小的优先级越高。
 
-审查在后台进行。批次注册成 kind 为 humanize-review 的后台任务（ctx.jobs），进度行进任务 roster，由 job-controller 实时推到浏览器：客户端渲染成输入框上方的进度条，会话头部的任务列表也会显示并允许取消。并行批次大小由 reviewConcurrency 控制，缺省为 3。不设上限，实际并发不超过待审文件数。批次同时在途审查多个文件，用滚动窗口推进：每批取队列头部最多 N 个，失败的文件插回队首，和还没处理过的文件凑成下一批。例如队列有 A B C D E 五个文件，三并发时，A 失败后第二批是 A D E。单个文件最多尝试 1 + reviewRetries 次（缺省 1），额度用尽才计入最终失败。终态说明列出仍然失败的文件和原因。这部分内容不进模型上下文。批次全程挂一个 jobs.wait，让结算被记为 awaited，抑制 dsh-tool-jobs 的完成通知。注意这个 wait 不能挂会提前 abort 的 signal：注册表在 done 的微任务里结算，abort 抢跑会把 wait 移出等待集合，awaited 失效，通知照样漏进主会话。结算记录在任务列表停留几秒后由插件摘掉。同一个 agent 同时只允许一个审查批次，批注合并进行中时拒绝派发。
+审查在后台进行。
 
-PROSE.md 的文件头是一个可选的 YAML 块：
+批次注册成 kind 为 humanize-review 的后台任务（ctx.jobs）。进度行进任务 roster，由 job-controller 实时推到浏览器。客户端渲染成输入框上方的进度条，会话头部的任务列表也会显示并允许取消。
+
+并行批次大小由 reviewConcurrency 控制，缺省为 3。不设上限，实际并发不超过待审文件数。批次同时在途审查多个文件，用滚动窗口推进。每批取队列头部最多 N 个，失败的文件插回队首，和还没处理过的文件凑成下一批。例如队列有 A B C D E 五个文件，三并发时，A 失败后第二批是 A D E。单个文件最多尝试 1 + reviewRetries 次（缺省 1），额度用尽才计入最终失败。
+
+终态说明列出仍然失败的文件和原因，仅用于界面展示。批次全程等待用户处理，避免完成通知打扰主会话。结算记录在任务列表停留几秒后由插件摘掉。
+
+同一个 agent 同时只允许一个审查批次，批注合并进行中时拒绝派发。
+
+PROSE.md 的文件头是一个可选的 YAML 块，include 声明审查范围，语法参考 .gitignore：
 
 ```markdown
 ---
-extensions:
-  - .md
-  - .txt
+include:
+  - '*.md'
+  - 'docs/**/*.txt'
+  - '!drafts/'
 ---
 ```
+
+不含 `/` 的模式匹配任意层级的文件名，含 `/` 的按声明文件所在目录锚定，`!` 前缀表示排除，结尾 `/` 匹配该目录下所有文件，`*` 不跨目录，`**` 跨目录。判定按规范链范围从小到大依次套用各条模式，最后一次命中的结果生效。
 
 #### 压缩前触发
 
@@ -109,11 +120,11 @@ extensions:
 
 - `lib/index.js` — 组合根：读设置、装包装工具、接管线和命令。
 - `lib/wrap.js` — 标记写入：包装 write/edit，增加必填 human_facing。
-- `lib/specs.js` — PROSE.md 分层规范加载与渲染。
+- `lib/specs.js` — PROSE.md 分层规范加载、渲染与 include 模式匹配。
 - `lib/pipeline.js` — 审查管线：跨模块共享状态（合并锁、审查锁、每文件串行队列）与单次审查的编排。
 - `lib/review.js` — 旁路审查调用与双看门狗（空闲两分钟、总时长十分钟）。
 - `lib/annotations.js` — 批注解析与暂存 markdown 渲染。
-- `lib/review-run.js` — /humanize-review 批次：滚动窗口并发、失败重试、jobs 进度上报，jobs 不可用时静默降级。
+- `lib/review-run.js` — /humanize-review 批次：滚动窗口并发、失败重试、jobs 进度上报，jobs 不可用时静默降级。批次全程挂一个 jobs.wait，让结算被记为 awaited，抑制 dsh-tool-jobs 的完成通知。结算依赖这个 wait，它挂的 signal 提前终止会让结算失效。注册表在 done 的微任务里结算，abort 抢跑会把 wait 移出等待集合，awaited 失效，通知照样漏进主会话。
 - `lib/merge.js` — /humanize 合并与 compaction/end 自动合并、合并上下文遮蔽。
 - `lib/staging.js`、`lib/diff.js`、`lib/prompts.js` — 暂存读写、改动区段、提示词资源。
 
