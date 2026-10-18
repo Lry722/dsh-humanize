@@ -12,7 +12,7 @@ DSH 插件是一个 npm 包。包内的 package.json 声明补丁文件的位置
 dsh plugin --profile web add link:/home/lry722/dev/dsh-humanize
 ```
 
-link 装载本身不会热重载宿主插件：插件 link 在 profile 的 node_modules 下，而 dsh-hmr 的默认 ignore 排除 `**/node_modules`，shipped 的 web 组合又把 hmr 的 root 设为空。改完 lib 下的源码后，运行进程仍会用 ESM 缓存里的旧模块——插件管理器的 disable/enable 也不会重新导入。开发时需要在 profile 的 cordis.patch.yml 里把插件目录纳入 hmr 监听：
+link 装载本身不会热重载宿主插件：插件 link 在 profile 的 node_modules 下，而 dsh-hmr 的默认 ignore 排除 `**/node_modules`，shipped 的 web 组合又把 hmr 的 root 设为空。改完 lib 下的源码后，运行进程仍会用 ESM 缓存里的旧模块。插件管理器的 disable/enable 也不会重新导入。开发时需要在 profile 的 cordis.patch.yml 里把插件目录纳入 hmr 监听：
 
 ```yaml
 - id: hmr
@@ -25,7 +25,7 @@ link 装载本身不会热重载宿主插件：插件 link 在 profile 的 node_
       - "**/.git/**"
 ```
 
-hmr 检测到改动后，会把该插件的全部依赖加入重载集合、逐个清掉 ESM 与 CJS 缓存再重新导入，因此改 lib 下任意一个文件都会整图重载。浏览器端 client/ 下的改动仍需刷新页面（没有 dev:web watcher 时不会自动重建）。
+hmr 检测到改动后，会把该插件的全部依赖加入重载集合、逐个清掉 ESM 与 CJS 缓存再重新导入，因此改 lib 下任意一个文件都会整图重载。浏览器端 client/ 下的改动仍需刷新页面。没有 dev:web watcher 时改动需手动重建。
 
 ## 整体流程
 
@@ -37,7 +37,7 @@ hmr 检测到改动后，会把该插件的全部依赖加入重载集合、逐�
 
 第三步，旁路审查。写入触发时，插件从原工具返回的写入前后内容算出改动区段，两侧各带三行上下文，只把改动区段和规范发给一次独立的模型调用。新建文件和 /humanize-review 的全量审查发送全文。调用要求模型对照规范逐条批注，输出结构化的审查结果。审查用哪个模型由插件配置决定，可以选比主模型便宜的模型。审查在后台进行，失败只记录日志，不影响主任务。
 
-第四步，延迟合并。批注先暂存到文件里，对同一文件再次审查时，基于已有批注修改。合并有两个触发时机。用户输入 /humanize 命令时，按命令指定的范围合并。会话发生上下文压缩时，合并整个项目的全部暂存批注。插件把规范和批注发给主模型，规范按内容分组只贴一次。主模型自行读取文件当前内容完成编辑，然后遮蔽这段处理上下文。
+第四步，延迟合并。批注先暂存到文件里，对同一文件再次审查时，基于已有批注修改。合并有两个触发时机。用户输入 /humanize 命令时，按命令指定的范围合并。会话发生上下文压缩时，合并整个项目的全部暂存批注。插件把规范和批注发给主模型完成编辑，并避免处理过程占用会话上下文。
 
 ## 平台机制对照
 
@@ -79,7 +79,7 @@ PATH 是文件时合并这一个文件，是目录时合并目录下所有有批
 
 PATH 是文件时审查这一个文件，是目录时递归展开。两种情况下都只审查受 git 管理且后缀在规范链 extensions 声明范围内的文件。各级的声明合并生效。
 
-审查在后台进行。批次注册成 kind 为 humanize-review 的后台任务（ctx.jobs），进度行进任务 roster，由 job-controller 实时推到浏览器：客户端渲染成输入框上方的进度条，会话头部的任务列表也会显示并允许取消。批次按并行批次大小（reviewConcurrency，缺省 3，不设上限，实际并发不超过待审文件数）同时在途审查多个文件，用滚动窗口推进：每批取队列头部最多 N 个，失败的文件插回队首，和还没处理过的文件凑成下一批（A B C D E、三并发时，A 失败后第二批是 A D E）。单个文件最多尝试 1 + reviewRetries 次（缺省 1），额度用尽才计入最终失败。终态说明列出仍然失败的文件和原因。这部分内容不进模型上下文——批次全程挂一个 jobs.wait，让结算被记为 awaited，抑制 dsh-tool-jobs 的完成通知。注意这个 wait 不能挂会提前 abort 的 signal：注册表在 done 的微任务里结算，abort 抢跑会把 wait 移出等待集合，awaited 失效，通知照样漏进主会话。结算记录在任务列表停留几秒后由插件摘掉。同一个 agent 同时只允许一个审查批次，批注合并进行中时拒绝派发。
+审查在后台进行。批次注册成 kind 为 humanize-review 的后台任务（ctx.jobs），进度行进任务 roster，由 job-controller 实时推到浏览器：客户端渲染成输入框上方的进度条，会话头部的任务列表也会显示并允许取消。并行批次大小由 reviewConcurrency 控制，缺省为 3。不设上限，实际并发不超过待审文件数。批次同时在途审查多个文件，用滚动窗口推进：每批取队列头部最多 N 个，失败的文件插回队首，和还没处理过的文件凑成下一批。例如队列有 A B C D E 五个文件，三并发时，A 失败后第二批是 A D E。单个文件最多尝试 1 + reviewRetries 次（缺省 1），额度用尽才计入最终失败。终态说明列出仍然失败的文件和原因。这部分内容不进模型上下文。批次全程挂一个 jobs.wait，让结算被记为 awaited，抑制 dsh-tool-jobs 的完成通知。注意这个 wait 不能挂会提前 abort 的 signal：注册表在 done 的微任务里结算，abort 抢跑会把 wait 移出等待集合，awaited 失效，通知照样漏进主会话。结算记录在任务列表停留几秒后由插件摘掉。同一个 agent 同时只允许一个审查批次，批注合并进行中时拒绝派发。
 
 PROSE.md 的文件头是一个可选的 YAML 块：
 
@@ -99,9 +99,29 @@ extensions:
 
 ## 设置页
 
-0.2.0 的 dsh-settings 没有命令式的 register(ns, schema)。插件导出 Config 声明设置，设置页只暴露标了 `volatile()` 的节点，命名空间是条目在补丁里声明的 id（dsh-humanize）。运行时该节点交给插件的是一个带 `get()` 的引用而不是普通值，读取要解引用；插件用访问器在使用时实时读，所以设置页改动不需要额外监听。
+0.2.0 的 dsh-settings 没有命令式的 register(ns, schema)。插件导出 Config 声明设置，设置页只暴露标了 `volatile()` 的节点，命名空间是条目在补丁里声明的 id（dsh-humanize）。运行时该节点交给插件的是一个带 `get()` 的引用，读取时要解引用。插件用访问器在使用时实时读，设置页改动直接生效。
 
-浏览器端注册进 `plugins.row.config`，key 是 `<包名>#<行 id>`，用 `configForms.whileServed(['dsh-humanize'], ...)` 保证宿主真的服务这个命名空间时才出现。页面把 `{ view, form }` 交给组件：`view: 'summary'` 渲染行内说明，`view: 'page'` 渲染表单；读取走 `form.state`（value/base/user/revision/writable），写入是一次原子 `form.mutate(ops, revision)`，path 以 volatile 节点名开头。插件自带页面时声明 `settings.configure({ auto: false })`。
+浏览器端注册进 `plugins.row.config`，key 是 `<包名>#<行 id>`，用 `configForms.whileServed(['dsh-humanize'], ...)` 保证宿主真的服务这个命名空间时才出现。页面把 `{ view, form }` 交给组件：`view: 'summary'` 渲染行内说明，`view: 'page'` 渲染表单。读取走 `form.state`（value/base/user/revision/writable），写入是一次原子 `form.mutate(ops, revision)`，path 以 volatile 节点名开头。插件自带页面时声明 `settings.configure({ auto: false })`。
+
+## 代码布局
+
+宿主端（lib/）按流程步骤分模块，index.js 只做组合：
+
+- `lib/index.js` — 组合根：读设置、装包装工具、接管线和命令。
+- `lib/wrap.js` — 标记写入：包装 write/edit，增加必填 human_facing。
+- `lib/specs.js` — PROSE.md 分层规范加载与渲染。
+- `lib/pipeline.js` — 审查管线：跨模块共享状态（合并锁、审查锁、每文件串行队列）与单次审查的编排。
+- `lib/review.js` — 旁路审查调用与双看门狗（空闲两分钟、总时长十分钟）。
+- `lib/annotations.js` — 批注解析与暂存 markdown 渲染。
+- `lib/review-run.js` — /humanize-review 批次：滚动窗口并发、失败重试、jobs 进度上报，jobs 不可用时静默降级。
+- `lib/merge.js` — /humanize 合并与 compaction/end 自动合并、合并上下文遮蔽。
+- `lib/staging.js`、`lib/diff.js`、`lib/prompts.js` — 暂存读写、改动区段、提示词资源。
+
+浏览器端（client/）拆为主入口加两个懒加载 chunk，与官方 dsh-client-ui-sidebar-terminal 的 client.js + client.terminal.js 同一模式：主入口只做 `require.async` 懒加载和插槽注册，chunk 用同样的 `__ModuleLoader__.load` 工厂格式注册，多一个 chunk 字段：
+
+- `client/client.js` — 入口：React.lazy 包 chunk，注册 conversation.input.dock 与两处设置座位。
+- `client/client.settings.js` — 设置卡片：通用表单控件与业务字段。
+- `client/client.progress.js` — 输入框上方的审查进度条。
 
 ## 服务速查
 
