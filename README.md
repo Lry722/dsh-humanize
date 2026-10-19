@@ -82,10 +82,10 @@ include:
 
 ## 提示词
 
-发给模型的提示词不在代码里，统一放在包根的 `prompts/` 目录，直接编辑即可：
+发给模型的提示词都放在包的根目录 `prompts/` 下，直接编辑即可：
 
 - `prompts/review-system.md`：旁路审查调用的 system 提示词。
-- `prompts/merge-header.md`：`/humanize` 合并消息的开头指令。
+- `prompts/merge-header.md`：`/humanize` 合并消息开头的提示词。
 - `prompts/human-facing-field.md`：包装工具里 `human_facing` 参数的描述。
 
 每次审查或合并都会重新读取对应文件，改完保存即生效。
