@@ -75,6 +75,21 @@ window.__ModuleLoader__.load({
       return h('button', { type: 'button', style: resetStyle, onClick: props.onReset }, '恢复默认值')
     }
 
+    /**
+     * 字段外壳：标签行、恢复默认值入口和说明文字，控件本体是 children。
+     * labelContent 用于标签和控件同行的场景，比如开关。
+     */
+    function FieldShell(props) {
+      return h('div', { style: fieldStyle },
+        h('div', { style: labelRowStyle },
+          props.labelContent ?? h('span', { style: labelStyle }, props.label),
+          h(ResetButton, { overridden: props.overridden, onReset: props.onReset }),
+        ),
+        props.children,
+        h('p', { style: hintStyle }, props.hint),
+      )
+    }
+
     /** 审查模型的两级选择，先选模型提供方，再选模型。 */
     function ModelPicker(props) {
       const { value, user, writable, groups, catalogFailed, set, unset } = props
@@ -121,14 +136,12 @@ window.__ModuleLoader__.load({
       }
 
       return h(Fragment, null,
-        h('div', { style: fieldStyle },
-          h('div', { style: labelRowStyle },
-            h('span', { style: labelStyle }, '审查模型提供方'),
-            h(ResetButton, {
-              overridden: Object.prototype.hasOwnProperty.call(user, 'reviewProvider'),
-              onReset: () => pickProvider(''),
-            }),
-          ),
+        h(FieldShell, {
+          label: '审查模型提供方',
+          overridden: Object.prototype.hasOwnProperty.call(user, 'reviewProvider'),
+          onReset: () => pickProvider(''),
+          hint: groups === null ? '正在加载模型目录，请稍候。' : '审查用的模型提供方。',
+        },
           h('select', {
             style: selectStyle,
             value: provider,
@@ -139,16 +152,13 @@ window.__ModuleLoader__.load({
             groups !== null && groups.map((g) => h('option', { key: g.id, value: g.id }, g.name)),
             !providerKnown && h('option', { value: provider }, provider + '，当前值，目录中不存在'),
           ),
-          h('p', { style: hintStyle }, groups === null ? '正在加载模型目录，请稍候。' : '审查用的模型提供方。'),
         ),
-        h('div', { style: fieldStyle },
-          h('div', { style: labelRowStyle },
-            h('span', { style: labelStyle }, '审查模型'),
-            h(ResetButton, {
-              overridden: Object.prototype.hasOwnProperty.call(user, 'reviewModel'),
-              onReset: () => pickModel(''),
-            }),
-          ),
+        h(FieldShell, {
+          label: '审查模型',
+          overridden: Object.prototype.hasOwnProperty.call(user, 'reviewModel'),
+          onReset: () => pickModel(''),
+          hint: provider === '' ? '选择模型提供方后可挑选模型。两者都留空时跟随会话当前使用的模型。' : '审查用的模型，可以选比主模型便宜的模型。',
+        },
           h('select', {
             style: selectStyle,
             value: model,
@@ -159,9 +169,6 @@ window.__ModuleLoader__.load({
             group !== undefined && group.models.map((m) => h('option', { key: m.id, value: m.id }, m.name)),
             group !== undefined && model !== '' && !group.models.some((m) => m.id === model)
               && h('option', { value: model }, model + '，当前值，目录中不存在'),
-          ),
-          h('p', { style: hintStyle },
-            provider === '' ? '选择模型提供方后可挑选模型。两者都留空时跟随会话当前使用的模型。' : '审查用的模型，可以选比主模型便宜的模型。',
           ),
         ),
       )
@@ -190,11 +197,12 @@ window.__ModuleLoader__.load({
         })
       }
       const effortKnown = effort === '' || efforts.some((e) => e.id === effort)
-      return h('div', { style: fieldStyle },
-        h('div', { style: labelRowStyle },
-          h('span', { style: labelStyle }, '审查推理等级'),
-          h(ResetButton, { overridden, onReset: () => unset('reviewReasoningEffort') }),
-        ),
+      return h(FieldShell, {
+        label: '审查推理等级',
+        overridden,
+        onReset: () => unset('reviewReasoningEffort'),
+        hint: '审查模型的推理等级，选项来自所选模型公布的等级列表。',
+      },
         h('select', {
           style: selectStyle,
           value: effort,
@@ -208,7 +216,6 @@ window.__ModuleLoader__.load({
           efforts.map((e) => h('option', { key: e.id, value: e.id }, e.name)),
           !effortKnown && h('option', { value: effort }, effort + '，当前值，该模型不支持'),
         ),
-        h('p', { style: hintStyle }, '审查模型的推理等级，选项来自所选模型公布的等级列表。'),
       )
     }
 
@@ -222,11 +229,12 @@ window.__ModuleLoader__.load({
         if (trimmed === '') props.unset()
         else props.set(trimmed)
       }
-      return h('div', { style: fieldStyle },
-        h('div', { style: labelRowStyle },
-          h('span', { style: labelStyle }, props.label),
-          h(ResetButton, { overridden: props.overridden, onReset: () => props.unset() }),
-        ),
+      return h(FieldShell, {
+        label: props.label,
+        overridden: props.overridden,
+        onReset: () => props.unset(),
+        hint: props.hint,
+      },
         h('input', {
           style: inputStyle,
           value: text,
@@ -236,7 +244,6 @@ window.__ModuleLoader__.load({
           onBlur: commit,
           onKeyDown: (event) => { if (event.key === 'Enter') event.target.blur() },
         }),
-        h('p', { style: hintStyle }, props.hint),
       )
     }
 
@@ -262,11 +269,12 @@ window.__ModuleLoader__.load({
         if (next === props.value) return
         props.set(next)
       }
-      return h('div', { style: fieldStyle },
-        h('div', { style: labelRowStyle },
-          h('span', { style: labelStyle }, props.label),
-          h(ResetButton, { overridden: props.overridden, onReset: () => props.unset() }),
-        ),
+      return h(FieldShell, {
+        label: props.label,
+        overridden: props.overridden,
+        onReset: () => props.unset(),
+        hint: props.hint,
+      },
         h('input', {
           style: inputStyle,
           type: 'number',
@@ -279,26 +287,24 @@ window.__ModuleLoader__.load({
           onBlur: commit,
           onKeyDown: (event) => { if (event.key === 'Enter') event.target.blur() },
         }),
-        h('p', { style: hintStyle }, props.hint),
       )
     }
 
     function BoolField(props) {
-      return h('div', { style: fieldStyle },
-        h('div', { style: labelRowStyle },
-          h('label', { style: checkRowStyle },
-            h('input', {
-              type: 'checkbox',
-              checked: props.value ?? true,
-              disabled: !props.writable,
-              onChange: (event) => props.set(event.target.checked),
-            }),
-            props.label,
-          ),
-          h(ResetButton, { overridden: props.overridden, onReset: () => props.unset() }),
+      return h(FieldShell, {
+        labelContent: h('label', { style: checkRowStyle },
+          h('input', {
+            type: 'checkbox',
+            checked: props.value ?? true,
+            disabled: !props.writable,
+            onChange: (event) => props.set(event.target.checked),
+          }),
+          props.label,
         ),
-        h('p', { style: hintStyle }, props.hint),
-      )
+        overridden: props.overridden,
+        onReset: () => props.unset(),
+        hint: props.hint,
+      })
     }
 
     /**

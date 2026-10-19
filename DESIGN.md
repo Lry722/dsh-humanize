@@ -109,9 +109,15 @@ PATH 是文件时合并这一个文件，是目录时合并目录下所有有批
 
 注册 `/humanize-review PATH` 命令，立即触发对一个 PATH 的全量审查。
 
-PATH 是文件时审查这一个文件，是目录时递归展开。两种情况下都只审查受 git 管理且路径命中规范链 include 模式的文件。各级的声明合并生效，范围越小的优先级越高。
+PATH 是文件时审查这一个文件，是目录时递归展开。
 
-审查在后台进行。
+两种情况下，审查范围先限定在受 git 管理的文件。文件路径要命中各级规范声明的范围。
+
+各级的声明合并生效，审查范围越小的优先级越高。
+
+目标处于 git 仓库之外，或环境里没有 git 命令时，审查以失败终态结束。终态说明给出原因。
+
+命令返回后，审查在后台继续执行。
 
 批次注册成 kind 为 humanize-review 的后台任务，通过 ctx.jobs 上报进度。进度行进任务 roster，由 job-controller 实时推到浏览器。客户端渲染成输入框上方的进度条，会话头部的任务列表也会显示并允许取消。
 
@@ -174,6 +180,9 @@ include:
 - `lib/annotations.js`，批注解析与暂存 markdown 渲染。
 - `lib/review-run.js`，/humanize-review 批次。批次按滚动窗口并发执行，失败会重试。jobs 可用时上报进度，否则继续执行批次。批次执行期间不发完成通知。
 - `lib/merge.js`，/humanize 合并、/humanize-loop 循环合并与 compaction/end 自动合并、子代理执行与收尾。
+- `lib/job-track.js`，后台任务脚手架。注册任务、挂 wait 抑制完成通知、延迟摘除结算记录，审查批次和循环合并共用。
+- `lib/command.js`，斜杠命令的路径参数解析。
+- `lib/defaults.js`，审查并发、重试次数和循环轮次的缺省值与边界，Config schema 和各使用处共用。
 - `lib/staging.js`、`lib/diff.js`、`lib/prompts.js`，暂存读写、改动区段、提示词资源。
 
 浏览器端的 client/ 目录拆为主入口加两个按需加载 chunk，与官方 dsh-client-ui-sidebar-terminal 的 client.js + client.terminal.js 同一模式。主入口只做 `require.async` 懒加载和插槽注册。chunk 用同样的 `__ModuleLoader__.load` 工厂格式注册。chunk 的注册对象在主入口基础上多一个 chunk 字段。
