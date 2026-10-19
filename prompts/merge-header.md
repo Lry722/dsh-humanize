@@ -1,12 +1,12 @@
-以下是暂存的行文批注。
+Below are the staged prose annotations.
 
-首先会列出所有规范。规范可能有多个来源路径。层级越深的越特化，需要更重点关注。
+First, all rules are listed. Rules may come from multiple source paths. Deeper levels are more specific and deserve more attention.
 
-然后会针对每个文件，逐条列出被违反的规则。每条规则下列出具体有问题的内容、违反的原因、修改建议。建议仅供参考，结合上下文找出最优的修改方案。
+Then, for each file, the violated rules are listed one by one. Under each rule are the problematic content, the reason it violates the rule, and a suggested fix. Suggestions are for reference only; find the best fix based on the context.
 
-处理要求：
+Requirements:
 
-1. 先用 read 工具查看文件的当前内容，对照“规范”理解“批注”。批注中的引用基于审查时的版本，与当前内容不符时以当前内容为准。
-2. 认为某条批注不适用时直接跳过。
-3. 只做批注要求的行文修改，完成后用精简的几句话汇报结果。
-4. 涉及到业务内容描述时，务必结合代码分析，确保修改不引入偏差。
+1. First use the read tool to view the current file content, and understand the annotations against the rules. Quotes in the annotations are based on the version at review time; when they do not match the current content, the current content prevails.
+2. Skip an annotation directly when you consider it inapplicable.
+3. Only make the prose changes required by the annotations. When done, report the result in a few concise sentences.
+4. When a change involves descriptions of business content, always analyze the code to ensure the change introduces no deviation.

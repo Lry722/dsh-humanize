@@ -8,15 +8,23 @@ test('编号用同一份规范快照解析回条文', () => {
   const list = normalizeAnnotations({
     annotations: [
       { rule: 1, quote: 'q', problem: 'p', suggestion: 's' },
-      { rule: 99, quote: 'q2', problem: 'p2', suggestion: 's2' },
-      { rule: '1', quote: 'q3', problem: 'p3', suggestion: 's3' },
+      { rule: 2, quote: 'q2', problem: 'p2', suggestion: 's2' },
     ],
   }, rules)
   assert.equal(list[0].ruleText, 'rule one')
-  // 编号在规范快照里找不到时按未对应处理。
-  assert.equal(list[1].ruleText, null)
-  // 编号不是数字时按未对应处理。
-  assert.equal(list[2].ruleText, null)
+  assert.equal(list[1].ruleText, 'rule two')
+})
+
+test('编号解析不出条文的条目被丢弃', () => {
+  const list = normalizeAnnotations({
+    annotations: [
+      // 编号在规范快照里找不到。
+      { rule: 99, quote: 'q', problem: 'p', suggestion: 's' },
+      // 编号不是数字。
+      { rule: '1', quote: 'q2', problem: 'p2', suggestion: 's2' },
+    ],
+  }, rules)
+  assert.equal(list.length, 0)
 })
 
 test('缺少 annotations 数组时抛错', () => {
@@ -25,7 +33,7 @@ test('缺少 annotations 数组时抛错', () => {
 })
 
 test('非对象的条目被过滤', () => {
-  const list = normalizeAnnotations({ annotations: [null, 'x', { quote: 'q' }] }, rules)
+  const list = normalizeAnnotations({ annotations: [null, 'x', { rule: 1, quote: 'q' }] }, rules)
   assert.equal(list.length, 1)
   assert.equal(list[0].quote, 'q')
 })
@@ -43,7 +51,7 @@ test('渲染的编号行能被 countAnnotations 数回来', () => {
   const rendered = renderStaging('/f.md', [
     { ruleText: 'rule one', quote: 'q1', problem: 'p1', suggestion: 's1' },
     { ruleText: 'rule one', quote: 'q2', problem: '', suggestion: '' },
-    { ruleText: null, quote: 'q3', problem: 'p3', suggestion: 's3' },
+    { ruleText: 'rule two', quote: 'q3', problem: 'p3', suggestion: 's3' },
   ])
   assert.equal(countAnnotations(rendered), 3)
   assert.equal(countAnnotations('# 没有批注\n', 0), 0)
