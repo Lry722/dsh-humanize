@@ -433,7 +433,6 @@ window.__ModuleLoader__.load({
         h(HumanizeCard, { view: 'page', form: { state, mutate }, modelCatalog }))
     }
 
-    module.exports.HumanizeCard = HumanizeCard
     module.exports.RowCard = RowCard
     module.exports.ConfigSection = ConfigSection
     return module.exports
