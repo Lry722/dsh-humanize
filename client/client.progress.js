@@ -18,18 +18,19 @@ window.__ModuleLoader__.load({
     const EMPTY_ROWS = []
 
     /**
-     * 当前会话的审查任务行。宿主把 /humanize-review 批次注册成
-     * kind 为 humanize-review 的后台任务，任务行形如
-     * `done/total · 已暂存 N 条批注`，终态信息在 detail 上。
-     * 进行中只会有一个。结算记录停留期间可能和新批次并存。
+     * 当前会话的 humanize 任务行。宿主把 /humanize-review 批次注册成
+     * kind 为 humanize-review 的后台任务，/humanize-loop 循环注册成
+     * kind 为 humanize-loop 的后台任务。任务行形如
+     * `done/total · 说明`，终态信息在 detail 上。
+     * 进行中只会有一个。结算记录停留期间可能和新任务并存。
      */
-    function useReviewJob(jobs, sessionId) {
+    function useHumanizeJob(jobs, sessionId) {
       useEffect(() => jobs.watchRows(sessionId), [jobs, sessionId])
       const snapshot = useSyncExternalStore(
         (listener) => jobs.state.subscribe(listener),
         () => jobs.state.getSnapshot(),
       )
-      const rows = (snapshot.rows[sessionId] ?? EMPTY_ROWS).filter((row) => row.kind === 'humanize-review')
+      const rows = (snapshot.rows[sessionId] ?? EMPTY_ROWS).filter((row) => row.kind === 'humanize-review' || row.kind === 'humanize-loop')
       // 优先取进行中的，否则取最新的一条。
       return rows.find((row) => row.status === 'running' || row.status === 'stopping')
         ?? rows[rows.length - 1]
@@ -105,11 +106,11 @@ window.__ModuleLoader__.load({
      */
     function ProgressDock(props) {
       const { jobs, sessionId } = props
-      const row = useReviewJob(jobs, sessionId)
+      const row = useHumanizeJob(jobs, sessionId)
       if (row === null || row === undefined) return null
       const view = jobView(row)
       const rows = [h('div', { key: 'head', style: dockRowStyle },
-        h('span', { style: dockTitleStyle }, '行文审查'),
+        h('span', { style: dockTitleStyle }, row.kind === 'humanize-loop' ? '循环合并' : '行文审查'),
         h('span', { style: dockMetaStyle }, view.meta),
       )]
       if (view.pct !== null) {

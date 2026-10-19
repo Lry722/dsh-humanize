@@ -374,6 +374,17 @@ window.__ModuleLoader__.load({
           unset: () => unset('reviewRetries'),
           hint: '失败的文件会插回下一批，和未处理的文件凑成同一批。单个文件最多重试 0 到 3 次，默认值是 1。',
         }),
+        h(NumberField, {
+          label: '循环合并轮次上限',
+          value: value.loopMaxRounds ?? 3,
+          overridden: Object.prototype.hasOwnProperty.call(user, 'loopMaxRounds'),
+          writable,
+          min: 1,
+          max: 10,
+          set: (next) => set('loopMaxRounds', next),
+          unset: () => unset('loopMaxRounds'),
+          hint: '/humanize-loop 每轮合并后复审，还有新批注就继续合并，达到上限则停下。默认值是 3，范围为 1 到 10。',
+        }),
         h(BoolField, {
           label: '上下文压缩时自动合并',
           value: value.mergeOnCompaction,
