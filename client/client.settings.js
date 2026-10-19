@@ -95,12 +95,24 @@ window.__ModuleLoader__.load({
       return h('button', { type: 'button', style: resetStyle, onClick: props.onReset }, '恢复默认值')
     }
 
+    const copyButtonStyle = {
+      flex: 'none',
+      font: 'inherit',
+      fontSize: '12px',
+      color: 'var(--dsw-alias-label-secondary)',
+      background: 'var(--dsw-alias-bg-layer-3)',
+      border: '1px solid var(--dsw-alias-border-l2)',
+      borderRadius: '6px',
+      padding: '2px 10px',
+      cursor: 'pointer',
+    }
+
     /** 复制按钮，成功后短暂显示已复制。 */
     function CopyButton(props) {
       const [copied, setCopied] = useState(false)
       return h('button', {
         type: 'button',
-        style: resetStyle,
+        style: copied ? { ...copyButtonStyle, color: 'var(--dsw-alias-state-success-primary)' } : copyButtonStyle,
         onClick: () => {
           navigator.clipboard?.writeText(props.text).then(() => {
             setCopied(true)
