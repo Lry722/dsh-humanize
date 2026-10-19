@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { createSpecMatcher, parseSpecRules, renderSpecChain } from '../lib/specs.js'
+import { createSpecMatcher, declaresInclude, parseSpecRules, renderSpecChain } from '../lib/specs.js'
 
 test('规范链渲染把编号重排成全局连续，解析能取回条文', () => {
   const chain = [
@@ -50,4 +50,19 @@ test('范围更小的声明后命中，覆盖范围更大的', () => {
   ])
   assert.equal(match('/proj/sub/a.md'), false)
   assert.equal(match('/proj/sub/deep/a.md'), false)
+})
+
+test('链里是否有 include 声明', () => {
+  assert.equal(declaresInclude([{ path: '/proj/PROSE.md', include: undefined }]), false)
+  assert.equal(declaresInclude([
+    { path: '/proj/PROSE.md', include: undefined },
+    { path: '/proj/sub/PROSE.md', include: ['*.md'] },
+  ]), true)
+})
+
+test('没有任何 include 声明时 matcher 不命中任何文件', () => {
+  // 调用方靠 declaresInclude 区分"没声明"和"声明了但没命中"，没声明时
+  // 规范作用于所有文件，不能直接用 matcher 的结果。
+  const match = createSpecMatcher([{ path: '/proj/PROSE.md', include: undefined }])
+  assert.equal(match('/proj/a.md'), false)
 })

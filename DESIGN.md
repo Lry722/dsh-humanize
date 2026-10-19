@@ -12,7 +12,17 @@ DSH 插件是一个 npm 包。包内的 package.json 声明补丁文件的位置
 dsh plugin --profile web add link:/home/lry722/dev/dsh-humanize
 ```
 
-link 装载本身不会热重载宿主插件。插件 link 落在 profile 的 node_modules 下，dsh-hmr 的默认 ignore 排除了这个目录，web 组合又把 hmr 的 root 设为空。改完 lib 下的源码后，运行进程仍会用 ESM 缓存里的旧模块。插件管理器的 disable/enable 也不会重新导入。开发时需要在 profile 的 cordis.patch.yml 里把插件目录纳入 hmr 监听：
+本地开发时还要把 `@deepseek-ai/*` 依赖解析到 dsh 安装上。做法是在插件目录里建一个指向 profile 模块目录的 `node_modules` 符号链接：
+
+```sh
+ln -s ~/.dsh/profiles/node_modules node_modules
+```
+
+link 装载的插件复用宿主进程的模块缓存。改完 lib 下的源码后，运行中的进程仍然复用旧模块，插件管理器的 disable/enable 也复用这份缓存。
+
+原因有两处。link 装载的插件落在 profile 的 node_modules 下，dsh-hmr 的默认 ignore 排除了这个目录。web 组合又把 hmr 的 root 设为空。
+
+开发时在 profile 的 cordis.patch.yml 里把插件目录纳入 hmr 监听：
 
 ```yaml
 - id: hmr
@@ -75,6 +85,29 @@ code mode 的 SDK 按 agent 可见的工具生成，生成的工具列表包含 
 
 dsh-agent-instructions 实现了 AGENTS.md 的分层加载，PROSE.md 照搬这套思路。两者的差别是加载基准不同。AGENTS.md 按会话工作目录加载一次，PROSE.md 每次按被写文件所在目录加载。
 
+PROSE.md 的文件头是一个可选的 YAML 块，include 声明规范作用的文件范围，语法参考 .gitignore：
+
+```markdown
+---
+include:
+  - '*.md'
+  - 'docs/**/*.txt'
+  - '!drafts/'
+---
+```
+
+匹配规则如下：
+
+- 模式里没有 `/` 时，匹配任意层级的文件名。
+- 含 `/` 的模式按声明文件所在目录锚定。
+- `!` 前缀表示排除。
+- 结尾 `/` 匹配该目录下所有文件。
+- `*` 不跨目录，`**` 跨目录。
+
+判定按规范链范围从小到大依次套用各条模式，最后一次命中的结果生效。
+
+include 声明是规范链的属性。链里有 include 声明时，只有命中模式的文件进入审查，写入触发的审查和 /humanize-review 都受它约束。链里没有任何 include 声明时，规范作用于所有文件。
+
 ### 审查调用
 
 ctx.llm.stream 发起独立的模型调用。写入触发的审查只发送改动区段，区段两侧各带三行上下文。调用参数里有一个可选的 purpose 字段，只接受 compaction 和 session-title 两个值。这个字段的作用是让适配器对辅助调用采用不同的传输策略。审查调用不填这个字段。平台会把这类调用和主任务的请求区分开记录。
@@ -128,27 +161,6 @@ PATH 是文件时审查这一个文件，是目录时递归展开。
 终态说明列出仍然失败的文件和原因，仅用于界面展示。批次全程等待用户处理，避免完成通知打扰主会话。结算记录在任务列表停留几秒后由插件摘掉。
 
 同一个 agent 同时只允许一个审查批次，批注合并进行中时拒绝派发。
-
-PROSE.md 的文件头是一个可选的 YAML 块，include 声明审查范围，语法参考 .gitignore：
-
-```markdown
----
-include:
-  - '*.md'
-  - 'docs/**/*.txt'
-  - '!drafts/'
----
-```
-
-匹配规则如下：
-
-- 模式里没有 `/` 时，匹配任意层级的文件名。
-- 含 `/` 的模式按声明文件所在目录锚定。
-- `!` 前缀表示排除。
-- 结尾 `/` 匹配该目录下所有文件。
-- `*` 不跨目录，`**` 跨目录。
-
-判定按规范链范围从小到大依次套用各条模式，最后一次命中的结果生效。
 
 #### 压缩后触发
 
