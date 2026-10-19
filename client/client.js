@@ -3,7 +3,9 @@
  *
  * 设置卡片和进度条各自是独立的懒加载 chunk，分别在
  * client.settings.js 和 client.progress.js。本文件只做
- * require.async 懒加载和插槽注册。这个结构和官方
+ * require.async 懒加载和插槽注册。chunk 的 URL 版本号由本文件的
+ * 元数据算出，改完任何一个 chunk 都要同步改动本文件，浏览器才会
+ * 加载新的 chunk。这个结构和官方
  * dsh-client-ui-sidebar-terminal 的 client.js 加 client.terminal.js
  * 是同一模式。手写为 __ModuleLoader__ 工厂格式，不引入构建步骤。
  * 外部依赖只有模块表里的 react。
