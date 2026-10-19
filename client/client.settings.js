@@ -1,7 +1,7 @@
 /**
  * dsh-humanize 浏览器端设置卡片，在打开设置界面时按需加载。
  * 通用表单控件包括文本、数字、开关和恢复默认值。业务字段包括
- * 审查模型、推理等级、并行批次、重试和压缩合并。
+ * 审查模型、推理等级、并行批次、重试、压缩合并和储存位置。
  */
 // 懒加载 chunk，比主入口多一个 chunk 字段。
 window.__ModuleLoader__.load({
@@ -68,11 +68,63 @@ window.__ModuleLoader__.load({
       ...inputStyle,
       cursor: 'pointer',
     }
+    const storageRowStyle = {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px',
+    }
+    const storageLabelStyle = {
+      flex: 'none',
+      fontSize: '12px',
+      color: 'var(--dsw-alias-label-tertiary)',
+    }
+    const storagePathStyle = {
+      flex: 1,
+      minWidth: 0,
+      fontSize: '12px',
+      fontFamily: 'monospace',
+      color: 'var(--dsw-alias-label-secondary)',
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+      whiteSpace: 'nowrap',
+    }
 
     /** 字段被用户覆盖时给出恢复默认值的入口。 */
     function ResetButton(props) {
       if (!props.overridden) return null
       return h('button', { type: 'button', style: resetStyle, onClick: props.onReset }, '恢复默认值')
+    }
+
+    /** 复制按钮，成功后短暂显示已复制。 */
+    function CopyButton(props) {
+      const [copied, setCopied] = useState(false)
+      return h('button', {
+        type: 'button',
+        style: resetStyle,
+        onClick: () => {
+          navigator.clipboard?.writeText(props.text).then(() => {
+            setCopied(true)
+            setTimeout(() => setCopied(false), 1500)
+          }, () => {})
+        },
+      }, copied ? '已复制' : '复制')
+    }
+
+    /** 暂存批注与审查请求留档的完整路径，带复制入口。 */
+    function StoragePaths(props) {
+      const custom = typeof props.storageDir === 'string' ? props.storageDir.trim() : ''
+      const root = custom.length > 0 ? custom.replace(/[\\/]+$/, '') : '~/.dsh/humanize'
+      const rows = [
+        ['暂存批注', `${root}/annotations`],
+        ['审查请求留档', `${root}/requests`],
+      ]
+      return h('div', { style: fieldStyle },
+        rows.map(([label, path]) => h('div', { key: label, style: storageRowStyle },
+          h('span', { style: storageLabelStyle }, label),
+          h('span', { style: storagePathStyle }, path),
+          h(CopyButton, { text: path }),
+        )),
+      )
     }
 
     /**
@@ -378,7 +430,7 @@ window.__ModuleLoader__.load({
           max: 3,
           set: (next) => set('reviewRetries', next),
           unset: () => unset('reviewRetries'),
-          hint: '失败的文件会插回下一批，和未处理的文件凑成同一批。单个文件最多重试 0 到 3 次，默认值是 1。',
+          hint: '审查调用失败后自动重试，间隔逐次递增，超过次数记为失败。范围为 0 到 3，默认值是 1。',
         }),
         h(NumberField, {
           label: '循环合并轮次上限',
@@ -400,6 +452,17 @@ window.__ModuleLoader__.load({
           unset: () => unset('mergeOnCompaction'),
           hint: '压缩结束时自动合并整个项目的暂存批注。关闭后只在手动执行 /humanize 时合并。',
         }),
+        h(TextField, {
+          label: '储存位置',
+          value: value.storageDir,
+          overridden: Object.prototype.hasOwnProperty.call(user, 'storageDir'),
+          writable,
+          set: (next) => set('storageDir', next),
+          unset: () => unset('storageDir'),
+          placeholder: '使用默认位置',
+          hint: '暂存批注和审查请求留档的保存位置。留空使用默认位置 ~/.dsh/humanize。改动后旧目录里的内容不会迁移。',
+        }),
+        h(StoragePaths, { storageDir: value.storageDir }),
       )
     }
 

@@ -49,7 +49,7 @@ hmr 检测到改动后，会把该插件的全部依赖加入重载集合、逐�
 
 审查通过一次独立的模型调用进行，调用要求模型对照规范逐条批注。审查结果通过 submit_annotations 工具提交，字段结构由工具的 schema 约束。审查用哪个模型由插件配置决定，可以选择成本更低的模型。
 
-审查在后台进行，失败只记录日志，主任务照常推进。
+审查在后台进行，失败按 reviewRetries 重试，主任务照常推进。配置类错误第一次失败就在任务列表告警，其余错误连续失败三次才告警，成功一次后告警状态复位。
 
 第四步，延迟合并。批注先暂存到文件里，对同一文件再次审查时，在已有批注的基础上更新批注内容。
 
@@ -154,13 +154,13 @@ PATH 是文件时审查这一个文件，是目录时递归展开。
 
 批次注册成 kind 为 humanize-review 的后台任务，通过 ctx.jobs 上报进度。进度行进任务 roster，由 job-controller 实时推到浏览器。客户端渲染成输入框上方的进度条，会话头部的任务列表也会显示并允许取消。
 
-并行批次大小由 reviewConcurrency 控制，缺省为 3。实际并发取 reviewConcurrency 与待审文件数中的较小值。批次同时在途审查多个文件，用滚动窗口推进。每批取队列头部最多 N 个，失败的文件插回队首，和还没处理过的文件凑成下一批。例如队列有 A B C D E 五个文件，三并发时，A 失败后第二批是 A D E。
+并行批次大小由 reviewConcurrency 控制，缺省为 3。实际并发取 reviewConcurrency 与待审文件数中的较小值。批次同时在途审查多个文件。失败重试由审查管线统一执行，失败后间隔逐次递增自动重试，写入触发的审查共用这套重试。
 
 单个文件最多尝试 1 + reviewRetries 次，reviewRetries 缺省为 1。额度用尽才计入最终失败。
 
-终态说明列出仍然失败的文件和原因，仅用于界面展示。批次全程等待用户处理，避免完成通知打扰主会话。结算记录在任务列表停留几秒后由插件摘掉。
+终态说明列出仍然失败的文件和原因，仅用于界面展示。批次全程抑制完成通知，避免打扰主会话。结算记录保留到用户在会话里发起下一个回合，下一条任务开始时提前摘掉。
 
-同一个 agent 同时只允许一个审查批次，批注合并进行中时拒绝派发。
+同一个 agent 同时只允许一个审查批次，批注合并进行中时拒绝派发。合并派发时，进行中的审查批次被取消，在途和排队的审查一并取消。合并一开始，这些审查的结果都会过期。
 
 #### 压缩后触发
 
@@ -170,13 +170,13 @@ PATH 是文件时审查这一个文件，是目录时递归展开。
 
 ## 设置页
 
-插件导出 Config 声明设置，设置页只暴露标了 `volatile()` 的节点。命名空间是条目在补丁里声明的 id，也就是 dsh-humanize。运行时该节点交给插件的是一个带 `get()` 的引用，读取时要解引用。插件用访问器在使用时实时读，设置页改动直接生效。
+插件导出 Config 声明设置，设置页只暴露标了 `volatile()` 的节点。命名空间是条目在补丁里声明的 id，也就是 dsh-humanize。运行时插件拿到的是带 `get()` 的引用节点，读取时先调 `get()`。插件用访问器在使用时实时读，设置页改动直接生效。
 
 浏览器端注册进 `plugins.row.config`，key 是 `<包名>#<行 id>`，用 `configForms.whileServed(['dsh-humanize'], ...)` 保证宿主真的服务这个命名空间时才出现。
 
 页面把 `{ view, form }` 交给组件。`view: 'summary'` 渲染行内说明，`view: 'page'` 渲染表单。
 
-读取走 `form.state`，它提供 value、base、user、revision、writable 五个字段。写入是一次原子 `form.mutate(ops, revision)`，path 以 volatile 节点名开头。
+读取通过 `form.state` 完成，它提供 value、base、user、revision、writable 五个字段。写入是一次原子 `form.mutate(ops, revision)`，path 以 volatile 节点名开头。
 
 插件自带页面时声明 `settings.configure({ auto: false })`。
 
@@ -187,19 +187,21 @@ PATH 是文件时审查这一个文件，是目录时递归展开。
 - `lib/index.js`，组合根，读设置、装包装工具、接管钩子和命令。
 - `lib/wrap.js`，标记写入，包装 write/edit，增加必填 human_facing。
 - `lib/specs.js`，PROSE.md 分层规范加载、渲染与 include 模式匹配。
-- `lib/pipeline.js`，审查管线，跨模块共享状态包括合并锁、审查锁和每文件串行队列，并负责单次审查的编排。
-- `lib/review.js`，负责发起旁路审查，并用两个看门狗控制时长，空闲两分钟，总时长十分钟。
-- `lib/annotations.js`，批注解析与暂存 markdown 渲染。
-- `lib/review-run.js`，/humanize-review 批次。批次按滚动窗口并发执行，失败会重试。jobs 可用时上报进度，否则继续执行批次。批次执行期间不发完成通知。
-- `lib/merge.js`，/humanize 合并、/humanize-loop 循环合并与 compaction/end 自动合并、子代理执行与收尾。
-- `lib/job-track.js`，后台任务脚手架。注册任务、挂 wait 抑制完成通知、延迟摘除结算记录，审查批次和循环合并共用。
-- `lib/command.js`，斜杠命令的路径参数解析。
-- `lib/defaults.js`，审查并发、重试次数和循环轮次的缺省值与边界，Config schema 和各使用处共用。
-- `lib/staging.js`、`lib/diff.js`、`lib/prompts.js`，暂存读写、改动区段、提示词资源。
+- `lib/pipeline.js`，审查管线，负责单次审查的编排。跨模块共享状态包括合并锁、审查锁和每文件审查队列。同一文件的审查串行，一个在途审查加一个待办槽，连续写入合并进待办槽。失败按 reviewRetries 重试，连续失败时在任务列表告警。合并触发时取消在途和排队的审查。
+- `lib/review.js`，负责发起旁路审查，并控制审查时长。
+- `lib/annotations.js`，批注解析与批注暂存的 markdown 渲染。
+- `lib/review-run.js`，/humanize-review 批次。批次按固定并发执行，失败重试由管线统一处理。jobs 可用时上报进度，否则继续执行批次。批次执行期间不发完成通知。
+- `lib/merge.js`，/humanize 合并、/humanize-loop 循环合并与 compaction/end 自动合并、子代理执行与收尾。派发时取消审查批次和在途审查。
+- `lib/job-track.js`，后台任务脚手架，负责注册任务并抑制完成通知。结算记录保留到用户在会话里发起下一个回合，审查批次、循环合并和失败告警共用。
+- `lib/command.js`，负责解析斜杠命令里的路径参数。
+- `lib/defaults.js`，审查并发、重试次数和循环轮次的缺省值与边界，由各使用处共用。
+- `lib/staging.js`，暂存文件读写与孤儿清理。储存根可通过设置页的 storageDir 修改。
+- `lib/diff.js`，负责整理改动区段。
+- `lib/prompts.js`，负责提供提示词资源。
 
-浏览器端的 client/ 目录拆为主入口加两个按需加载 chunk，与官方 dsh-client-ui-sidebar-terminal 的 client.js + client.terminal.js 同一模式。主入口只做 `require.async` 懒加载和插槽注册。chunk 用同样的 `__ModuleLoader__.load` 工厂格式注册。chunk 的注册对象在主入口基础上多一个 chunk 字段。
+浏览器端的 client/ 目录拆为主入口加两个按需加载 chunk，与官方 dsh-client-ui-sidebar-terminal 的 client.js 和 client.terminal.js 是同一模式。主入口负责插槽注册，设置卡片和进度条各自是一个 chunk。
 
-- `client/client.js`，入口，按需加载 chunk。注册 conversation.input.dock 与两处设置座位。
+- `client/client.js`，入口，按需加载 chunk。注册 conversation.input.dock 与两处设置插槽。
 - `client/client.settings.js`，设置卡片，通用表单控件与业务字段。
 - `client/client.progress.js`，输入框上方的进度条，渲染审查批次和循环合并两种任务。
 
