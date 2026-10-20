@@ -15,29 +15,24 @@ window.__ModuleLoader__.load({
     /** 共用的空数组，让 getSnapshot 在无任务时返回同一个引用。 */
     const EMPTY_ROWS = []
 
-    /**
-     * 当前会话的 humanize 任务行。
-     *
-     * 任务来自宿主注册的 humanize-review 与 humanize-loop 两类
-     * 后台任务。
-     *
-     * 同一时刻只会有一条进行中。结算记录停留期间可能和新任务并存。
-     */
+    /** 当前会话的 humanize 任务行。 */
     function useHumanizeJob(jobs, sessionId) {
       useEffect(() => jobs.watchRows(sessionId), [jobs, sessionId])
       const snapshot = useSyncExternalStore(
         (listener) => jobs.state.subscribe(listener),
         () => jobs.state.getSnapshot(),
       )
+      // 这两类任务分别是 /humanize-review 批次和 /humanize-loop 循环合并。
       const rows = (snapshot.rows[sessionId] ?? EMPTY_ROWS).filter((row) => row.kind === 'humanize-review' || row.kind === 'humanize-loop')
-      // 优先取进行中的，否则取最新的一条。
+      // 同一时刻只会有一条任务行在进行中。已结束的任务行停留期间可能和新任务并存，
+      // 优先取进行中的那条，只剩已结束的任务行时取列表里最新的一条。
       return rows.find((row) => row.status === 'running' || row.status === 'stopping')
         ?? rows[rows.length - 1]
         ?? null
     }
 
     /**
-     * 任务行的展示形态。pct 有值时才画进度条。
+     * 任务行的显示方式。pct 有值时才画进度条。
      */
     function jobView(row) {
       if (row.status === 'running' || row.status === 'stopping') {
@@ -47,6 +42,7 @@ window.__ModuleLoader__.load({
         const total = match === null ? 0 : Number(match[2])
         return { pct: total > 0 ? (done / total) * 100 : 0, meta: row.progress ?? '', done: false }
       }
+      // 已结束的任务行由宿主控制，在任务列表里停留几秒后会被摘除，进度条随之消失。
       return { pct: row.status === 'completed' ? 100 : null, meta: row.detail ?? '', done: row.status === 'completed' }
     }
 
@@ -98,10 +94,7 @@ window.__ModuleLoader__.load({
       overflow: 'hidden',
     }
 
-    /**
-     * 输入框上方的审查进度条。进行中的状态一直显示。终态停留由宿主
-     * 控制，结算记录在任务列表里停留几秒后被摘掉，进度条随之消失。
-     */
+    /** 输入框上方的审查进度条。任务进行中时一直显示，结束后隐藏。 */
     function ProgressDock(props) {
       const { jobs, sessionId } = props
       const row = useHumanizeJob(jobs, sessionId)

@@ -3,8 +3,8 @@
  * 通用表单控件包括文本、数字、开关和恢复默认值。
  *
  * 业务字段按用途分三组。审查模型和审查推理等级负责模型选择。并行批次
- * 大小、失败重试次数和循环合并轮次上限负责批量与重试。上下文压缩时
- * 自动合并和储存位置负责合并与储存。
+ * 大小、失败重试次数和循环合并轮次上限负责批量与重试。上下文压缩时的
+ * 自动合并和保存位置归到同一组。
  */
 window.__ModuleLoader__.load({
   id: 'dsh-humanize',
@@ -109,7 +109,7 @@ window.__ModuleLoader__.load({
       cursor: 'pointer',
     }
 
-    /** 复制路径到剪贴板，复制成功后短暂显示已复制。 */
+    /** 把路径写入剪贴板，并给出复制成功的提示。 */
     function CopyButton(props) {
       const [copied, setCopied] = useState(false)
       return h('button', {
@@ -124,13 +124,13 @@ window.__ModuleLoader__.load({
       }, copied ? '已复制' : '复制')
     }
 
-    /** 暂存批注与审查请求留档的储存位置，带复制入口。 */
+    /** 暂存批注和审查请求记录的保存位置，带复制入口。 */
     function StoragePaths(props) {
       const custom = typeof props.storageDir === 'string' ? props.storageDir.trim() : ''
       const root = custom.length > 0 ? custom.replace(/[\\/]+$/, '') : '~/.dsh/humanize'
       const rows = [
         ['暂存批注', `${root}/annotations`],
-        ['审查请求留档', `${root}/requests`],
+        ['审查请求记录', `${root}/requests`],
       ]
       return h('div', { style: fieldStyle },
         rows.map(([label, path]) => h('div', { key: label, style: storageRowStyle },
@@ -142,7 +142,9 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * 字段外壳：标签行、恢复默认值入口和说明文字，控件本体是 children。
+     * 字段外壳由标签行、恢复默认值入口和说明文字组成。控件本体通过
+     * children 传入。
+     *
      * labelContent 用于标签和控件同行的场景，比如开关。
      */
     function FieldShell(props) {
@@ -173,7 +175,7 @@ window.__ModuleLoader__.load({
             overridden: Object.prototype.hasOwnProperty.call(user, 'reviewModel'),
             writable, set: (next) => set('reviewModel', next), unset: () => unset('reviewModel'),
             placeholder: '跟随会话当前使用的模型',
-            hint: '模型目录加载失败，请手动填写模型名。留空时跟随会话当前使用的模型。',
+            hint: '模型目录加载失败，请手动填写审查模型。留空时跟随会话当前使用的模型。',
           }),
         )
       }
@@ -205,7 +207,7 @@ window.__ModuleLoader__.load({
           label: '审查模型提供方',
           overridden: Object.prototype.hasOwnProperty.call(user, 'reviewProvider'),
           onReset: () => pickProvider(''),
-          hint: groups === null ? '正在加载模型目录，请稍候。' : '审查时调用的模型提供方，留空时跟随会话当前使用的模型。',
+          hint: groups === null ? '正在加载模型目录，请稍候。' : '审查模型提供方，留空时跟随会话当前使用的模型。',
         },
           h('select', {
             style: selectStyle,
@@ -215,14 +217,14 @@ window.__ModuleLoader__.load({
           },
             h('option', { value: '' }, '跟随会话当前使用的模型'),
             groups !== null && groups.map((g) => h('option', { key: g.id, value: g.id }, g.name)),
-            !providerKnown && h('option', { value: provider }, provider + '，当前值，目录中不存在'),
+            !providerKnown && h('option', { value: provider }, provider + '，当前值，来自旧配置'),
           ),
         ),
         h(FieldShell, {
           label: '审查模型',
           overridden: Object.prototype.hasOwnProperty.call(user, 'reviewModel'),
           onReset: () => pickModel(''),
-          hint: provider === '' ? '选择模型提供方后可挑选模型。两者都留空时跟随会话当前使用的模型。' : '审查用的模型，可以选择成本更低的模型。',
+          hint: provider === '' ? '选择模型提供方后，再从列表中选择模型。两者都留空时跟随会话当前使用的模型。' : '审查模型，可以选择成本更低的模型。',
         },
           h('select', {
             style: selectStyle,
@@ -233,7 +235,7 @@ window.__ModuleLoader__.load({
             h('option', { value: '' }, '跟随会话当前使用的模型'),
             group !== undefined && group.models.map((m) => h('option', { key: m.id, value: m.id }, m.name)),
             group !== undefined && model !== '' && !group.models.some((m) => m.id === model)
-              && h('option', { value: model }, model + '，当前值，目录中不存在'),
+              && h('option', { value: model }, model + '，当前值，来自旧配置'),
           ),
         ),
       )
@@ -248,9 +250,7 @@ window.__ModuleLoader__.load({
       const model = value.reviewModel ?? ''
       const info = groups?.find((g) => g.id === provider)?.models.find((m) => m.id === model)
       const efforts = info?.reasoning?.efforts
-      // 以下情况退化为手动填写的文本框。跟随会话当前使用的模型。模型
-      // 目录加载失败。所选模型缺少可选推理等级。留空时使用模型的默认
-      // 推理等级。
+      // 缺模型或不支持推理等级时改为手动填写。
       if (catalogFailed || provider === '' || model === '' || efforts === undefined || efforts.length === 0) {
         return h(TextField, {
           label: '审查推理等级',
@@ -258,7 +258,7 @@ window.__ModuleLoader__.load({
           set: (next) => set('reviewReasoningEffort', next), unset: () => unset('reviewReasoningEffort'),
           placeholder: '使用模型的默认推理等级',
           hint: provider === '' || model === ''
-            ? '当前跟随会话模型，没有可选的推理等级列表，可以手动填写。留空时使用模型的默认推理等级。'
+            ? '跟随会话当前使用的模型。请手动填写推理等级，留空时使用模型的默认推理等级。'
             : '所选模型缺少可选推理等级，可以手动填写。留空时使用模型的默认推理等级。',
         })
       }
@@ -280,12 +280,12 @@ window.__ModuleLoader__.load({
         },
           h('option', { value: '' }, '使用模型的默认推理等级'),
           efforts.map((e) => h('option', { key: e.id, value: e.id }, e.name)),
-          !effortKnown && h('option', { value: effort }, effort + '，当前值，该模型不支持'),
+          !effortKnown && h('option', { value: effort }, effort + '，当前值，该模型只提供默认推理等级'),
         ),
       )
     }
 
-    /** 文本字段在失焦时提交，清空后恢复默认值。 */
+    /** 用失焦提交，避免用户还在输入时就改写设置。清空后恢复默认值。 */
     function TextField(props) {
       const [text, setText] = useState(props.value ?? '')
       useEffect(() => setText(props.value ?? ''), [props.value])
@@ -313,10 +313,7 @@ window.__ModuleLoader__.load({
       )
     }
 
-    /**
-     * 数字字段在失焦时提交。提交时把值限制在最小值和最大值之间，
-     * 再取整。清空后恢复默认值。
-     */
+    /** 数字输入控件，配合 min 和 max 限制取值范围。失焦时提交，清空后恢复默认值。 */
     function NumberField(props) {
       const [text, setText] = useState(String(props.value ?? ''))
       useEffect(() => setText(String(props.value ?? '')), [props.value])
@@ -331,6 +328,7 @@ window.__ModuleLoader__.load({
           setText(String(props.value ?? ''))
           return
         }
+        // 把值限制在允许范围内并取整。
         const next = Math.max(props.min ?? 0, Math.min(props.max ?? Infinity, Math.round(parsed)))
         setText(String(next))
         if (next === props.value) return
@@ -375,15 +373,14 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * 插件行的配置页，负责渲染摘要文字和完整表单。view 区分这两种
-     * 形态。设置快照和写入入口由调用方通过 props 传入。
+     * 插件配置页，包含摘要视图和设置表单。
      */
     function HumanizeCard(props) {
       const { form, view, modelCatalog } = props
       const [groups, setGroups] = useState(null)
       const [catalogFailed, setCatalogFailed] = useState(false)
       useEffect(() => {
-        // modelCatalog 缺失时改为手动填写的表单。
+        // 目录服务不可用时降级为手动填写。
         if (typeof modelCatalog !== 'function') {
           setCatalogFailed(true)
           return
@@ -397,7 +394,6 @@ window.__ModuleLoader__.load({
         return () => { alive = false }
       }, [])
 
-      // 插件列表里这一行的摘要文字。
       if (view === 'summary') return h('p', { style: hintStyle }, '对写入的内容做行文审查，并把批注合并进来。')
 
       const snapshot = form?.state
@@ -417,19 +413,20 @@ window.__ModuleLoader__.load({
       return h('div', null,
         h(ModelPicker, { value, user, writable, groups, catalogFailed, set, unset }),
         h(EffortPicker, { value, user, writable, groups, catalogFailed, set, unset }),
-        // 下面几个数字字段的默认值要和 lib/defaults.js 保持一致，改动时两处同步。
         h(NumberField, {
           label: '并行批次大小',
+          // 默认值 3，要和 lib/defaults.js 保持一致。
           value: value.reviewConcurrency ?? 3,
           overridden: Object.prototype.hasOwnProperty.call(user, 'reviewConcurrency'),
           writable,
           min: 1,
           set: (next) => set('reviewConcurrency', next),
           unset: () => unset('reviewConcurrency'),
-          hint: '同时进行中的审查调用数，默认值是 3，最小值是 1。批次太大时会碰到模型提供方的速率限制，碰到限制的调用记为失败并重试。',
+          hint: '同时进行的审查调用数量，最小值为 1，默认值为 3。',
         }),
         h(NumberField, {
           label: '失败重试次数',
+          // 默认值 1，要和 lib/defaults.js 保持一致。
           value: value.reviewRetries ?? 1,
           overridden: Object.prototype.hasOwnProperty.call(user, 'reviewRetries'),
           writable,
@@ -437,10 +434,11 @@ window.__ModuleLoader__.load({
           max: 3,
           set: (next) => set('reviewRetries', next),
           unset: () => unset('reviewRetries'),
-          hint: '审查调用失败后自动重试，间隔逐次递增，超过次数记为失败。范围为 0 到 3，默认值是 1。',
+          hint: '审查调用失败后自动重试，间隔逐次递增。超过重试次数后记为失败。最小值为 0，最大值为 3，默认值为 1。',
         }),
         h(NumberField, {
           label: '循环合并轮次上限',
+          // 默认值 3，要和 lib/defaults.js 保持一致。
           value: value.loopMaxRounds ?? 3,
           overridden: Object.prototype.hasOwnProperty.call(user, 'loopMaxRounds'),
           writable,
@@ -448,7 +446,7 @@ window.__ModuleLoader__.load({
           max: 10,
           set: (next) => set('loopMaxRounds', next),
           unset: () => unset('loopMaxRounds'),
-          hint: '/humanize-loop 每轮合并后复审，还有新批注就继续合并，达到上限则停下。默认值是 3，范围为 1 到 10。',
+          hint: '/humanize-loop 每轮合并后复审，还有新批注就继续合并，达到上限则停下。最小值为 1，最大值为 10，默认值为 3。',
         }),
         h(BoolField, {
           label: '上下文压缩时自动合并',
@@ -460,21 +458,21 @@ window.__ModuleLoader__.load({
           hint: '压缩结束时自动合并整个项目的暂存批注。关闭后只在手动执行 /humanize 时合并。',
         }),
         h(TextField, {
-          label: '储存位置',
+          label: '保存位置',
           value: value.storageDir,
           overridden: Object.prototype.hasOwnProperty.call(user, 'storageDir'),
           writable,
           set: (next) => set('storageDir', next),
           unset: () => unset('storageDir'),
           placeholder: '使用默认位置',
-          hint: '暂存批注和审查请求留档的储存位置。留空使用默认位置 ~/.dsh/humanize。改动后需要自己把旧目录里的内容搬到新位置。',
+          hint: '暂存批注和审查请求记录的保存位置。留空使用默认位置 ~/.dsh/humanize。改动后需要自己把旧目录里的内容搬到新位置。',
         }),
         h(StoragePaths, { storageDir: value.storageDir }),
       )
     }
 
     /**
-     * 渲染期错误边界。插槽条目渲染抛错时会被静默摘掉，插槽位置会变成空白。
+     * 渲染期错误边界。插槽条目渲染抛错时会被静默摘除，插槽位置会变成空白。
      * 这里把异常显示成文字，省得再对着空白页排查。
      */
     class DiagBoundary extends React.Component {

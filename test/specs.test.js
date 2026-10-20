@@ -23,14 +23,14 @@ test('模式里没有斜杠时，命中任意层级的同名文件', () => {
   assert.equal(match('/proj/a.js'), false)
 })
 
-test('含斜杠的模式按声明文件所在目录锚定', () => {
+test('含斜杠的模式相对声明文件所在目录解析', () => {
   const match = createSpecMatcher([{ path: '/proj/PROSE.md', include: ['docs/**/*.txt'] }])
   assert.equal(match('/proj/docs/x/y.txt'), true)
   assert.equal(match('/proj/docs/y.txt'), true)
   assert.equal(match('/proj/other/y.txt'), false)
 })
 
-test('结尾斜杠的目录模式匹配该目录下所有文件', () => {
+test('结尾斜杠的目录模式命中该目录下所有文件', () => {
   const match = createSpecMatcher([{ path: '/proj/PROSE.md', include: ['docs/'] }])
   assert.equal(match('/proj/docs/a.md'), true)
   assert.equal(match('/proj/docs/deep/a.md'), true)
@@ -49,8 +49,7 @@ test('最后一次命中的结果生效', () => {
   assert.equal(match('/proj/keep.md'), true)
 })
 
-test('范围更小的声明排在后面，命中结果覆盖范围更大的声明', () => {
-  // 规范链按文件祖先目录收集，后声明的规则生效。
+test('后声明的 include 覆盖前面的声明', () => {
   const match = createSpecMatcher([
     { path: '/proj/PROSE.md', include: ['*.md'] },
     { path: '/proj/sub/PROSE.md', include: ['!*.md'] },

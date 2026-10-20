@@ -15,10 +15,9 @@ test('用同一份规范快照，把编号还原成对应的条文', () => {
   assert.equal(list[1].ruleText, 'rule two')
 })
 
-test('规范快照里查不到的编号，条目直接丢掉', () => {
+test('规则集合里没有的编号，条目直接丢掉', () => {
   const list = normalizeAnnotations({
     annotations: [
-      // 规范快照里缺这个编号。
       { rule: 99, quote: 'q', problem: 'p', suggestion: 's' },
       { rule: '1', quote: 'q2', problem: 'p2', suggestion: 's2' },
     ],
@@ -37,7 +36,7 @@ test('null 和字符串条目直接丢掉', () => {
   assert.equal(list[0].quote, 'q')
 })
 
-test('解析整段文本时，前后多出来的文字也能正常处理', () => {
+test('解析整段文本时只取中间的 JSON', () => {
   const list = parseAnnotations('开头\n{"annotations": []}\n结尾', rules)
   assert.deepEqual(list, [])
 })

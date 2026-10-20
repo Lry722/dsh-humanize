@@ -24,7 +24,7 @@ test('上游后中止时转发中止和原因', () => {
   assert.equal(controller.signal.reason, 'cancelled')
 })
 
-test('dispose 后不再跟随上游', () => {
+test('dispose 后停止跟随上游', () => {
   const source = new AbortController()
   const { controller, dispose } = fuseAbortSignal(source.signal)
   dispose()

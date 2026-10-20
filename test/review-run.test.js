@@ -33,7 +33,7 @@ test('规范链有 include 声明时按模式过滤', async () => {
   }
 })
 
-test('规范链缺少规范时所有文件都视为命中', async () => {
+test('规范链没有规范时所有文件都视为命中', async () => {
   const dir = await makeProject(undefined)
   try {
     assert.equal(await includeDeclared(join(dir, 'a.md')), true)
