@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createSpecMatcher, declaresInclude, parseSpecRules, renderSpecChain } from '../lib/specs.js'
 
-test('规范链渲染把编号重排成全局连续，解析能取回条文', () => {
+test('规范链渲染把编号重排成全局连续', () => {
   const chain = [
     { path: '/proj/PROSE.md', content: '1. one\n2. two', include: undefined },
     { path: '/proj/docs/PROSE.md', content: '1. three', include: undefined },
@@ -16,7 +16,7 @@ test('规范链渲染把编号重排成全局连续，解析能取回条文', ()
   assert.equal(rules.get(3), 'three')
 })
 
-test('不含斜杠的模式匹配任意层级的文件名', () => {
+test('模式里没有斜杠时，命中任意层级的同名文件', () => {
   const match = createSpecMatcher([{ path: '/proj/PROSE.md', include: ['*.md'] }])
   assert.equal(match('/proj/a.md'), true)
   assert.equal(match('/proj/docs/deep/a.md'), true)
@@ -30,7 +30,14 @@ test('含斜杠的模式按声明文件所在目录锚定', () => {
   assert.equal(match('/proj/other/y.txt'), false)
 })
 
-test('结尾斜杠的目录模式匹配该目录下所有文件，! 前缀排除', () => {
+test('结尾斜杠的目录模式匹配该目录下所有文件', () => {
+  const match = createSpecMatcher([{ path: '/proj/PROSE.md', include: ['docs/'] }])
+  assert.equal(match('/proj/docs/a.md'), true)
+  assert.equal(match('/proj/docs/deep/a.md'), true)
+  assert.equal(match('/proj/other/a.md'), false)
+})
+
+test('! 前缀的模式表示排除', () => {
   const match = createSpecMatcher([{ path: '/proj/PROSE.md', include: ['*.md', '!drafts/'] }])
   assert.equal(match('/proj/drafts/a.md'), false)
   assert.equal(match('/proj/keep/a.md'), true)
@@ -42,8 +49,8 @@ test('最后一次命中的结果生效', () => {
   assert.equal(match('/proj/keep.md'), true)
 })
 
-test('范围更小的声明后命中，覆盖范围更大的', () => {
-  // 规范链按文件祖先目录收集，范围小的排在后面，后命中生效。
+test('范围更小的声明排在后面，命中结果覆盖范围更大的声明', () => {
+  // 规范链按文件祖先目录收集，后声明的规则生效。
   const match = createSpecMatcher([
     { path: '/proj/PROSE.md', include: ['*.md'] },
     { path: '/proj/sub/PROSE.md', include: ['!*.md'] },
@@ -52,7 +59,7 @@ test('范围更小的声明后命中，覆盖范围更大的', () => {
   assert.equal(match('/proj/sub/deep/a.md'), false)
 })
 
-test('链里是否有 include 声明', () => {
+test('declaresInclude 判断规范链里是否声明了 include', () => {
   assert.equal(declaresInclude([{ path: '/proj/PROSE.md', include: undefined }]), false)
   assert.equal(declaresInclude([
     { path: '/proj/PROSE.md', include: undefined },
@@ -60,9 +67,7 @@ test('链里是否有 include 声明', () => {
   ]), true)
 })
 
-test('没有任何 include 声明时 matcher 不命中任何文件', () => {
-  // 调用方靠 declaresInclude 区分"没声明"和"声明了但没命中"，没声明时
-  // 规范作用于所有文件，不能直接用 matcher 的结果。
+test('未声明 include 时匹配器对所有文件都返回 false', () => {
   const match = createSpecMatcher([{ path: '/proj/PROSE.md', include: undefined }])
   assert.equal(match('/proj/a.md'), false)
 })

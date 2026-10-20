@@ -2,3 +2,32 @@
 - insert:
     - id: dsh-humanize
       name: 'dsh-humanize'
+    # 批注合并子代理专用的 preset。工具组成由 preset 决定，这里只挂
+    # 文件读写、检索和 persona，不挂终端、委派和压缩。压缩尤其不能挂：
+    # 子代理会话的 compaction/end 会再触发一次自动合并。
+    - id: preset-humanize-merge
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: humanize-merge
+        name: 行文批注合并
+        description: dsh-humanize 的合并子代理专用。按暂存批注修订文档，只有文件读写和检索工具。
+        order: 20
+        plugins:
+          - id: persona
+            name: '@deepseek-ai/dsh-persona'
+            config:
+              prefix: |-
+                You revise documents so their prose complies with staged annotations.
+                The user message carries the writing rules and the per-file annotations.
+                Read each file, apply only the changes the annotations require, and
+                report the result in a few concise sentences when done.
+              complete: true
+              includeRuntimeContext: false
+          - id: tool-fs
+            name: '@deepseek-ai/dsh-tool-fs'
+            config:
+              readImage: false
+          - id: tool-fs-search
+            name: '@deepseek-ai/dsh-tool-fs-search'
+            config:
+              sampleOverCapGlobResults: false

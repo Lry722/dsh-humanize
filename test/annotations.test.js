@@ -4,7 +4,7 @@ import { countAnnotations, normalizeAnnotations, parseAnnotations, renderStaging
 
 const rules = new Map([[1, 'rule one'], [2, 'rule two']])
 
-test('编号用同一份规范快照解析回条文', () => {
+test('用同一份规范快照，把编号还原成对应的条文', () => {
   const list = normalizeAnnotations({
     annotations: [
       { rule: 1, quote: 'q', problem: 'p', suggestion: 's' },
@@ -15,12 +15,11 @@ test('编号用同一份规范快照解析回条文', () => {
   assert.equal(list[1].ruleText, 'rule two')
 })
 
-test('编号解析不出条文的条目被丢弃', () => {
+test('规范快照里查不到的编号，条目直接丢掉', () => {
   const list = normalizeAnnotations({
     annotations: [
-      // 编号在规范快照里找不到。
+      // 规范快照里缺这个编号。
       { rule: 99, quote: 'q', problem: 'p', suggestion: 's' },
-      // 编号不是数字。
       { rule: '1', quote: 'q2', problem: 'p2', suggestion: 's2' },
     ],
   }, rules)
@@ -32,18 +31,18 @@ test('缺少 annotations 数组时抛错', () => {
   assert.throws(() => normalizeAnnotations(null, rules))
 })
 
-test('非对象的条目被过滤', () => {
+test('null 和字符串条目直接丢掉', () => {
   const list = normalizeAnnotations({ annotations: [null, 'x', { rule: 1, quote: 'q' }] }, rules)
   assert.equal(list.length, 1)
   assert.equal(list[0].quote, 'q')
 })
 
-test('文本兜底解析容忍前后缀文字', () => {
+test('解析整段文本时，前后多出来的文字也能正常处理', () => {
   const list = parseAnnotations('开头\n{"annotations": []}\n结尾', rules)
   assert.deepEqual(list, [])
 })
 
-test('没有 JSON 对象时抛错', () => {
+test('传入的文本里没有 JSON 对象时抛错', () => {
   assert.throws(() => parseAnnotations('no json here', rules))
 })
 

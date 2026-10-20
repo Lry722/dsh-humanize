@@ -1,15 +1,5 @@
 /**
- * dsh-humanize 浏览器端入口，负责插槽装配。
- *
- * 设置卡片和进度条各自是独立的懒加载 chunk，分别在
- * client.settings.js 和 client.progress.js。设置卡片覆盖审查模型、
- * 并发、重试、轮次上限、压缩合并和储存位置。本文件只做
- * require.async 懒加载和插槽注册。chunk 的 URL 版本号由本文件的
- * 元数据算出，改完任何一个 chunk 都要同步改动本文件，浏览器才会
- * 加载新的 chunk。这个结构和官方
- * dsh-client-ui-sidebar-terminal 的 client.js 加 client.terminal.js
- * 是同一模式。手写为 __ModuleLoader__ 工厂格式，不引入构建步骤。
- * 外部依赖只有模块表里的 react。
+ * dsh-humanize 浏览器端入口，只做懒加载和插槽注册。
  */
 window.__ModuleLoader__.load({
   id: 'dsh-humanize',
@@ -20,18 +10,21 @@ window.__ModuleLoader__.load({
     const h = React.createElement
     const { Suspense, lazy } = React
 
-    /** 设置命名空间，宿主条目的 id，也是 Plugins 页面里本插件行的 id。 */
+    /** NS 是设置命名空间。同一个字符串也用作宿主条目的 id 和 Plugins 页面里本插件行的 id。 */
     const NS = 'dsh-humanize'
 
-    /** 懒加载设置 chunk，首次渲染设置页时才拉取。 */
+    // 各 chunk 的 URL 版本号由本文件的元数据算出，改完任何一个 chunk
+    // 都要同步改动本文件，浏览器才会加载新的 chunk。
+
+    /** 设置页 chunk 里的行卡片。 */
     const LazyRowCard = lazy(async () => ({ default: (await require.async('./client.settings.js')).RowCard }))
+    /** 设置页 chunk 里的配置区。 */
     const LazyConfigSection = lazy(async () => ({ default: (await require.async('./client.settings.js')).ConfigSection }))
-    /** 懒加载进度条 chunk，首次出现审查任务时才拉取。 */
+    /** 进度条 chunk，只在首次出现审查任务时请求。 */
     const LazyProgressDock = lazy(async () => ({ default: (await require.async('./client.progress.js')).ProgressDock }))
 
     function apply(ctx) {
-      // jobs 服务提供任务 roster 流。有 jobs 服务时才注册进度条，
-      // 其余功能照常运行。
+      // 进度条依赖 jobs 服务提供的任务清单流，挂在这个 inject 里。
       ctx.inject(['jobs'], (jobCtx) => {
         const jobs = jobCtx.jobs
         jobCtx.slots.inject('conversation.input.dock', () => jobCtx.slots.register({
@@ -41,16 +34,17 @@ window.__ModuleLoader__.load({
         }, (owner) => h(Suspense, { fallback: null },
           h(LazyProgressDock, { jobs, sessionId: String(owner.sessionId) }))))
       })
-      // 设置页有两处插槽。一处在包页面上内联，按包名匹配。另一处在
-      // 包内那一行点进去的配置页，按“包名#行 id”匹配。两者写同一份设置。
+      // 设置页有两处插槽。一处在包页面上内联，按包名匹配。另一处是
+      // 包内那一行点进去打开的设置页，键由包名、井号和行 id 拼成。两处
+      // 插槽对应的是同一份设置数据。
       ctx.inject(['configForms'], (formCtx) => {
-        // remote 是按命名空间追踪的代理，访问 remote.session 这一跳必须在
-        // inject 里声明 "remote.session"。只声明 "remote" 的话，渲染期会抛
-        // cannot get property "remote.session" without inject。取好的方法
-        // 往下传，渲染期不碰代理。
+        // remote 是按命名空间追踪的代理。渲染的时候访问哪个命名空间，
+        // 就要在 inject 里声明哪个命名空间。
         formCtx.inject(['remote', 'remote.session'], (remCtx) => {
           const configForms = formCtx.configForms
           const sessionRemote = remCtx.remote.session
+          // 按命名空间追踪的代理只能在注入回调里碰。方法在这里先取出来
+          // 再往下传，渲染的时候直接调用。
           const modelCatalog = typeof sessionRemote?.modelCatalog === 'function'
             ? sessionRemote.modelCatalog.bind(sessionRemote)
             : undefined
