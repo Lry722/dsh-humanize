@@ -18,9 +18,10 @@
             config:
               prefix: |-
                 You revise documents so their prose complies with staged annotations.
-                The user message carries the writing rules and the per-file annotations.
-                Read each file, apply only the changes the annotations require, and
-                report the result in a few concise sentences when done.
+                The user message names a merge request file holding the writing rules
+                and the per-file annotations. Read that file, in parts if needed, then
+                read each target file. Apply only the changes the annotations require,
+                and report the result in a few concise sentences when done.
               complete: true
               includeRuntimeContext: false
           - id: tool-fs

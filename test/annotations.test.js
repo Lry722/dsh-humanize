@@ -5,24 +5,26 @@ import { countAnnotations, normalizeAnnotations, parseAnnotations, renderStaging
 const rules = new Map([[1, 'rule one'], [2, 'rule two']])
 
 test('用同一份规范快照，把编号还原成对应的条文', () => {
-  const list = normalizeAnnotations({
+  const { annotations, dropped } = normalizeAnnotations({
     annotations: [
       { rule: 1, quote: 'q', problem: 'p', suggestion: 's' },
       { rule: 2, quote: 'q2', problem: 'p2', suggestion: 's2' },
     ],
   }, rules)
-  assert.equal(list[0].ruleText, 'rule one')
-  assert.equal(list[1].ruleText, 'rule two')
+  assert.equal(annotations[0].ruleText, 'rule one')
+  assert.equal(annotations[1].ruleText, 'rule two')
+  assert.equal(dropped, 0)
 })
 
-test('规则集合里没有的编号，条目直接丢掉', () => {
-  const list = normalizeAnnotations({
+test('规则集合里没有的编号，条目丢掉并计入丢弃数', () => {
+  const { annotations, dropped } = normalizeAnnotations({
     annotations: [
       { rule: 99, quote: 'q', problem: 'p', suggestion: 's' },
       { rule: '1', quote: 'q2', problem: 'p2', suggestion: 's2' },
     ],
   }, rules)
-  assert.equal(list.length, 0)
+  assert.equal(annotations.length, 0)
+  assert.equal(dropped, 2)
 })
 
 test('缺少 annotations 数组时抛错', () => {
@@ -30,15 +32,17 @@ test('缺少 annotations 数组时抛错', () => {
   assert.throws(() => normalizeAnnotations(null, rules))
 })
 
-test('null 和字符串条目直接丢掉', () => {
-  const list = normalizeAnnotations({ annotations: [null, 'x', { rule: 1, quote: 'q' }] }, rules)
-  assert.equal(list.length, 1)
-  assert.equal(list[0].quote, 'q')
+test('null 和字符串条目丢掉，有效条目保留', () => {
+  const { annotations, dropped } = normalizeAnnotations({ annotations: [null, 'x', { rule: 1, quote: 'q' }] }, rules)
+  assert.equal(annotations.length, 1)
+  assert.equal(annotations[0].quote, 'q')
+  assert.equal(dropped, 2)
 })
 
 test('解析整段文本时只取中间的 JSON', () => {
-  const list = parseAnnotations('开头\n{"annotations": []}\n结尾', rules)
-  assert.deepEqual(list, [])
+  const { annotations, dropped } = parseAnnotations('开头\n{"annotations": []}\n结尾', rules)
+  assert.deepEqual(annotations, [])
+  assert.equal(dropped, 0)
 })
 
 test('传入的文本里没有 JSON 对象时抛错', () => {

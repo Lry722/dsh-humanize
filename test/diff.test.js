@@ -33,3 +33,21 @@ test('未闭合的围栏同样让区段扩展到围栏开头', () => {
   assert.equal(region.startLine, 8)
   assert.ok(region.text.startsWith('```js'))
 })
+
+test('长代码块中段改动时区段包含闭合围栏', () => {
+  const lines = ['l0', '```js', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', '```', 'l13', 'l14']
+  const after = lines.map((line, index) => (index === 6 ? 'E' : line)).join('\n')
+  const region = changedRegion(lines.join('\n'), after)
+  assert.equal(region.startLine, 2)
+  assert.ok(region.text.startsWith('```js'))
+  assert.ok(region.text.endsWith('```'))
+})
+
+test('波浪线围栏同样按完整围栏扩展区段', () => {
+  const lines = ['l0', '~~~js', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', '~~~', 'l11']
+  const after = lines.map((line, index) => (index === 5 ? 'D' : line)).join('\n')
+  const region = changedRegion(lines.join('\n'), after)
+  assert.equal(region.startLine, 2)
+  assert.ok(region.text.startsWith('~~~js'))
+  assert.ok(region.text.endsWith('~~~'))
+})

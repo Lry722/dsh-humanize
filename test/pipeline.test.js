@@ -4,11 +4,11 @@
  */
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createReviewPipeline } from '../lib/pipeline.js'
-import { setStorageRootResolver } from '../lib/staging.js'
+import { setStorageRootResolver, stagingPathFor, writeStaging } from '../lib/staging.js'
 
 /**
  * 造一个假 ctx。审查管线只用到 ctx.get（jobs 服务缺省返回
@@ -120,5 +120,91 @@ test('shutdown 前排进待办槽的审查按丢弃结算，不再发起调用',
   assert.equal((await second).kind, 'discarded')
   assert.equal(calls, 1)
   await draining
+  await rm(storage, { recursive: true, force: true })
+})
+
+/** 构造一个提交指定批注负载的审查流。 */
+function submitStream(payload) {
+  const chunks = [
+    { type: 'block-start', index: 0, blockType: 'tool-call' },
+    { type: 'block-end', index: 0, block: { type: 'tool-call', id: 'call-1', name: 'submit_annotations', arguments: JSON.stringify(payload) } },
+    { type: 'finish', reason: { kind: 'stop' } },
+  ]
+  return {
+    [Symbol.asyncIterator]() {
+      let index = 0
+      return {
+        async next() {
+          if (index >= chunks.length) return { done: true, value: undefined }
+          index += 1
+          return { done: false, value: chunks[index - 1] }
+        },
+      }
+    },
+  }
+}
+
+test('批注全部对不上规则编号时按失败处理，暂存批注保留', async () => {
+  const storage = await mkdtemp(join(tmpdir(), 'humanize-pipeline-dropped-'))
+  setStorageRootResolver(() => storage)
+  const project = join(storage, 'project')
+  await mkdir(join(project, '.git'), { recursive: true })
+  await writeFile(join(project, 'PROSE.md'), '1. 平铺直叙。\n', 'utf8')
+  const target = join(project, 'doc.md')
+  await writeFile(target, '写给人看的文档。\n', 'utf8')
+  await writeStaging(target, `# ${target}\n\n1. "写给人看的文档。"\n`)
+
+  let seenTools
+  const ctx = {
+    ...fakeContext(),
+    llm: {
+      stream(options) {
+        seenTools = options.tools
+        return submitStream({ annotations: [{ rule: 99, quote: 'q', problem: 'p', suggestion: 's' }] })
+      },
+    },
+  }
+  const config = { reviewProvider: 'p', reviewModel: 'm', reviewRetries: 0 }
+  const pipeline = createReviewPipeline(ctx, config, { info() {}, warn() {} })
+
+  const outcome = await pipeline.scheduleReview(fakeAgent(), target, undefined, '写给人看的文档。\n')
+  assert.equal(outcome.kind, 'failed')
+  // 暂存没有被当成“审查通过”清掉。
+  assert.equal(await readFile(stagingPathFor(target), 'utf8').then(() => true), true)
+  // 工具 schema 里列出了本次的有效编号。
+  assert.deepEqual(seenTools[0].parameters.properties.annotations.items.properties.rule.enum, [1])
+  await rm(storage, { recursive: true, force: true })
+})
+
+test('部分批注对不上编号时保留有效批注，并记一条丢弃日志', async () => {
+  const storage = await mkdtemp(join(tmpdir(), 'humanize-pipeline-partial-'))
+  setStorageRootResolver(() => storage)
+  const project = join(storage, 'project')
+  await mkdir(join(project, '.git'), { recursive: true })
+  await writeFile(join(project, 'PROSE.md'), '1. 平铺直叙。\n', 'utf8')
+  const target = join(project, 'doc.md')
+  await writeFile(target, '写给人看的文档。\n', 'utf8')
+
+  const warnings = []
+  const ctx = {
+    ...fakeContext(),
+    llm: {
+      stream() {
+        return submitStream({
+          annotations: [
+            { rule: 1, quote: 'q', problem: 'p', suggestion: 's' },
+            { rule: 42, quote: 'q2', problem: 'p2', suggestion: 's2' },
+          ],
+        })
+      },
+    },
+  }
+  const config = { reviewProvider: 'p', reviewModel: 'm', reviewRetries: 0 }
+  const pipeline = createReviewPipeline(ctx, config, { info() {}, warn: (...args) => warnings.push(args) })
+
+  const outcome = await pipeline.scheduleReview(fakeAgent(), target, undefined, '写给人看的文档。\n')
+  assert.equal(outcome.kind, 'ok')
+  assert.equal(outcome.annotations, 1)
+  assert.equal(warnings.some((args) => String(args[0]).includes('unknown rule numbers')), true)
   await rm(storage, { recursive: true, force: true })
 })

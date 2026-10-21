@@ -1,31 +1,35 @@
 /**
- * 合并运行（单次和循环）的热重载测试。用假的子代理和审查调度
- * 验证：一轮合并结束后不会把“暂存为空”误判成收敛；重载后新实例
- * 会补完上一轮复审，单次合并到此结束，循环合并继续下一轮。
+ * 合并运行的测试。用假的子代理和审查调度验证：单次合并跑完就结束，
+ * 循环合并复审出新批注才继续下一轮，合并失败时暂存批注保留。
  */
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { existsSync } from 'node:fs'
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { reconcilePendingMerges, registerMerge } from '../lib/merge.js'
+import { isMergeAgent, registerMerge } from '../lib/merge.js'
 import { createReviewPipeline } from '../lib/pipeline.js'
 import { setStorageRootResolver, stagingPathFor, writeStaging } from '../lib/staging.js'
 
 const log = { info() {}, warn() {} }
 
 /**
- * 造一个假 ctx。jobs 服务缺失，任务进度走空实现；事件监听存在
- * emit 里，测试可以手动发出子代理的 turn/end。
+ * 造一个假 ctx。jobs 服务缺失，任务进度走空实现。agents.list 返回
+ * 注册表里的全部 agent，派发前的合并子代理检查靠它。
  */
 function makeCtx(agents, activation, llm) {
+  const list = [...agents]
+  const byId = new Map(list.map((agent) => [agent.id, agent]))
+  const bySession = new Map(list.map((agent) => [agent.session.id, agent]))
   const commands = new Map()
   const listeners = new Map()
   return {
     logger: () => log,
     get: () => undefined,
-    agents: { get: (id) => agents.get(id), list: () => [] },
+    agents: {
+      get: (id) => byId.get(id) ?? bySession.get(id),
+      list: () => list,
+    },
     subagents: { startActivation: activation },
     ...(llm !== undefined ? { llm } : {}),
     commands: {
@@ -33,12 +37,12 @@ function makeCtx(agents, activation, llm) {
       get(name) { return commands.get(name) },
     },
     on(event, callback) {
-      const list = listeners.get(event) ?? []
-      list.push(callback)
-      listeners.set(event, list)
+      const callbacks = listeners.get(event) ?? []
+      callbacks.push(callback)
+      listeners.set(event, callbacks)
       return () => {
-        const index = list.indexOf(callback)
-        if (index >= 0) list.splice(index, 1)
+        const index = callbacks.indexOf(callback)
+        if (index >= 0) callbacks.splice(index, 1)
       }
     },
     effect() {},
@@ -61,26 +65,25 @@ function makeState() {
 }
 
 function makeAgent(id, sessionId, cwd) {
-  const appended = []
+  const injected = []
   return {
     id,
-    appended,
+    injected,
+    inject(message) { injected.push(message) },
     session: {
       id: sessionId,
-      header: { cwd },
+      header: { cwd, agentPreset: 'standard' },
       requestHeader: () => undefined,
-      append(type, message) { appended.push(message) },
-      snapshotEvents: () => [],
     },
   }
 }
 
-function makeChild(id) {
+function makeChild(id, parentSessionId) {
   return {
     id,
     session: {
       id,
-      snapshotEvents: () => [],
+      header: { parentSession: parentSessionId, agentPreset: 'humanize-merge', origin: 'subagent' },
     },
   }
 }
@@ -116,7 +119,7 @@ async function waitFor(predicate, timeoutMs = 3000) {
 }
 
 async function removeStorage(storage) {
-  // 后台循环可能刚好在写锁文件，删除目录时重试几次。
+  // 后台循环可能刚好在写真暂存，删除目录时重试几次。
   for (let attempt = 0; attempt < 20; attempt += 1) {
     try {
       await rm(storage, { recursive: true, force: true })
@@ -139,7 +142,7 @@ async function makeProject(storage) {
 }
 
 function noticeTexts(agent) {
-  return agent.appended.map((message) => message.content?.[0]?.text ?? '').join('\n')
+  return agent.injected.map((message) => message.content?.[0]?.text ?? '').join('\n')
 }
 
 test('一轮合并后复查没有新批注时正常结束', async () => {
@@ -149,7 +152,7 @@ test('一轮合并后复查没有新批注时正常结束', async () => {
     const { project } = await makeProject(storage)
     const agent = makeAgent('agent-1', 'session-1', project)
     const activation = deferredActivation('child-1')
-    const ctx = makeCtx(new Map([['agent-1', agent]]), async () => activation.activation)
+    const ctx = makeCtx([agent], async () => activation.activation)
     const state = makeState()
     const reviews = makeReviews()
     registerMerge(ctx, log, { loopMaxRounds: 3 }, state, reviews.scheduleReview, async () => {}, () => {})
@@ -158,9 +161,9 @@ test('一轮合并后复查没有新批注时正常结束', async () => {
     assert.equal(result.kind, 'success')
     activation.resolve({ stopReason: 'completed' })
 
-    await waitFor(() => state.running.size === 0 && !existsSync(join(storage, 'merge-runs.json')))
+    await waitFor(() => state.running.size === 0)
     assert.equal(reviews.calls.length, 1)
-    assert.match(noticeTexts(agent), /循环合并第 1 轮结束：复审暂存 0 条批注，还有 0 个文件有批注/)
+    assert.match(noticeTexts(agent), /已按暂存批注修订/)
     await assert.rejects(readFile(stagingPathFor(join(project, 'doc.md'))), /ENOENT/)
   } finally {
     await removeStorage(storage)
@@ -174,64 +177,18 @@ test('合并运行期间持有运行锁，运行结束后释放', async () => {
     const { project } = await makeProject(storage)
     const agent = makeAgent('agent-1', 'session-1', project)
     const activation = deferredActivation('child-1')
-    const ctx = makeCtx(new Map([['agent-1', agent]]), async () => activation.activation)
+    const ctx = makeCtx([agent], async () => activation.activation)
     const state = makeState()
     registerMerge(ctx, log, { loopMaxRounds: 3 }, state, makeReviews().scheduleReview, async () => {}, () => {})
 
     assert.equal(state.running.size, 0)
     const result = await ctx.commands.get('humanize-loop').handler({ agent, rawInput: '' })
     assert.equal(result.kind, 'success')
-    // 命令返回时首次派发已经完成，运行锁要一直持有到运行结束，
-    // 重复派发和 agent/created 触发的接手都靠它让路。
+    // 命令返回时首次派发已经完成，运行锁要一直持有到运行结束。
     assert.ok(state.running.has('agent-1'))
 
     activation.resolve({ stopReason: 'completed' })
-    await waitFor(() => state.running.size === 0 && !existsSync(join(storage, 'merge-runs.json')))
-  } finally {
-    await removeStorage(storage)
-  }
-})
-
-test('合并期间热重载：新实例补完复审，而不是把暂存为空当成收敛', async () => {
-  const storage = await mkdtemp(join(tmpdir(), 'humanize-loop-reload-'))
-  setStorageRootResolver(() => storage)
-  try {
-    const { project, target } = await makeProject(storage)
-    const agent = makeAgent('agent-1', 'session-1', project)
-    const child = makeChild('child-1')
-    const agents = new Map([['agent-1', agent], ['session-1', agent], ['child-1', child]])
-    const activation = deferredActivation('child-1')
-    const ctxA = makeCtx(agents, async () => activation.activation)
-    const stateA = makeState()
-    const reviewsA = makeReviews()
-    registerMerge(ctxA, log, { loopMaxRounds: 3 }, stateA, reviewsA.scheduleReview, async () => {}, () => {})
-
-    await ctxA.commands.get('humanize-loop').handler({ agent, rawInput: '' })
-    // 等派发真正落到在途合并记录上，再模拟重载。
-    await waitFor(() => existsSync(join(storage, 'merge-pending.json')))
-
-    // 旧实例被热重载销毁。
-    stateA.disposed = true
-    const reviewsB = makeReviews()
-    const ctxB = makeCtx(agents, async () => activation.activation)
-    const stateB = makeState()
-    const mergeB = registerMerge(ctxB, log, { loopMaxRounds: 3 }, stateB, reviewsB.scheduleReview, async () => {}, () => {})
-
-    // 新实例先按在途记录补收尾，再接手循环。
-    const reconciled = reconcilePendingMerges(ctxB, log, stateB, reviewsB.scheduleReview)
-    // 等新实例挂上子代理的 turn/end 监听，再放行子代理，避免事件发空。
-    await waitFor(() => stateB.merging.has('agent-1'))
-    activation.resolve({ stopReason: 'completed' })
-    ctxB.emit('session/event', child.session, { type: 'turn/end', data: { reason: { kind: 'completed' } } })
-    await reconciled
-    await mergeB.resumeRuns()
-
-    await waitFor(() => stateB.running.size === 0 && stateA.running.size === 0 && !existsSync(join(storage, 'merge-runs.json')))
-    // 复审由新实例补跑，文件是合并后的内容，before 是合并前的快照。
-    assert.equal(reviewsB.calls.length, 1)
-    assert.equal(reviewsB.calls[0].filePath, target)
-    assert.equal(reviewsB.calls[0].before, '第一版。\n')
-    assert.match(noticeTexts(agent), /循环合并第 1 轮结束：复审暂存 0 条批注，还有 0 个文件有批注/)
+    await waitFor(() => state.running.size === 0)
   } finally {
     await removeStorage(storage)
   }
@@ -243,11 +200,9 @@ test('复审产生新批注后继续下一轮，收敛才结束', async () => {
   try {
     const { project, target } = await makeProject(storage)
     const agent = makeAgent('agent-1', 'session-1', project)
-    const child = makeChild('child-1')
-    const agents = new Map([['agent-1', agent], ['session-1', agent], ['child-1', child]])
     let starts = 0
     let reviews = 0
-    const ctx = makeCtx(agents, async () => {
+    const ctx = makeCtx([agent], async () => {
       starts += 1
       const activation = deferredActivation(`child-${starts}`)
       // 子代理总是立刻完成，第二轮要看复审是否真的又排了一轮。
@@ -266,147 +221,68 @@ test('复审产生新批注后继续下一轮，收敛才结束', async () => {
     registerMerge(ctx, log, { loopMaxRounds: 3 }, state, scheduleReview, async () => {}, () => {})
 
     await ctx.commands.get('humanize-loop').handler({ agent, rawInput: '' })
-    await waitFor(() => state.running.size === 0 && !existsSync(join(storage, 'merge-runs.json')))
+    await waitFor(() => state.running.size === 0)
 
     assert.equal(starts, 2)
     assert.equal(reviews, 2)
-    assert.match(noticeTexts(agent), /循环合并第 1 轮结束：复审暂存 1 条批注/)
-    assert.match(noticeTexts(agent), /循环合并第 2 轮结束：复审暂存 0 条批注/)
+    // 复审结果只进任务行，会话只收到合并修改说明。
+    const mergeNotices = agent.injected.filter((message) => /已按暂存批注修订/.test(message.content?.[0]?.text ?? ''))
+    assert.equal(mergeNotices.length, 2)
     await assert.rejects(readFile(stagingPathFor(target)), /ENOENT/)
   } finally {
     await removeStorage(storage)
   }
 })
 
-test('记录停在 review 阶段时，接手方先补复审再结束', async () => {
-  const storage = await mkdtemp(join(tmpdir(), 'humanize-loop-review-'))
+test('合并失败时保留暂存批注，不再开下一轮', async () => {
+  const storage = await mkdtemp(join(tmpdir(), 'humanize-loop-failed-'))
   setStorageRootResolver(() => storage)
   try {
     const { project, target } = await makeProject(storage)
-    // 模拟合并已经收尾、复审还没跑完就被重载打断。
-    await rm(stagingPathFor(target), { force: true })
-    await writeFile(join(storage, 'merge-runs.json'), JSON.stringify({
-      'session-1': {
-        target: project,
-        round: 1,
-        phase: 'review',
-        runId: 'old-run',
-        reviews: [{ filePath: target, before: '第一版。\n' }],
-      },
-    }), 'utf8')
-
     const agent = makeAgent('agent-1', 'session-1', project)
-    const agents = new Map([['agent-1', agent], ['session-1', agent]])
-    const ctx = makeCtx(agents, async () => { throw new Error('不应再派发合并') })
+    const activation = deferredActivation('child-1')
+    const ctx = makeCtx([agent], async () => activation.activation)
     const state = makeState()
     const reviews = makeReviews()
-    const merge = registerMerge(ctx, log, { loopMaxRounds: 3 }, state, reviews.scheduleReview, async () => {}, () => {})
+    registerMerge(ctx, log, { loopMaxRounds: 3 }, state, reviews.scheduleReview, async () => {}, () => {})
 
-    await merge.resumeRuns()
-    await waitFor(() => state.running.size === 0 && !existsSync(join(storage, 'merge-runs.json')))
+    await ctx.commands.get('humanize-loop').handler({ agent, rawInput: '' })
+    activation.resolve({ stopReason: 'aborted' })
+    await waitFor(() => state.running.size === 0)
 
-    assert.equal(reviews.calls.length, 1)
-    assert.equal(reviews.calls[0].filePath, target)
-    assert.equal(reviews.calls[0].before, '第一版。\n')
-    assert.match(noticeTexts(agent), /循环合并第 1 轮结束：复审暂存 0 条批注/)
+    assert.equal(reviews.calls.length, 0)
+    assert.match(noticeTexts(agent), /批注合并未完成，暂存批注保留/)
+    assert.equal(await readFile(stagingPathFor(target), 'utf8').then(() => true), true)
   } finally {
     await removeStorage(storage)
   }
 })
 
-test('重载接手后复审仍有批注时继续下一轮合并', async () => {
-  const storage = await mkdtemp(join(tmpdir(), 'humanize-loop-reload-rounds-'))
-  setStorageRootResolver(() => storage)
-  try {
-    const { project, target } = await makeProject(storage)
-    const agent = makeAgent('agent-1', 'session-1', project)
-    const child = makeChild('child-1')
-    const agents = new Map([['agent-1', agent], ['session-1', agent], ['child-1', child]])
-    const first = deferredActivation('child-1')
-    let starts = 0
-    const activation = async () => {
-      starts += 1
-      if (starts === 1) return first.activation
-      const next = deferredActivation(`child-${starts}`)
-      queueMicrotask(() => next.resolve({ stopReason: 'completed' }))
-      return next.activation
-    }
-    const ctxA = makeCtx(agents, activation)
-    const stateA = makeState()
-    const reviewsA = makeReviews()
-    registerMerge(ctxA, log, { loopMaxRounds: 3 }, stateA, reviewsA.scheduleReview, async () => {}, () => {})
-
-    await ctxA.commands.get('humanize-loop').handler({ agent, rawInput: '' })
-    await waitFor(() => existsSync(join(storage, 'merge-pending.json')))
-
-    // 第一轮合并期间重载。新实例接手复审，复审又产出一条批注。
-    stateA.disposed = true
-    const ctxB = makeCtx(agents, activation)
-    const stateB = makeState()
-    let reviewed = 0
-    const scheduleReview = async (reviewAgent, filePath) => {
-      reviewed += 1
-      if (reviewed === 1) {
-        await writeStaging(filePath, `# ${filePath}\n\n1. "重写后的行文。"\n`)
-        return { kind: 'ok', annotations: 1 }
-      }
-      return { kind: 'ok', annotations: 0 }
-    }
-    const mergeB = registerMerge(ctxB, log, { loopMaxRounds: 3 }, stateB, scheduleReview, async () => {}, () => {})
-    const reconciled = reconcilePendingMerges(ctxB, log, stateB, scheduleReview)
-    await waitFor(() => stateB.merging.has('agent-1'))
-    first.resolve({ stopReason: 'completed' })
-    ctxB.emit('session/event', child.session, { type: 'turn/end', data: { reason: { kind: 'completed' } } })
-    await reconciled
-    await mergeB.resumeRuns()
-
-    await waitFor(() => stateB.running.size === 0 && stateA.running.size === 0 && !existsSync(join(storage, 'merge-runs.json')))
-    assert.equal(starts, 2)
-    assert.equal(reviewed, 2)
-    assert.match(noticeTexts(agent), /循环合并第 1 轮结束：复审暂存 1 条批注/)
-    assert.match(noticeTexts(agent), /循环合并第 2 轮结束：复审暂存 0 条批注/)
-    await assert.rejects(readFile(stagingPathFor(target)), /ENOENT/)
-  } finally {
-    await removeStorage(storage)
-  }
-})
-
-test('合并失败时清掉循环记录，不会把失败当成下一轮', async () => {
-  const storage = await mkdtemp(join(tmpdir(), 'humanize-loop-failed-'))
+test('合并子代理还在运行时拒绝新的派发', async () => {
+  const storage = await mkdtemp(join(tmpdir(), 'humanize-merge-busy-'))
   setStorageRootResolver(() => storage)
   try {
     const { project } = await makeProject(storage)
     const agent = makeAgent('agent-1', 'session-1', project)
-    const child = makeChild('child-1')
-    const agents = new Map([['agent-1', agent], ['session-1', agent], ['child-1', child]])
-    const activation = deferredActivation('child-1')
-    const ctxA = makeCtx(agents, async () => activation.activation)
-    const stateA = makeState()
-    const reviewsA = makeReviews()
-    registerMerge(ctxA, log, { loopMaxRounds: 3 }, stateA, reviewsA.scheduleReview, async () => {}, () => {})
+    const child = makeChild('child-1', 'session-1')
+    const ctx = makeCtx([agent, child], async () => { throw new Error('不应派发') })
+    const state = makeState()
+    registerMerge(ctx, log, { loopMaxRounds: 3 }, state, makeReviews().scheduleReview, async () => {}, () => {})
 
-    await ctxA.commands.get('humanize-loop').handler({ agent, rawInput: '' })
-    await waitFor(() => existsSync(join(storage, 'merge-pending.json')))
-    stateA.disposed = true
-
-    const reviewsB = makeReviews()
-    const ctxB = makeCtx(agents, async () => activation.activation)
-    const stateB = makeState()
-    const mergeB = registerMerge(ctxB, log, { loopMaxRounds: 3 }, stateB, reviewsB.scheduleReview, async () => {}, () => {})
-    const reconciled = reconcilePendingMerges(ctxB, log, stateB, reviewsB.scheduleReview)
-    await waitFor(() => stateB.merging.has('agent-1'))
-    activation.resolve({ stopReason: 'aborted' })
-    ctxB.emit('session/event', child.session, { type: 'turn/end', data: { reason: { kind: 'aborted' } } })
-    await reconciled
-    await mergeB.resumeRuns()
-
-    await waitFor(() => stateA.running.size === 0 && stateB.running.size === 0)
-    assert.equal(reviewsB.calls.length, 0)
-    assert.equal(existsSync(join(storage, 'merge-runs.json')), false)
-    assert.match(noticeTexts(agent), /批注合并未完成，暂存批注保留/)
+    const result = await ctx.commands.get('humanize-loop').handler({ agent, rawInput: '' })
+    assert.equal(result.kind, 'error')
+    assert.match(result.text, /子代理还在运行/)
+    assert.equal(state.running.size, 0)
   } finally {
     await removeStorage(storage)
   }
+})
+
+test('合并子代理按会话头里的 preset 识别', () => {
+  const child = makeChild('child-1', 'session-1')
+  const agent = makeAgent('agent-1', 'session-1', '/tmp')
+  assert.equal(isMergeAgent(child), true)
+  assert.equal(isMergeAgent(agent), false)
 })
 
 /** 造一个提交批注的审查流，参数结构对齐 submit_annotations。 */
@@ -439,7 +315,7 @@ test('循环复审走真实审查管线，新批注进入下一轮并最终清�
     let starts = 0
     let reviews = 0
     const ctx = makeCtx(
-      new Map([['agent-1', agent], ['session-1', agent]]),
+      [agent],
       async () => {
         starts += 1
         const activation = deferredActivation(`child-${starts}`)
@@ -467,53 +343,15 @@ test('循环复审走真实审查管线，新批注进入下一轮并最终清�
     registerMerge(ctx, log, config, pipeline.state, pipeline.scheduleReview, pipeline.waitForReviews, pipeline.discardReviews)
 
     await ctx.commands.get('humanize-loop').handler({ agent, rawInput: '' })
-    await waitFor(() => pipeline.state.running.size === 0 && !existsSync(join(storage, 'merge-runs.json')))
+    await waitFor(() => pipeline.state.running.size === 0)
 
     assert.equal(starts, 2)
     assert.equal(reviews, 2)
     assert.equal(await readFile(target, 'utf8'), '第三版。\n')
-    assert.match(noticeTexts(agent), /循环合并第 1 轮结束：复审暂存 1 条批注/)
-    assert.match(noticeTexts(agent), /循环合并第 2 轮结束：复审暂存 0 条批注/)
+    // 复审结果只进任务行，会话只收到合并修改说明。
+    const mergeNotices = agent.injected.filter((message) => /已按暂存批注修订/.test(message.content?.[0]?.text ?? ''))
+    assert.equal(mergeNotices.length, 2)
     await assert.rejects(readFile(stagingPathFor(target)), /ENOENT/)
-  } finally {
-    await removeStorage(storage)
-  }
-})
-
-test('记录停在 dispatch 阶段时按同一轮重新派发', async () => {
-  const storage = await mkdtemp(join(tmpdir(), 'humanize-loop-dispatch-'))
-  setStorageRootResolver(() => storage)
-  try {
-    const { project, target } = await makeProject(storage)
-    await writeFile(join(storage, 'merge-runs.json'), JSON.stringify({
-      'session-1': {
-        target: project,
-        round: 1,
-        phase: 'dispatch',
-        runId: 'old-run',
-        reviews: [{ filePath: target, before: '第一版。\n' }],
-      },
-    }), 'utf8')
-
-    const agent = makeAgent('agent-1', 'session-1', project)
-    const agents = new Map([['agent-1', agent], ['session-1', agent]])
-    let starts = 0
-    const ctx = makeCtx(agents, async () => {
-      starts += 1
-      const activation = deferredActivation(`child-${starts}`)
-      queueMicrotask(() => activation.resolve({ stopReason: 'completed' }))
-      return activation.activation
-    })
-    const state = makeState()
-    const reviews = makeReviews()
-    const merge = registerMerge(ctx, log, { loopMaxRounds: 3 }, state, reviews.scheduleReview, async () => {}, () => {})
-
-    await merge.resumeRuns()
-    await waitFor(() => state.running.size === 0 && !existsSync(join(storage, 'merge-runs.json')))
-
-    assert.equal(starts, 1)
-    assert.equal(reviews.calls.length, 1)
-    assert.match(noticeTexts(agent), /循环合并第 1 轮结束/)
   } finally {
     await removeStorage(storage)
   }
@@ -523,10 +361,10 @@ test('一次 /humanize 合并照常清暂存并排复审', async () => {
   const storage = await mkdtemp(join(tmpdir(), 'humanize-merge-once-'))
   setStorageRootResolver(() => storage)
   try {
-    const { project, target } = await makeProject(storage)
+    const { project } = await makeProject(storage)
     const agent = makeAgent('agent-1', 'session-1', project)
     const activation = deferredActivation('child-1')
-    const ctx = makeCtx(new Map([['agent-1', agent], ['session-1', agent]]), async () => activation.activation)
+    const ctx = makeCtx([agent], async () => activation.activation)
     const state = makeState()
     const reviews = makeReviews()
     registerMerge(ctx, log, { loopMaxRounds: 3 }, state, reviews.scheduleReview, async () => {}, () => {})
@@ -535,53 +373,8 @@ test('一次 /humanize 合并照常清暂存并排复审', async () => {
     assert.equal(result.kind, 'success')
     activation.resolve({ stopReason: 'completed' })
 
-    await waitFor(() => reviews.calls.length === 1 && state.running.size === 0 && !existsSync(join(storage, 'merge-runs.json')))
+    await waitFor(() => reviews.calls.length === 1 && state.running.size === 0)
     assert.match(noticeTexts(agent), /已按暂存批注修订/)
-    assert.equal(existsSync(join(storage, 'merge-runs.json')), false)
-  } finally {
-    await removeStorage(storage)
-  }
-})
-
-test('一次 /humanize 合并期间重载，新实例补完复审再结束', async () => {
-  const storage = await mkdtemp(join(tmpdir(), 'humanize-run-once-reload-'))
-  setStorageRootResolver(() => storage)
-  try {
-    const { project, target } = await makeProject(storage)
-    const agent = makeAgent('agent-1', 'session-1', project)
-    const child = makeChild('child-1')
-    const agents = new Map([['agent-1', agent], ['session-1', agent], ['child-1', child]])
-    const activation = deferredActivation('child-1')
-    let starts = 0
-    const ctxA = makeCtx(agents, async () => { starts += 1; return activation.activation })
-    const stateA = makeState()
-    const reviewsA = makeReviews()
-    registerMerge(ctxA, log, { loopMaxRounds: 3 }, stateA, reviewsA.scheduleReview, async () => {}, () => {})
-
-    const result = await ctxA.commands.get('humanize').handler({ agent, rawInput: '' })
-    assert.equal(result.kind, 'success')
-    await waitFor(() => existsSync(join(storage, 'merge-pending.json')))
-
-    // 单次合并跑到一半时重载。
-    stateA.disposed = true
-    const reviewsB = makeReviews()
-    const ctxB = makeCtx(agents, async () => { starts += 1; return activation.activation })
-    const stateB = makeState()
-    const mergeB = registerMerge(ctxB, log, { loopMaxRounds: 3 }, stateB, reviewsB.scheduleReview, async () => {}, () => {})
-    const reconciled = reconcilePendingMerges(ctxB, log, stateB, reviewsB.scheduleReview)
-    await waitFor(() => stateB.merging.has('agent-1'))
-    activation.resolve({ stopReason: 'completed' })
-    ctxB.emit('session/event', child.session, { type: 'turn/end', data: { reason: { kind: 'completed' } } })
-    await reconciled
-    await mergeB.resumeRuns()
-
-    await waitFor(() => stateA.running.size === 0 && stateB.running.size === 0 && !existsSync(join(storage, 'merge-runs.json')))
-    assert.equal(starts, 1)
-    assert.equal(reviewsB.calls.length, 1)
-    assert.equal(reviewsB.calls[0].filePath, target)
-    assert.equal(reviewsB.calls[0].before, '第一版。\n')
-    assert.match(noticeTexts(agent), /已按暂存批注修订/)
-    assert.match(noticeTexts(agent), /批注合并结束：复审暂存 0 条批注/)
   } finally {
     await removeStorage(storage)
   }
@@ -594,7 +387,7 @@ test('一次 /humanize 复审还有批注也到此为止，不再开下一轮', 
     const { project, target } = await makeProject(storage)
     const agent = makeAgent('agent-1', 'session-1', project)
     let starts = 0
-    const ctx = makeCtx(new Map([['agent-1', agent], ['session-1', agent]]), async () => {
+    const ctx = makeCtx([agent], async () => {
       starts += 1
       const activation = deferredActivation(`child-${starts}`)
       queueMicrotask(() => activation.resolve({ stopReason: 'completed' }))
@@ -611,13 +404,123 @@ test('一次 /humanize 复审还有批注也到此为止，不再开下一轮', 
 
     const result = await ctx.commands.get('humanize').handler({ agent, rawInput: '' })
     assert.equal(result.kind, 'success')
-    await waitFor(() => state.running.size === 0 && !existsSync(join(storage, 'merge-runs.json')))
+    await waitFor(() => state.running.size === 0)
 
     assert.equal(starts, 1)
     assert.equal(reviews, 1)
-    assert.match(noticeTexts(agent), /批注合并结束：复审暂存 1 条批注/)
+    assert.match(noticeTexts(agent), /已按暂存批注修订/)
     // 单次合并不跟进下一轮，复审产生的批注留在暂存里。
     assert.equal(await readFile(stagingPathFor(target), 'utf8').then(() => true), true)
+  } finally {
+    await removeStorage(storage)
+  }
+})
+
+test('插件重载后运行结束，已完成的合并不再复审', async () => {
+  const storage = await mkdtemp(join(tmpdir(), 'humanize-loop-reload-'))
+  setStorageRootResolver(() => storage)
+  try {
+    const { project, target } = await makeProject(storage)
+    const agent = makeAgent('agent-1', 'session-1', project)
+    const activation = deferredActivation('child-1')
+    const ctx = makeCtx([agent], async () => activation.activation)
+    const state = makeState()
+    const reviews = makeReviews()
+    registerMerge(ctx, log, { loopMaxRounds: 3 }, state, reviews.scheduleReview, async () => {}, () => {})
+
+    await ctx.commands.get('humanize-loop').handler({ agent, rawInput: '' })
+    // 插件重载把 disposed 置位，随后子代理跑完。这次运行到此结束。
+    state.disposed = true
+    activation.resolve({ stopReason: 'completed' })
+    await waitFor(() => state.running.size === 0)
+
+    assert.equal(reviews.calls.length, 0)
+    // 子代理已完成时合并照常收尾：清暂存并留下成功说明。
+    await assert.rejects(readFile(stagingPathFor(target), 'utf8'), /ENOENT/)
+    assert.match(noticeTexts(agent), /已按暂存批注修订/)
+  } finally {
+    await removeStorage(storage)
+  }
+})
+
+test('合并期间写入的新暂存批注不会被旧快照清掉', async () => {
+  const storage = await mkdtemp(join(tmpdir(), 'humanize-merge-new-staging-'))
+  setStorageRootResolver(() => storage)
+  try {
+    const { project, target } = await makeProject(storage)
+    const agent = makeAgent('agent-1', 'session-1', project)
+    const activation = deferredActivation('child-1')
+    // 派发前先改写暂存，模拟合并期间另一次审查写入了新批注。
+    const ctx = makeCtx([agent], async () => {
+      await writeStaging(target, `# ${target}\n\n1. "合并期间的新批注。"\n`)
+      return activation.activation
+    })
+    const state = makeState()
+    registerMerge(ctx, log, { loopMaxRounds: 1 }, state, makeReviews().scheduleReview, async () => {}, () => {})
+
+    await ctx.commands.get('humanize').handler({ agent, rawInput: '' })
+    activation.resolve({ stopReason: 'completed' })
+    await waitFor(() => state.running.size === 0)
+
+    // 内容已经和合并前的快照不同，按新内容保留。
+    const kept = await readFile(stagingPathFor(target), 'utf8')
+    assert.match(kept, /合并期间的新批注/)
+  } finally {
+    await removeStorage(storage)
+  }
+})
+
+test('压缩结束触发合并，完成后留下结果说明', async () => {
+  const storage = await mkdtemp(join(tmpdir(), 'humanize-compaction-'))
+  setStorageRootResolver(() => storage)
+  try {
+    const { project } = await makeProject(storage)
+    const agent = makeAgent('agent-1', 'session-1', project)
+    let starts = 0
+    const activation = deferredActivation('child-1')
+    const ctx = makeCtx([agent], async () => {
+      starts += 1
+      return activation.activation
+    })
+    const state = makeState()
+    registerMerge(ctx, log, { mergeOnCompaction: true, loopMaxRounds: 3 }, state, makeReviews().scheduleReview, async () => {}, () => {})
+
+    ctx.emit('session/event', { id: 'session-1', header: { cwd: project } }, { type: 'compaction/end', data: {} })
+    await waitFor(() => starts === 1)
+    activation.resolve({ stopReason: 'completed' })
+    await waitFor(() => state.merging.size === 0)
+
+    assert.match(noticeTexts(agent), /已按暂存批注修订/)
+  } finally {
+    await removeStorage(storage)
+  }
+})
+
+test('合并请求写到临时文件，子代理完成后清理', async () => {
+  const storage = await mkdtemp(join(tmpdir(), 'humanize-merge-request-'))
+  setStorageRootResolver(() => storage)
+  try {
+    const { project } = await makeProject(storage)
+    const agent = makeAgent('agent-1', 'session-1', project)
+    let activationSpec
+    const activation = deferredActivation('child-1')
+    const ctx = makeCtx([agent], async (spec) => {
+      activationSpec = spec
+      return activation.activation
+    })
+    const state = makeState()
+    registerMerge(ctx, log, { loopMaxRounds: 1 }, state, makeReviews().scheduleReview, async () => {}, () => {})
+
+    await ctx.commands.get('humanize').handler({ agent, rawInput: '' })
+    const text = activationSpec.request.prompt[0].text
+    const match = /The merge request is in (.+?)\.\n/.exec(text)
+    assert.ok(match, text)
+    const requestPath = match[1]
+    assert.match(await readFile(requestPath, 'utf8'), /## Rules/)
+
+    activation.resolve({ stopReason: 'completed' })
+    await waitFor(() => state.running.size === 0)
+    await assert.rejects(readFile(requestPath, 'utf8'), /ENOENT/)
   } finally {
     await removeStorage(storage)
   }

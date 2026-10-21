@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Humanize",
+    "description": "Mark human-facing writes, review delivered prose against PROSE.md, and merge annotations."
+  }
+}

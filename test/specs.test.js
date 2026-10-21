@@ -1,19 +1,63 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { createSpecMatcher, declaresInclude, parseSpecRules, renderSpecChain } from '../lib/specs.js'
+import { buildSpecRules, createSpecMatcher, declaresInclude, renderSpecChain } from '../lib/specs.js'
 
 test('规范链渲染把编号重排成全局连续', () => {
   const chain = [
     { path: '/proj/PROSE.md', content: '1. one\n2. two', include: undefined },
     { path: '/proj/docs/PROSE.md', content: '1. three', include: undefined },
   ]
-  const text = renderSpecChain(chain)
+  const { text, rules } = buildSpecRules(chain)
   assert.ok(text.includes('1. one'))
   assert.ok(text.includes('2. two'))
   assert.ok(text.includes('3. three'))
-  const rules = parseSpecRules(text)
-  assert.equal(rules.get(1), 'one')
-  assert.equal(rules.get(3), 'three')
+  assert.deepEqual(rules.map((rule) => rule.text), ['one', 'two', 'three'])
+  assert.equal(rules[2].source, '/proj/docs/PROSE.md')
+})
+
+test('缩进的编号同样进入规则列表，校验和提示词用同一份编号', () => {
+  const chain = [{ path: '/proj/PROSE.md', content: '1. one\n   1. nested\n2. two', include: undefined }]
+  const { text, rules } = buildSpecRules(chain)
+  assert.ok(text.includes('   2. nested'))
+  assert.deepEqual(rules.map((rule) => rule.text), ['one', 'nested', 'two'])
+})
+
+test('代码块里的编号保持原样，不进入规则列表', () => {
+  const chain = [{ path: '/proj/PROSE.md', content: '1. one\n```\n1. sample\n```\n2. two', include: undefined }]
+  const { text, rules } = buildSpecRules(chain)
+  assert.ok(text.includes('1. sample'))
+  assert.deepEqual(rules.map((rule) => rule.text), ['one', 'two'])
+})
+
+test('CRLF 规范里的编号全部保留，编号不会重复', () => {
+  const chain = [{ path: '/proj/PROSE.md', content: '1. one\r\n2. two\r\n' }]
+  const { text, rules } = buildSpecRules(chain)
+  assert.deepEqual(rules.map((rule) => rule.text), ['one', 'two'])
+  assert.ok(text.includes('1. one'))
+  assert.ok(text.includes('2. two'))
+})
+
+test('波浪线围栏里的编号同样不进入规则列表', () => {
+  const chain = [{ path: '/proj/PROSE.md', content: '1. one\n~~~\n1. sample\n~~~\n2. two', include: undefined }]
+  const { text, rules } = buildSpecRules(chain)
+  assert.ok(text.includes('1. sample'))
+  assert.deepEqual(rules.map((rule) => rule.text), ['one', 'two'])
+})
+
+test('四反引号围栏里的三反引号示例不会提前结束围栏', () => {
+  const chain = [{
+    path: '/proj/PROSE.md',
+    content: '````md\n```\n1. sample\n```\n````\n1. real',
+    include: undefined,
+  }]
+  const { text, rules } = buildSpecRules(chain)
+  assert.ok(text.includes('1. sample'))
+  assert.deepEqual(rules.map((rule) => rule.text), ['real'])
+})
+
+test('renderSpecChain 与 buildSpecRules 的文本一致', () => {
+  const chain = [{ path: '/proj/PROSE.md', content: '1. one', include: undefined }]
+  assert.equal(renderSpecChain(chain), buildSpecRules(chain).text)
 })
 
 test('模式里没有斜杠时，命中任意层级的同名文件', () => {
@@ -69,4 +113,11 @@ test('declaresInclude 判断规范链里是否声明了 include', () => {
 test('未声明 include 时匹配器对所有文件都返回 false', () => {
   const match = createSpecMatcher([{ path: '/proj/PROSE.md', include: undefined }])
   assert.equal(match('/proj/a.md'), false)
+})
+
+test('规范内容里的分段标记被外层围栏包住', () => {
+  const chain = [{ path: '/proj/PROSE.md', content: '1. one\n```\n## Writing rules\n```' }]
+  const { text } = buildSpecRules(chain)
+  assert.ok(text.includes('````\n'))
+  assert.ok(text.includes('## Writing rules'))
 })
