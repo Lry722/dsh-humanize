@@ -3,7 +3,7 @@
  * 通用表单控件包括文本、数字、开关和恢复默认值。
  *
  * 业务字段按用途分三组。审查模型和审查推理等级负责模型选择。并行批次
- * 大小、失败重试次数和循环合并轮次上限负责批量与重试。上下文压缩时的
+ * 大小、审查失败重试次数和循环合并轮次上限负责批量与重试。上下文压缩时的
  * 自动合并和保存位置归到同一组。
  */
 window.__ModuleLoader__.load({
@@ -328,7 +328,6 @@ window.__ModuleLoader__.load({
           setText(String(props.value ?? ''))
           return
         }
-        // 把值限制在允许范围内并取整。
         const next = Math.max(props.min ?? 0, Math.min(props.max ?? Infinity, Math.round(parsed)))
         setText(String(next))
         if (next === props.value) return
@@ -415,7 +414,7 @@ window.__ModuleLoader__.load({
         h(EffortPicker, { value, user, writable, groups, catalogFailed, set, unset }),
         h(NumberField, {
           label: '并行批次大小',
-          // 默认值 3，要和 lib/defaults.js 保持一致。
+          // 数值要和 lib/defaults.js 对齐。
           value: value.reviewConcurrency ?? 3,
           overridden: Object.prototype.hasOwnProperty.call(user, 'reviewConcurrency'),
           writable,
@@ -425,8 +424,7 @@ window.__ModuleLoader__.load({
           hint: '同时进行的审查调用数量，最小值为 1，默认值为 3。',
         }),
         h(NumberField, {
-          label: '失败重试次数',
-          // 默认值 1，要和 lib/defaults.js 保持一致。
+          label: '审查失败重试次数',
           value: value.reviewRetries ?? 1,
           overridden: Object.prototype.hasOwnProperty.call(user, 'reviewRetries'),
           writable,
@@ -434,11 +432,10 @@ window.__ModuleLoader__.load({
           max: 3,
           set: (next) => set('reviewRetries', next),
           unset: () => unset('reviewRetries'),
-          hint: '审查调用失败后自动重试，间隔逐次递增。超过重试次数后记为失败。最小值为 0，最大值为 3，默认值为 1。',
+          hint: '审查失败后会自动重试。每次重试的间隔逐次变长。重试次数用完之后仍然失败，就记为最终失败。最小值为 0，最大值为 3，默认值为 1。',
         }),
         h(NumberField, {
           label: '循环合并轮次上限',
-          // 默认值 3，要和 lib/defaults.js 保持一致。
           value: value.loopMaxRounds ?? 3,
           overridden: Object.prototype.hasOwnProperty.call(user, 'loopMaxRounds'),
           writable,

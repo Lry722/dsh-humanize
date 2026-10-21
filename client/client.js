@@ -13,7 +13,8 @@ window.__ModuleLoader__.load({
     const h = React.createElement
     const { Suspense, lazy } = React
 
-    /** NS 是设置命名空间。同一个字符串也用作宿主条目的 id 和 Plugins 页面里本插件行的 id。 */
+    // NS 是设置项的命名空间标识。
+    // 同一个字符串还用作宿主条目的 id，以及 Plugins 页面里本插件行的 id。
     const NS = 'dsh-humanize'
 
     const LazyRowCard = lazy(async () => ({ default: (await require.async('./client.settings.js')).RowCard }))

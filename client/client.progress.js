@@ -24,25 +24,23 @@ window.__ModuleLoader__.load({
       )
       // 这两类任务分别是 /humanize-review 批次和 /humanize-loop 循环合并。
       const rows = (snapshot.rows[sessionId] ?? EMPTY_ROWS).filter((row) => row.kind === 'humanize-review' || row.kind === 'humanize-loop')
-      // 同一时刻只会有一条任务行在进行中。已结束的任务行停留期间可能和新任务并存，
-      // 优先取进行中的那条，只剩已结束的任务行时取列表里最新的一条。
+      // 同一时刻只会有一条任务行在进行中。终态的任务行停留期间可能和新任务并存，
+      // 优先取进行中的那条，只剩终态的任务行时取列表里最新的一条。
       return rows.find((row) => row.status === 'running' || row.status === 'stopping')
         ?? rows[rows.length - 1]
         ?? null
     }
 
-    /**
-     * 任务行的显示方式。pct 有值时才画进度条。
-     */
+    /** 把一条任务行转成进度条要用的显示数据。 */
     function jobView(row) {
       if (row.status === 'running' || row.status === 'stopping') {
-        // 进度取自任务行的进度文本，格式是 done/total。
         const match = /(\d+)\/(\d+)/.exec(row.progress ?? '')
         const done = match === null ? 0 : Number(match[1])
         const total = match === null ? 0 : Number(match[2])
         return { pct: total > 0 ? (done / total) * 100 : 0, meta: row.progress ?? '', done: false }
       }
-      // 已结束的任务行由宿主控制，在任务列表里停留几秒后会被摘除，进度条随之消失。
+      // 终态的任务行由宿主维护。它在任务列表里停留几秒后会被摘除，进度条也跟着消失。
+      // 已完成的任务行画满进度条。其他终态只显示文字信息。
       return { pct: row.status === 'completed' ? 100 : null, meta: row.detail ?? '', done: row.status === 'completed' }
     }
 
