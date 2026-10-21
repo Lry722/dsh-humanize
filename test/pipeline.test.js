@@ -171,8 +171,8 @@ test('批注全部对不上规则编号时按失败处理，暂存批注保留',
   assert.equal(outcome.kind, 'failed')
   // 暂存没有被当成“审查通过”清掉。
   assert.equal(await readFile(stagingPathFor(target), 'utf8').then(() => true), true)
-  // 工具 schema 里列出了本次的有效编号。
-  assert.deepEqual(seenTools[0].parameters.properties.annotations.items.properties.rule.enum, [1])
+  // 审查请求不申请工具，模型直接输出文本 JSON。
+  assert.equal(seenTools, undefined)
   await rm(storage, { recursive: true, force: true })
 })
 
