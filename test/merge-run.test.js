@@ -164,6 +164,10 @@ test('一轮合并后复查没有新批注时正常结束', async () => {
     await waitFor(() => state.running.size === 0)
     assert.equal(reviews.calls.length, 1)
     assert.match(noticeTexts(agent), /已按暂存批注修订/)
+    // 折叠行摘要是概括，完整文件清单留在正文里，不受摘要长度上限影响。
+    const notice = agent.injected.find((message) => message.source?.form === 'notice')
+    assert.equal(notice.source.summary, '已按暂存批注修订 1 个文件。')
+    assert.match(notice.content[0].text, /doc\.md/)
     await assert.rejects(readFile(stagingPathFor(join(project, 'doc.md'))), /ENOENT/)
   } finally {
     await removeStorage(storage)

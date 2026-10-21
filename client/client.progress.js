@@ -64,7 +64,7 @@ window.__ModuleLoader__.load({
     }
     const dockRowStyle = {
       display: 'flex',
-      alignItems: 'center',
+      alignItems: 'flex-start',
       gap: '10px',
     }
     const dockTitleStyle = {
@@ -72,7 +72,7 @@ window.__ModuleLoader__.load({
       flex: 'none',
       fontSize: '13px',
       fontWeight: 500,
-      lineHeight: '24px',
+      lineHeight: '20px',
     }
     const dockTrackStyle = {
       width: '100%',
@@ -81,15 +81,16 @@ window.__ModuleLoader__.load({
       background: 'var(--dsw-alias-border-l2)',
       overflow: 'hidden',
     }
+    // 终态说明可能很长（失败清单、轮次上限的未收敛批注数）。这里让它换行，
+    // 不做单行省略，否则用户读不到完整的结果。
     const dockMetaStyle = {
       minWidth: 0,
       flex: 'auto',
       color: 'var(--dsw-alias-label-tertiary)',
       fontSize: '13px',
       lineHeight: '20px',
-      textOverflow: 'ellipsis',
-      whiteSpace: 'nowrap',
-      overflow: 'hidden',
+      whiteSpace: 'pre-wrap',
+      overflowWrap: 'anywhere',
     }
 
     /** 输入框上方的审查进度条。任务进行中时一直显示，结束后隐藏。 */

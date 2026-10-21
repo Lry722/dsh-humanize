@@ -7,7 +7,7 @@
  * 2026-10-21：设置页新增合并子代理的模型与推理等级选择。
  * 2026-10-21：进度条纳入单次合并与压缩触发的合并任务。
  */
-// chunks: b21a4b07
+// chunks: 8eb19607
 window.__ModuleLoader__.load({
   id: 'dsh-humanize',
   factory: (require) => {
