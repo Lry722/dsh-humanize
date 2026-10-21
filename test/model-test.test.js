@@ -1,0 +1,58 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import { probeModel } from '../lib/model-test.js'
+
+/** 用给定的流片段造一个只提供 llm.stream 的上下文。 */
+function ctxWith(chunks) {
+  return {
+    llm: {
+      stream() {
+        return (async function* () {
+          for (const chunk of chunks) yield chunk
+        })()
+      },
+    },
+  }
+}
+
+test('模型正常返回时测试通过', async () => {
+  const ctx = ctxWith([
+    { type: 'text-delta', index: 0, text: 'OK' },
+    { type: 'finish', reason: { kind: 'stop' } },
+  ])
+  const result = await probeModel(ctx, { provider: 'p', model: 'm' })
+  assert.deepEqual(result, { ok: true })
+})
+
+test('测试请求达到 token 上限也算模型可用', async () => {
+  const ctx = ctxWith([
+    { type: 'text-delta', index: 0, text: 'O' },
+    { type: 'finish', reason: { kind: 'max-tokens' } },
+  ])
+  const result = await probeModel(ctx, { provider: 'p', model: 'm' })
+  assert.deepEqual(result, { ok: true, truncated: true })
+})
+
+test('提供方返回错误时把原因带回设置页', async () => {
+  const ctx = ctxWith([
+    {
+      type: 'finish',
+      reason: { kind: 'error', failure: { message: 'The model has reached its end of life.' } },
+    },
+  ])
+  const result = await probeModel(ctx, { provider: 'p', model: 'm' })
+  assert.equal(result.ok, false)
+  assert.equal(result.code, 'provider')
+  assert.match(result.message, /end of life/)
+})
+
+test('请求被取消时返回取消状态', async () => {
+  const controller = new AbortController()
+  controller.abort()
+  const ctx = ctxWith([
+    { type: 'finish', reason: { kind: 'aborted', failure: { message: 'aborted' } } },
+  ])
+  const result = await probeModel(ctx, { provider: 'p', model: 'm' }, controller.signal)
+  assert.equal(result.ok, false)
+  assert.equal(result.code, 'aborted')
+})

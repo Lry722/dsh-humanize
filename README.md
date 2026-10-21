@@ -41,6 +41,8 @@ dsh plugin --profile web add link:/path/to/dsh-humanize
 - `reviewReasoningEffort`：审查模型的推理等级，从所选模型公布的等级里下拉选择。默认采用模型自身的默认值。
 - `mergeProvider` 与 `mergeModel`：合并子代理（`/humanize`、`/humanize-loop` 和压缩触发的合并）用的模型，界面和审查模型一致。默认跟随主会话当前使用的模型。
 - `mergeReasoningEffort`：合并子代理的推理等级，从所选模型公布的等级里下拉选择。默认跟随主会话当前使用的推理等级。
+
+审查模型和合并模型下面各有一个测试按钮，发一条最小请求确认提供方、模型和推理等级能正常返回。模型选择留空表示跟随会话模型，设置页无法预检。
 - `reviewConcurrency`：并发审查数，最小值为 1，默认值为 3。
 - `reviewRetries`：失败重试次数，最小值为 0，最大值为 3，默认值为 1。
 - `loopMaxRounds`：循环合并的轮次上限，最小值为 1，最大值为 10，默认值为 3。

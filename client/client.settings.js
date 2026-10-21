@@ -134,6 +134,85 @@ window.__ModuleLoader__.load({
       }, copied ? t('common.copied') : t('common.copy'))
     }
 
+    const testRowStyle = {
+      display: 'flex',
+      alignItems: 'flex-start',
+      gap: '8px',
+      padding: '0 0 12px',
+    }
+    const testButtonStyle = { ...copyButtonStyle, flex: 'none' }
+    const testStatusStyle = (status) => ({
+      flex: 1,
+      minWidth: 0,
+      maxHeight: '120px',
+      overflow: 'auto',
+      fontSize: '12px',
+      lineHeight: 1.5,
+      whiteSpace: 'pre-wrap',
+      overflowWrap: 'anywhere',
+      color: status === 'error'
+        ? 'var(--dsw-alias-state-error-primary)'
+        : status === 'ok' ? 'var(--dsw-alias-state-success-primary)' : 'var(--dsw-alias-label-tertiary)',
+    })
+
+    /**
+     * 测试审查模型或合并模型是否可用。请求走宿主的受认证路由，用一条
+     * 最小请求确认提供方、模型和推理等级能正常返回。
+     */
+    function ModelTest(props) {
+      const { prefix, value, writable } = props
+      const provider = value[`${prefix}Provider`] ?? ''
+      const model = value[`${prefix}Model`] ?? ''
+      const effort = value[`${prefix}ReasoningEffort`] ?? ''
+      const [state, setState] = useState({ status: 'idle' })
+      // 换了模型或推理等级后，上一次的测试结果就过期了。
+      useEffect(() => { setState({ status: 'idle' }) }, [provider, model, effort])
+      const ready = writable && provider !== '' && model !== ''
+      const testing = state.status === 'testing'
+      const run = () => {
+        if (!ready || testing) return
+        setState({ status: 'testing' })
+        void fetch('api/humanize.model-test', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            provider,
+            model,
+            ...(effort !== '' ? { reasoningEffort: effort } : {}),
+          }),
+        }).then(async (response) => {
+          const result = await response.json().catch(() => null)
+          if (result?.ok === true) {
+            setState({ status: 'ok' })
+            return
+          }
+          const message = result?.code === 'timeout'
+            ? t('model.testTimeout')
+            : (result?.message ?? `HTTP ${response.status}`)
+          setState({ status: 'error', message })
+        }).catch((error) => {
+          setState({ status: 'error', message: error instanceof Error ? error.message : String(error) })
+        })
+      }
+      let statusText = ''
+      if (!ready) statusText = writable ? t('model.testNeedSelection') : ''
+      else if (testing) statusText = t('model.testing')
+      else if (state.status === 'ok') statusText = t('model.testOk')
+      else if (state.status === 'error') statusText = t('model.testFailed') + state.message
+      return h('div', { style: testRowStyle },
+        h('button', {
+          type: 'button',
+          style: ready && !testing ? testButtonStyle : { ...testButtonStyle, opacity: 0.5, cursor: 'default' },
+          disabled: !ready || testing,
+          title: t('model.testHint'),
+          onClick: run,
+        }, testing ? t('model.testing') : t('model.test')),
+        statusText !== ''
+          ? h('span', { style: testStatusStyle(state.status), 'aria-live': 'polite' }, statusText)
+          : null,
+      )
+    }
+
     /** 暂存批注和审查请求记录的保存位置。暂存位置可以复制。 */
     function StoragePaths(props) {
       const custom = typeof props.storageDir === 'string' ? props.storageDir.trim() : ''
@@ -428,8 +507,10 @@ window.__ModuleLoader__.load({
       return h('div', null,
         h(ModelPicker, { prefix: 'review', value, user, writable, groups, catalogFailed, set, unset }),
         h(EffortPicker, { prefix: 'review', value, user, writable, groups, catalogFailed, set, unset }),
+        h(ModelTest, { prefix: 'review', value, writable }),
         h(ModelPicker, { prefix: 'merge', value, user, writable, groups, catalogFailed, set, unset }),
         h(EffortPicker, { prefix: 'merge', value, user, writable, groups, catalogFailed, set, unset }),
+        h(ModelTest, { prefix: 'merge', value, writable }),
         h(NumberField, {
           label: t('settings.reviewConcurrency'),
           value: value.reviewConcurrency ?? FIELD_DEFAULTS.reviewConcurrency,
