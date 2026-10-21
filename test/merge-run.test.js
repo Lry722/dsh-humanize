@@ -251,7 +251,12 @@ test('合并失败时保留暂存批注，不再开下一轮', async () => {
     registerMerge(ctx, log, { loopMaxRounds: 3 }, state, reviews.scheduleReview, async () => {}, () => {})
 
     await ctx.commands.get('humanize-loop').handler({ agent, rawInput: '' })
-    activation.resolve({ stopReason: 'error', diagnostic: '429 quota exceeded; retry in 51s' })
+    // result.diagnostic 为空时，从子代理的 turn/end 事件里拿实际错误。
+    ctx.emit('session/event', { id: 'child-1' }, {
+      type: 'turn/end',
+      data: { turn: 1, reason: { kind: 'error', error: { message: '429 quota exceeded; retry in 51s' } } },
+    })
+    activation.resolve({ stopReason: 'error' })
     await waitFor(() => state.running.size === 0)
 
     assert.equal(reviews.calls.length, 0)
