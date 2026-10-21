@@ -251,11 +251,12 @@ test('合并失败时保留暂存批注，不再开下一轮', async () => {
     registerMerge(ctx, log, { loopMaxRounds: 3 }, state, reviews.scheduleReview, async () => {}, () => {})
 
     await ctx.commands.get('humanize-loop').handler({ agent, rawInput: '' })
-    activation.resolve({ stopReason: 'aborted' })
+    activation.resolve({ stopReason: 'error', diagnostic: '429 quota exceeded; retry in 51s' })
     await waitFor(() => state.running.size === 0)
 
     assert.equal(reviews.calls.length, 0)
-    assert.match(noticeTexts(agent), /批注合并未完成，暂存批注保留/)
+    // 失败原因要带回主会话，用户不用打开子代理会话也能看到。
+    assert.match(noticeTexts(agent), /429 quota exceeded/)
     assert.equal(await readFile(stagingPathFor(target), 'utf8').then(() => true), true)
   } finally {
     await removeStorage(storage)
