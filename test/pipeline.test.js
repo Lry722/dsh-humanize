@@ -52,6 +52,50 @@ function gatedStream(gate) {
 /** 等一个微任务排空，让排队的审查走到流上。 */
 const tick = () => new Promise((resolve) => { setImmediate(resolve) })
 
+/** 等一个条件成立，超时后抛错。 */
+async function waitFor(check, timeoutMs = 3000) {
+  const start = Date.now()
+  while (!check()) {
+    if (Date.now() - start > timeoutMs) throw new Error('timed out waiting for condition')
+    await new Promise((resolve) => setTimeout(resolve, 5))
+  }
+}
+
+/**
+ * 造一组受闸门控制的审查流。每调用一次 stream 记一次启动，调用 release
+ * 之后才返回结束块，用来观察同时进行的审查数。
+ */
+function heldStreams() {
+  let active = 0
+  let peak = 0
+  let started = 0
+  const releases = []
+  const stream = () => {
+    active += 1
+    started += 1
+    peak = Math.max(peak, active)
+    let release
+    const gate = new Promise((resolve) => { release = resolve })
+    releases.push(release)
+    return (async function* () {
+      try {
+        await gate
+        yield { type: 'text-delta', index: 0, text: '{"annotations":[]}' }
+        yield { type: 'finish', reason: { kind: 'stop' } }
+      } finally {
+        active -= 1
+      }
+    })()
+  }
+  return {
+    stream,
+    releases,
+    active: () => active,
+    peak: () => peak,
+    started: () => started,
+  }
+}
+
 test('shutdown 关门：新审查直接跳过，在途审查照常跑完', async () => {
   const storage = await mkdtemp(join(tmpdir(), 'humanize-pipeline-'))
   setStorageRootResolver(() => storage)
@@ -312,4 +356,92 @@ test('二进制文件跳过审查', async () => {
   assert.equal(calls, 0)
   await pipeline.shutdown()
   await rm(storage, { recursive: true, force: true })
+})
+
+test('写入审查共用 reviewConcurrency 上限', async () => {
+  const storage = await mkdtemp(join(tmpdir(), 'humanize-pipeline-limit-'))
+  setStorageRootResolver(() => storage)
+  const project = join(storage, 'project')
+  await mkdir(join(project, '.git'), { recursive: true })
+  await writeFile(join(project, 'PROSE.md'), '1. 平铺直叙。\n', 'utf8')
+  const targets = []
+  for (let index = 0; index < 3; index += 1) {
+    const path = join(project, `doc${index}.md`)
+    const content = `第 ${index} 篇。\n`
+    await writeFile(path, content, 'utf8')
+    targets.push({ path, content })
+  }
+
+  const held = heldStreams()
+  const ctx = { ...fakeContext(), llm: { stream: held.stream } }
+  const config = { reviewProvider: 'p', reviewModel: 'm', reviewRetries: 0, reviewConcurrency: 2 }
+  const pipeline = createReviewPipeline(ctx, config, { info() {}, warn() {} })
+  const agent = fakeAgent()
+  const reviews = targets.map((target) => pipeline.scheduleReview(agent, target.path, undefined, target.content))
+  try {
+    await waitFor(() => held.started() === 2)
+    assert.equal(held.active(), 2)
+    assert.equal(held.peak(), 2)
+
+    const release = held.releases.shift()
+    assert.equal(typeof release, 'function')
+    release()
+    await waitFor(() => held.started() === 3)
+    assert.equal(held.active(), 2)
+    assert.equal(held.peak(), 2)
+
+    while (held.releases.length > 0) held.releases.shift()()
+    const outcomes = await Promise.all(reviews)
+    assert.deepEqual(outcomes.map((outcome) => outcome.kind), ['ok', 'ok', 'ok'])
+    assert.equal(held.peak(), 2)
+  } finally {
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      while (held.releases.length > 0) held.releases.shift()()
+      await tick()
+    }
+    await Promise.allSettled(reviews)
+    await pipeline.shutdown()
+    await rm(storage, { recursive: true, force: true })
+  }
+})
+
+test('等待并发闸门的审查可以中止', async () => {
+  const storage = await mkdtemp(join(tmpdir(), 'humanize-pipeline-abort-'))
+  setStorageRootResolver(() => storage)
+  const project = join(storage, 'project')
+  await mkdir(join(project, '.git'), { recursive: true })
+  await writeFile(join(project, 'PROSE.md'), '1. 平铺直叙。\n', 'utf8')
+  const firstTarget = join(project, 'first.md')
+  const secondTarget = join(project, 'second.md')
+  await writeFile(firstTarget, '第一篇。\n', 'utf8')
+  await writeFile(secondTarget, '第二篇。\n', 'utf8')
+
+  const held = heldStreams()
+  const ctx = { ...fakeContext(), llm: { stream: held.stream } }
+  const config = { reviewProvider: 'p', reviewModel: 'm', reviewRetries: 0, reviewConcurrency: 1 }
+  const pipeline = createReviewPipeline(ctx, config, { info() {}, warn() {} })
+  const agent = fakeAgent()
+  const controller = new AbortController()
+  const first = pipeline.scheduleReview(agent, firstTarget, undefined, '第一篇。\n')
+  const second = pipeline.scheduleReview(agent, secondTarget, undefined, '第二篇。\n', controller.signal)
+  try {
+    await waitFor(() => held.started() === 1)
+    await tick()
+    controller.abort()
+    const outcome = await second
+    assert.equal(outcome.kind, 'aborted')
+    assert.equal(held.started(), 1)
+
+    held.releases.shift()()
+    assert.equal((await first).kind, 'ok')
+    assert.equal(held.started(), 1)
+  } finally {
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      while (held.releases.length > 0) held.releases.shift()()
+      await tick()
+    }
+    await Promise.allSettled([first, second])
+    await pipeline.shutdown()
+    await rm(storage, { recursive: true, force: true })
+  }
 })

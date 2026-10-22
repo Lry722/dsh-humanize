@@ -51,7 +51,7 @@ Open the dsh-humanize row in the Plugins list and edit its configuration. The bo
 - `reviewReasoningEffort`: reasoning effort for the review model, picked from the efforts that model publishes. Defaults to the model's own default.
 - `mergeProvider` and `mergeModel`: the model used by the merge subagent, with the same controls as the review model. The merge subagent covers `/humanize`, `/humanize-loop` and compaction-triggered merges. Defaults to the model the main session is using. Set both fields together; if only one is set, both follow the session model.
 - `mergeReasoningEffort`: reasoning effort for the merge subagent, picked from the efforts that model publishes. Defaults to the reasoning effort the main session is using.
-- `reviewConcurrency`: concurrency for batch review. Minimum 1, default 3.
+- `reviewConcurrency`: maximum number of concurrent review calls, shared across write review, batch review and re-review. Minimum 1, default 3.
 - `reviewRetries`: number of retries after a failure. Minimum 0, maximum 3, default 1.
 - `loopMaxRounds`: maximum rounds for loop merge. Minimum 1, maximum 10, default 3.
 - `mergeOnCompaction`: whether to merge all staged annotations in the project when context compaction ends. Default true. When off, merges only run on `/humanize` or `/humanize-loop`.
@@ -63,7 +63,7 @@ Review call records are stored separately in the system temp directory; the exac
 
 Relative paths resolve against the process working directory. Changing the storage location leaves the old contents in place.
 
-Batch review concurrency is capped by the number of files to review. High concurrency can hit the model provider's rate limit.
+Review concurrency is shared across write review, batch review and re-review. A batch is also capped by the number of files it has to review. High concurrency can hit the model provider's rate limit.
 
 A call that hits a rate limit is recorded as failed and retried. A review that times out is aborted; that review ends as aborted and is not retried. Other failures wait longer before each retry; after the retry budget is spent, the review is marked failed. Write review and batch review share this retry behavior.
 
