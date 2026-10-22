@@ -54,8 +54,8 @@ test('审查请求带上全文、审查范围和已有批注', async () => {
     assert.equal(seen[0].tools, undefined)
     const wholePrompt = seen[0].messages[0].content[0].text
     assert.match(wholePrompt, /## Writing rules\n1\. 平铺直叙。/)
-    assert.match(wholePrompt, /## Full file under review: \/tmp\/a\.md\n正文/)
-    assert.match(wholePrompt, /## Review scope: whole file/)
+    assert.match(wholePrompt, /## Full file content under review\n\nThe whole file is in scope\.\n\n```\n正文\n```/)
+    assert.doesNotMatch(wholePrompt, /review scope starts/)
     const request = await readFile(join(root, 'tmp', 'a.md.request.md'), 'utf8')
     assert.match(request, /## system/)
     assert.match(request, /## user/)
@@ -69,18 +69,40 @@ test('审查请求带上全文、审查范围和已有批注', async () => {
       { reviewProvider: 'p', reviewModel: 'm' },
       agent,
       '/tmp/region.md',
-      '第一段\n第二段\n第三段',
-      { text: '第二段', startLine: 2, endLine: 2 },
+      '第一段\n第二段\n第三段\n第四段',
+      [{ startLine: 2, endLine: 2 }, { startLine: 4, endLine: 4 }],
       spec,
       '1. "旧句子"',
     )
     const regionPrompt = seen[1].messages[0].content[0].text
-    assert.match(regionPrompt, /## Full file under review: \/tmp\/region\.md\n第一段\n第二段\n第三段/)
-    assert.match(regionPrompt, /## Review scope: lines 2-2\nAdd new annotations only inside the region below\.\n\n第二段/)
+    assert.match(regionPrompt, /## Full file content under review\n\n```\n第一段\n<!-- dsh-humanize: review scope starts \(lines 2-2\) -->\n第二段\n<!-- dsh-humanize: review scope ends -->\n第三段\n<!-- dsh-humanize: review scope starts \(lines 4-4\) -->\n第四段\n<!-- dsh-humanize: review scope ends -->\n```/)
+    assert.doesNotMatch(regionPrompt, /whole file is in scope/)
     assert.match(regionPrompt, /## Existing annotations[\s\S]*1\. "旧句子"/)
-    // 全文在前、审查范围居中、已有批注在最后，模型先看全文再做对账。
-    assert.ok(regionPrompt.indexOf('## Full file under review') < regionPrompt.indexOf('## Review scope: lines'))
-    assert.ok(regionPrompt.indexOf('## Review scope: lines') < regionPrompt.indexOf('## Existing annotations'))
+    // 全文只出现一次，每段改动各有一对标记，已有批注在最后。
+    assert.equal(regionPrompt.match(/第二段/g)?.length, 1)
+    assert.equal(regionPrompt.match(/第四段/g)?.length, 1)
+    assert.equal(regionPrompt.match(/review scope starts/g)?.length, 2)
+    assert.equal(regionPrompt.match(/review scope ends/g)?.length, 2)
+    assert.ok(regionPrompt.indexOf('## Full file content under review') < regionPrompt.indexOf('<!-- dsh-humanize: review scope starts'))
+    assert.ok(regionPrompt.indexOf('<!-- dsh-humanize: review scope ends') < regionPrompt.indexOf('## Existing annotations'))
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('全文里的代码围栏不会提前闭合外层代码块', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'humanize-review-fence-'))
+  setRequestRootResolver(() => root)
+  const seen = []
+  const ctx = ctxWith([
+    { type: 'text-delta', index: 0, text: '{"annotations":[]}' },
+    finish('stop'),
+  ], seen)
+  try {
+    const content = '```js\nconst a = 1\n```'
+    await runReview(ctx, { reviewProvider: 'p', reviewModel: 'm' }, agent, '/tmp/fence.md', content, null, spec, undefined)
+    const prompt = seen[0].messages[0].content[0].text
+    assert.ok(prompt.includes('````\n```js\nconst a = 1\n```\n````'))
   } finally {
     await rm(root, { recursive: true, force: true })
   }

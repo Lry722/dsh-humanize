@@ -6,8 +6,8 @@ Output exactly one JSON object and nothing else. Do not add prose, do not use a 
 Requirements:
 
 - rule is the number of the violated rule, as numbered in the rules text. Use the number that matches the rule; do not invent one.
-- quote is the exact text from the full file under review and stays short.
+- quote is the exact text from the file content, excluding the code fence and the review scope markers, and stays short.
 - problem explains what is wrong; suggestion gives the fix.
 - When there are no problems, output {"annotations":[]}. Do not force findings.
-- Add new annotations only inside review scope. Do not report problems outside it as new annotations.
+- The message states the review scope. Add new annotations only inside that scope. When the file contains review scope markers, each start marker opens a block and the next end marker closes it; text between blocks is out of scope. The code fence and the markers are not part of the file; do not quote them.
 - When existing annotations are provided, reconcile them against the full file: keep the ones that still hold, drop the ones whose quoted text is gone. Return the complete final list.

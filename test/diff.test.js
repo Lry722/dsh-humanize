@@ -1,43 +1,65 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { changedRegion } from '../lib/diff.js'
+import { changedRegions } from '../lib/diff.js'
+
+/** 从写入后的内容里取出区段文本。 */
+function textOf(after, region) {
+  return after.split('\n').slice(region.startLine - 1, region.endLine).join('\n')
+}
 
 test('前后内容相同时返回 null', () => {
-  assert.equal(changedRegion('a\nb\nc', 'a\nb\nc'), null)
+  assert.equal(changedRegions('a\nb\nc', 'a\nb\nc'), null)
 })
 
 test('改动区段包住改动并保留上下文', () => {
-  const changed = changedRegion('a\nb\nc', 'a\nB\nc')
-  assert.equal(changed.text, 'a\nB\nc')
-  assert.equal(changed.startLine, 1)
-  assert.equal(changed.endLine, 3)
+  const after = 'a\nB\nc'
+  const changed = changedRegions('a\nb\nc', after)
+  assert.deepEqual(changed, [{ startLine: 1, endLine: 3 }])
+  assert.equal(textOf(after, changed[0]), 'a\nB\nc')
 
-  const inserted = changedRegion('a\nc', 'a\nb\nc')
-  assert.equal(inserted.text, 'a\nb\nc')
-  assert.equal(inserted.startLine, 1)
-  assert.equal(inserted.endLine, 3)
+  const insertedAfter = 'a\nb\nc'
+  const inserted = changedRegions('a\nc', insertedAfter)
+  assert.deepEqual(inserted, [{ startLine: 1, endLine: 3 }])
+  assert.equal(textOf(insertedAfter, inserted[0]), 'a\nb\nc')
+})
+
+test('分散的多处改动各成一段，中间未改的内容不进入范围', () => {
+  const lines = Array.from({ length: 30 }, (_, index) => `line ${index + 1}`)
+  const after = lines
+    .map((line, index) => (index === 4 ? 'LINE 5' : index === 19 ? 'LINE 20' : line))
+    .join('\n')
+  const regions = changedRegions(lines.join('\n'), after)
+  assert.equal(regions.length, 2)
+  assert.ok(regions[0].startLine <= 5 && regions[0].endLine >= 5)
+  assert.ok(regions[1].startLine <= 20 && regions[1].endLine >= 20)
+  // 两段之间的内容保持在第 10 行之外。
+  assert.ok(regions[0].endLine < 10)
+  assert.ok(regions[1].startLine > 10)
 })
 
 test('区段扩展到完整的代码围栏', () => {
   const closed = ['l0', 'l1', 'l2', 'l3', 'l4', 'l5', 'l6', '```js', 'const a = 1', 'const b = 2', 'const c = 3', 'const d = 4', '```', 'l13', 'l14', 'l15', 'l16', 'l17', 'l18', 'l19']
   const closedAfter = closed.map((line, index) => (index === 11 ? 'const d = 5' : line)).join('\n')
-  const closedRegion = changedRegion(closed.join('\n'), closedAfter)
-  assert.equal(closedRegion.startLine, 8)
-  assert.ok(closedRegion.text.startsWith('```js'))
-  assert.ok(closedRegion.text.includes('\n```\n'))
+  const closedRegions = changedRegions(closed.join('\n'), closedAfter)
+  assert.equal(closedRegions.length, 1)
+  assert.equal(closedRegions[0].startLine, 8)
+  assert.ok(textOf(closedAfter, closedRegions[0]).startsWith('```js'))
+  assert.ok(textOf(closedAfter, closedRegions[0]).includes('\n```\n'))
 
   const unclosed = ['l0', 'l1', 'l2', 'l3', 'l4', 'l5', 'l6', '```js', 'const a = 1', 'const b = 2', 'const c = 3', 'const d = 4', 'const e = 5']
   const unclosedAfter = unclosed.map((line, index) => (index === 11 ? 'const d = 40' : line)).join('\n')
-  const unclosedRegion = changedRegion(unclosed.join('\n'), unclosedAfter)
-  assert.equal(unclosedRegion.startLine, 8)
-  assert.ok(unclosedRegion.text.startsWith('```js'))
+  const unclosedRegions = changedRegions(unclosed.join('\n'), unclosedAfter)
+  assert.equal(unclosedRegions.length, 1)
+  assert.equal(unclosedRegions[0].startLine, 8)
+  assert.ok(textOf(unclosedAfter, unclosedRegions[0]).startsWith('```js'))
 })
 
 test('波浪线围栏同样按完整围栏扩展区段', () => {
   const lines = ['l0', '~~~js', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', '~~~', 'l11']
   const after = lines.map((line, index) => (index === 5 ? 'D' : line)).join('\n')
-  const region = changedRegion(lines.join('\n'), after)
-  assert.equal(region.startLine, 2)
-  assert.ok(region.text.startsWith('~~~js'))
-  assert.ok(region.text.endsWith('~~~'))
+  const regions = changedRegions(lines.join('\n'), after)
+  assert.equal(regions.length, 1)
+  assert.equal(regions[0].startLine, 2)
+  assert.ok(textOf(after, regions[0]).startsWith('~~~js'))
+  assert.ok(textOf(after, regions[0]).endsWith('~~~'))
 })

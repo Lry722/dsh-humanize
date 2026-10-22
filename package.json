@@ -43,6 +43,9 @@
     "README.md",
     "DESIGN.md"
   ],
+  "dependencies": {
+    "diff": "^9.0.0"
+  },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
     "@deepseek-ai/cosmokit": "^1.8.5",
