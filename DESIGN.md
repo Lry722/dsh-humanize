@@ -268,13 +268,16 @@ PATH 是文件时审查这一个文件，是目录时递归展开。
 
 - `lib/index.js`，插件入口，负责把各部分拼起来，读取设置、包装写入工具、接管钩子和命令。
 - `lib/wrap.js`，包装写入工具，给 write/edit 增加必填的 human_facing。
-- `lib/specs.js`，负责加载和渲染 PROSE.md 分层规范，并匹配 include 模式。规范搜索以会话工作目录为界。
+- `lib/specs.js`，负责加载和渲染 PROSE.md 分层规范。规范搜索以会话工作目录为界。
+  - `lib/spec-match.js`，负责 include 模式的编译与匹配。
 - `lib/pipeline.js`，审查管线，负责单次审查的编排。
 - `lib/review.js`，负责发起审查调用，并控制审查时长，写入审查和审查批次共用。
 - `lib/annotations.js`，负责解析批注并把它渲染成暂存的 markdown 文件。
 - `lib/review-run.js`，负责执行 /humanize-review 批次，按设定的并发数跑。
-- `lib/merge.js`，负责三种触发方式的合并：/humanize、/humanize-loop 和 compaction/end 自动合并。
-  - 合并子代理的派发和收尾也在这个模块。插件把规范和批注写进一个临时请求文件，派发合并子代理完成合并，临时文件在子代理结束后删除。
+  - `lib/git-files.js`，负责把审查目标展开成受 git 管理、且命中 include 模式的文件。
+- `lib/merge.js`，负责三种触发方式的合并：/humanize、/humanize-loop 和 compaction/end 自动合并。命令注册和轮次编排在这个模块。
+  - `lib/merge-agent.js`，合并子代理的派发和收尾。插件把规范和批注写进一个临时请求文件，派发合并子代理完成合并，临时文件在子代理结束后删除。
+  - `lib/merge-lock.js`，合并锁与合并子代理的身份判定。锁跨会话生效。
   - 子代理按本包 cordis.patch.yml 里声明为 humanize-merge 的 preset 派发。
   - 合并运行的轮次和待复审文件留在内存，插件重载会结束这次运行。
 - `lib/job-track.js`，后台任务的公共部分，负责登记任务并屏蔽完成通知。

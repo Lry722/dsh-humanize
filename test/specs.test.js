@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { buildSpecRules, createSpecMatcher, declaresInclude, renderSpecChain } from '../lib/specs.js'
+import { createSpecMatcher, declaresInclude } from '../lib/spec-match.js'
+import { buildSpecRules, renderSpecChain } from '../lib/specs.js'
 
 test('规范链渲染把编号重排成全局连续，缩进与 CRLF 都保留', () => {
   const chain = [

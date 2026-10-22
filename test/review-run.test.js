@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { includeDeclared } from '../lib/review-run.js'
+import { includeDeclared } from '../lib/git-files.js'
 
 async function makeProject(specContent) {
   const dir = await mkdtemp(join(tmpdir(), 'humanize-review-run-'))
