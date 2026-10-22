@@ -25,7 +25,7 @@ function makeCtx(agents, activation, llm) {
     get: () => undefined,
     agents: {
       get: (id) => byId.get(id) ?? bySession.get(id),
-      // 派发前的合并子代理检查要看全部 agent，这里原样返回注册表。
+      // 派发前的合并子代理检查要看全部 agent。
       list: () => list,
     },
     subagents: { startActivation: activation },
@@ -43,7 +43,7 @@ function makeCtx(agents, activation, llm) {
         if (index >= 0) callbacks.splice(index, 1)
       }
     },
-    // 副作用和注入走空实现，任务进度也就没有进度行可画。
+    // 副作用和注入走空实现，测试只验证派发和通知。
     effect() {},
     inject() {},
     emit(event, ...args) {
@@ -88,7 +88,7 @@ function makeChild(id, parentSessionId) {
   }
 }
 
-/** 可手动放行的合并子代理。 */
+/** 合并子代理，由测试决定何时放行。 */
 function deferredActivation(childId) {
   let resolve
   const result = new Promise((done) => { resolve = done })
@@ -98,7 +98,7 @@ function deferredActivation(childId) {
   }
 }
 
-/** 记录复审调用的假调度器，全部按“没有新批注”返回。 */
+/** 记录复审调用的假调度器，全部返回批注数为零的结果。 */
 function makeReviews() {
   const calls = []
   return {
@@ -260,7 +260,7 @@ test('合并失败时保留暂存批注，停在当前轮', async () => {
     await waitFor(() => state.running.size === 0)
 
     assert.equal(reviews.calls.length, 0)
-    // 失败原因要带回主会话，用户在主会话就能看到。
+    // 失败原因要带回主会话，方便用户查看。
     assert.match(noticeTexts(agent), /429 quota exceeded/)
     assert.equal(await readFile(stagingPathFor(target), 'utf8').then(() => true), true)
   } finally {
@@ -295,7 +295,7 @@ test('合并子代理按会话头里的 preset 识别', () => {
   assert.equal(isMergeAgent(agent), false)
 })
 
-/** 造一个提交批注的审查流，参数结构对齐 submit_annotations。 */
+/** 构造一个提交批注的审查流，参数结构对齐 submit_annotations。 */
 function submitStream(annotations) {
   const chunks = [
     { type: 'block-start', index: 0, blockType: 'tool-call' },
@@ -385,7 +385,7 @@ test('不同会话的合并运行互斥', async () => {
 
     const second = await ctx.commands.get('humanize').handler({ agent: secondAgent, rawInput: '' })
     assert.equal(second.kind, 'error')
-    assert.match(second.text, /已有批注合并运行/)
+    assert.match(second.text, /已有批注合并正在进行/)
 
     activation.resolve({ stopReason: 'completed' })
     await waitFor(() => state.running.size === 0 && state.mergeRun === null)

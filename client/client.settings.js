@@ -98,8 +98,8 @@ window.__ModuleLoader__.load({
       whiteSpace: 'nowrap',
     }
 
-    /** 用户没改过这个字段时整个按钮都不渲染，标签行里也就不会留下空位。 */
     function ResetButton(props) {
+      // 没改过这个字段时不渲染按钮，标签行里不会留下空位。
       if (!props.overridden) return null
       return h('button', { type: 'button', style: resetStyle, onClick: props.onReset }, t('common.reset'))
     }

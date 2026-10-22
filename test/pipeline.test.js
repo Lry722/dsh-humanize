@@ -38,7 +38,7 @@ function gatedStream(gate) {
       let i = 0
       return {
         async next() {
-          // 每次取块都先等 gate。release 之后一次性交出全部块，然后结束。
+          // gate 放行后一次性交出全部块，然后结束。
           await gate
           if (i >= chunks.length) return { done: true, value: undefined }
           i += 1
