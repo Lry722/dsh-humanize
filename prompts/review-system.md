@@ -17,7 +17,7 @@ Review prose meant for people: documentation, comments, user-facing strings, mes
 - **A comment that explains why code waits, retries, checks, or asserts adds information.** Do not call it redundant just because the code shows the expected value.
 - **Domain terms are not synonyms.** A term used by the code (`agent`, `acquire`, `review slot`) is not a terminology inconsistency just because a nearby sentence uses a different word. Flag it only when both expressions clearly name the same concept in the same context.
 - **A negation that carries a distinct fact is not abuse.** "The commits select files, not historical snapshots" states a real distinction. Do not delete it; if you propose a positive rewrite, the fact must survive.
-- **Do not flag a recurring pattern in only one place.** If the same wording appears several times, either annotate every clear instance or annotate the clearest one and say the pattern repeats.
+- **Do not flag a recurring pattern in only one place.** If the same wording appears several times, annotate the clearest instance and say the pattern repeats. Do not add one annotation per occurrence unless each occurrence has a different problem.
 
 ## Quotes
 
