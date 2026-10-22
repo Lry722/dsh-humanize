@@ -49,15 +49,12 @@ test('--changed 可以从路径前后摘出，路径里的空格保留', () => {
   assert.deepEqual(splitReviewArgs('docs/a b.md'), { changed: false, recent: undefined, pathInput: 'docs/a b.md' })
 })
 
-test('--recent 和 HEAD~N 可以带在路径前后，非法数字报错', () => {
+test('--recent 可以带在路径前后，非法数字报错', () => {
   assert.deepEqual(splitReviewArgs('--recent 3 docs/a b.md'), { changed: false, recent: 3, pathInput: 'docs/a b.md' })
   assert.deepEqual(splitReviewArgs('docs/a b.md --recent=2'), { changed: false, recent: 2, pathInput: 'docs/a b.md' })
-  assert.deepEqual(splitReviewArgs('HEAD~3 docs/a b.md'), { changed: false, recent: 3, pathInput: 'docs/a b.md' })
-  assert.deepEqual(splitReviewArgs('docs/a b.md HEAD~2'), { changed: false, recent: 2, pathInput: 'docs/a b.md' })
   assert.match(splitReviewArgs('--recent').error, /正整数/)
   assert.match(splitReviewArgs('--recent 0').error, /正整数/)
-  assert.match(splitReviewArgs('HEAD~0').error, /正整数/)
-  assert.match(splitReviewArgs('--recent 2 HEAD~3').error, /只能写一种/)
+  assert.match(splitReviewArgs('--recent abc').error, /正整数/)
 })
 
 test('命令把 --changed 的 HEAD 内容传给审查管线', async () => {

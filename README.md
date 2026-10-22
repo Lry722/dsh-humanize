@@ -134,11 +134,11 @@ Run `/humanize-review <path>` to dispatch a batch review. By default, it reviews
 
 Run `/humanize-review --changed <path>` to review only files changed since HEAD. The flag can come before or after the path; omit the path to use the current working directory. Changed files include working-tree modifications, staged changes, and untracked files that git does not ignore. Deleted files are skipped. The full file is still sent, but annotations are limited to the changed regions; new files get a full review. When nothing changed, the task ends as completed and says so.
 
-Run `/humanize-review --recent 3 <path>` or `/humanize-review HEAD~3 <path>` to re-review files touched by the last 3 commits. The commits only select the file set; review uses the current working-tree content and covers the whole file, not just the commit diff. The range is `HEAD~N..HEAD`; if the repository has fewer than N commits, it falls back to all files at HEAD. Files missing from the working tree are skipped. `--recent` and `--changed` cannot be combined.
+Run `/humanize-review --recent N <path>` to re-review files touched by the last N commits. The commits only select the file set; review uses the current working-tree content and covers the whole file, not just the commit diff. If the repository has fewer than N commits, it falls back to all files at HEAD. Files missing from the working tree are skipped. `--recent` and `--changed` cannot be combined.
 
 Review runs in the background as a task. The progress bar updates above the input box. The task list in the session header shows the same task. Review runs in a separate context; what it reads stays separate from the session.
 
-The target must be inside a git repository whose status can be read. If either condition is missing, the task ends as failed with a reason. If there is nothing to review, the task ends as completed and says so. The default mode checks git-tracked files and the include patterns; the incremental mode checks changed files and the include patterns; the recent mode checks the files touched by `HEAD~N..HEAD`, their presence in the working tree, and the include patterns.
+The target must be inside a git repository whose status can be read. If either condition is missing, the task ends as failed with a reason. If there is nothing to review, the task ends as completed and says so. The default mode checks git-tracked files and the include patterns; the incremental mode checks changed files and the include patterns; the recent mode checks the files touched by the last N commits, their presence in the working tree, and the include patterns.
 
 ## Prompts
 

@@ -128,7 +128,7 @@ test('没有改动时增量模式返回空列表', async () => {
   }
 })
 
-test('最近提交模式收集 HEAD~N..HEAD 涉及的文件，并按全文审查', async () => {
+test('最近提交模式收集最近 N 个提交涉及的文件，并按全文审查', async () => {
   const dir = await makeRepo()
   try {
     await writeFile(join(dir, 'PROSE.md'), '1. 平铺直叙。\n')
