@@ -32,6 +32,7 @@
     }
   },
   "files": [
+    "LICENSE",
     "lib",
     "client",
     "prompts",
@@ -50,13 +51,37 @@
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
     "@deepseek-ai/cosmokit": "^1.8.5",
+    "@deepseek-ai/dsh-agent-preset": "^0.2.1-rc.2",
     "@deepseek-ai/dsh-atomic-write": "^0.2.1-rc.2",
     "@deepseek-ai/dsh-home-paths": "^0.2.1-rc.2",
     "@deepseek-ai/dsh-jobs": "^0.2.1-rc.2",
     "@deepseek-ai/dsh-llm": "^0.2.1-rc.2",
+    "@deepseek-ai/dsh-persona": "^0.2.1-rc.2",
     "@deepseek-ai/dsh-scope": "^0.2.1-rc.2",
+    "@deepseek-ai/dsh-tool-fs": "^0.2.1-rc.2",
+    "@deepseek-ai/dsh-tool-fs-search": "^0.2.1-rc.2",
     "@deepseek-ai/schemastery": "^3.18.1",
     "js-yaml": "^4.1.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Lry722/dsh-humanize.git"
+  },
+  "homepage": "https://github.com/Lry722/dsh-humanize#readme",
+  "bugs": {
+    "url": "https://github.com/Lry722/dsh-humanize/issues"
+  },
+  "author": "Lry722 <958515687@qq.com>",
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "prose",
+    "writing",
+    "review",
+    "annotations"
+  ],
+  "engines": {
+    "node": ">=20.3"
   },
   "license": "MIT",
   "icon": "./icon.svg"

@@ -27,6 +27,14 @@
 
 ## 安装
 
+从 GitHub 安装：
+
+```sh
+dsh plugin --profile web add github:Lry722/dsh-humanize
+```
+
+本地开发时用 link 方式装载当前目录：
+
 ```sh
 dsh plugin --profile web add link:/path/to/dsh-humanize
 ```
