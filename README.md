@@ -134,13 +134,11 @@ Run `/humanize-review <path>` to dispatch a batch review. By default, it reviews
 
 Run `/humanize-review --changed <path>` to review only files changed since HEAD. The flag can come before or after the path; omit the path to use the current working directory. Changed files include working-tree modifications, staged changes, and untracked files that git does not ignore. Deleted files are skipped. The full file is still sent, but annotations are limited to the changed regions; new files get a full review. When nothing changed, the task ends as completed and says so.
 
-Run `/humanize-review --commit <id> <path>` to review the changes introduced by a commit. `<id>` can be a full or short hash, a branch, a tag, or a revision such as `HEAD~1`; omit the path to use the current working directory. `--commit` and `--changed` cannot be combined. The review compares the commit with its first parent; a root commit is treated as all files added. Deleted and binary files are skipped.
-
-Commit review only covers files whose working-tree content still matches the commit. Files changed since the commit are skipped and reported in the task detail. This keeps the review content identical to the commit snapshot, so annotations staged by file path do not overwrite the current version. Merge still treats the current file content as authoritative. To review an older commit, check it out first or run from a worktree whose content matches.
+Run `/humanize-review --recent 3 <path>` or `/humanize-review HEAD~3 <path>` to re-review files touched by the last 3 commits. The commits only select the file set; review uses the current working-tree content and covers the whole file, not just the commit diff. The range is `HEAD~N..HEAD`; if the repository has fewer than N commits, it falls back to all files at HEAD. Files missing from the working tree are skipped. `--recent` and `--changed` cannot be combined.
 
 Review runs in the background as a task. The progress bar updates above the input box. The task list in the session header shows the same task. Review runs in a separate context; what it reads stays separate from the session.
 
-The target must be inside a git repository whose status can be read. If either condition is missing, the task ends as failed with a reason. If there is nothing to review, the task ends as completed and says so. The default mode checks git-tracked files and the include patterns; the incremental mode checks changed files and the include patterns; the commit mode checks the commit diff, working-tree consistency and the include patterns.
+The target must be inside a git repository whose status can be read. If either condition is missing, the task ends as failed with a reason. If there is nothing to review, the task ends as completed and says so. The default mode checks git-tracked files and the include patterns; the incremental mode checks changed files and the include patterns; the recent mode checks the files touched by `HEAD~N..HEAD`, their presence in the working tree, and the include patterns.
 
 ## Prompts
 

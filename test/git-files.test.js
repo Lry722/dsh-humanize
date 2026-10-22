@@ -9,7 +9,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
-import { collectCommitTargets, collectTargets } from '../lib/git-files.js'
+import { collectRecentTargets, collectTargets } from '../lib/git-files.js'
 
 const execFileAsync = promisify(execFile)
 
@@ -128,42 +128,51 @@ test('没有改动时增量模式返回空列表', async () => {
   }
 })
 
-test('提交模式收集提交的改动，并跳过工作区已变化的文件', async () => {
+test('最近提交模式收集 HEAD~N..HEAD 涉及的文件，并按全文审查', async () => {
   const dir = await makeRepo()
   try {
     await writeFile(join(dir, 'PROSE.md'), '1. 平铺直叙。\n')
-    await writeFile(join(dir, 'doc.md'), 'old\n')
+    await writeFile(join(dir, 'doc.md'), 'v1\n')
+    await writeFile(join(dir, 'old.md'), 'old\n')
     await writeFile(join(dir, 'gone.md'), 'gone\n')
-    await writeFile(join(dir, 'bin.dat'), Buffer.from([0, 1, 2]))
     await commitAll(dir, 'one')
 
-    await writeFile(join(dir, 'doc.md'), 'new\n')
-    await writeFile(join(dir, 'added.md'), 'added\n')
-    await writeFile(join(dir, 'bin.dat'), Buffer.from([0, 1, 3]))
-    await rm(join(dir, 'gone.md'))
+    await writeFile(join(dir, 'doc.md'), 'v2\n')
+    await writeFile(join(dir, 'other.md'), 'other\n')
     await commitAll(dir, 'two')
 
-    const first = await collectCommitTargets(dir, dir, 'HEAD')
-    const byPath = new Map(first.targets.map((target) => [target.filePath, target]))
-    assert.deepEqual([...byPath.keys()].sort(), [join(dir, 'added.md'), join(dir, 'doc.md')].sort())
-    assert.equal(byPath.get(join(dir, 'doc.md')).before, 'old\n')
-    assert.equal(byPath.get(join(dir, 'doc.md')).after, 'new\n')
-    assert.equal(byPath.get(join(dir, 'added.md')).before, undefined)
-    assert.equal(byPath.get(join(dir, 'added.md')).after, 'added\n')
-    assert.equal(first.skipped.some((item) => item.filePath.endsWith('bin.dat') && item.reason === '二进制文件'), true)
+    await writeFile(join(dir, 'doc.md'), 'v3\n')
+    await writeFile(join(dir, 'added.md'), 'added\n')
+    await rm(join(dir, 'gone.md'))
+    await commitAll(dir, 'three')
 
-    await writeFile(join(dir, 'doc.md'), 'working\n')
-    const second = await collectCommitTargets(dir, dir, 'HEAD')
-    assert.equal(second.targets.some((target) => target.filePath.endsWith('doc.md')), false)
-    assert.equal(second.targets.some((target) => target.filePath.endsWith('added.md')), true)
-    assert.equal(second.skipped.some((item) => item.filePath.endsWith('doc.md')
-      && item.reason === '工作区内容与提交不一致的文件'), true)
+    const two = await collectRecentTargets(dir, dir, 2)
+    assert.deepEqual(paths(two.targets).sort(), [
+      join(dir, 'added.md'),
+      join(dir, 'doc.md'),
+      join(dir, 'other.md'),
+    ].sort())
+    assert.equal(two.targets.every((target) => target.before === undefined), true)
+    assert.deepEqual(two.skipped, [])
+
+    const one = await collectRecentTargets(dir, dir, 1)
+    assert.deepEqual(paths(one.targets).sort(), [join(dir, 'added.md'), join(dir, 'doc.md')].sort())
+
+    // 历史不足 N 个提交时，退化为 HEAD 里的全部文件。
+    const all = await collectRecentTargets(dir, dir, 10)
+    assert.deepEqual(paths(all.targets).sort(), [
+      join(dir, 'PROSE.md'),
+      join(dir, 'added.md'),
+      join(dir, 'doc.md'),
+      join(dir, 'old.md'),
+      join(dir, 'other.md'),
+    ].sort())
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
 })
 
-test('提交模式遵守 include 范围和命令路径', async () => {
+test('最近提交模式遵守 include 范围和命令路径', async () => {
   const dir = await makeRepo()
   try {
     await mkdir(join(dir, 'docs'))
@@ -178,56 +187,40 @@ test('提交模式遵守 include 范围和命令路径', async () => {
     await writeFile(join(dir, 'other.md'), 'new other\n')
     await commitAll(dir, 'two')
 
-    const docs = await collectCommitTargets(join(dir, 'docs'), dir, 'HEAD')
+    const docs = await collectRecentTargets(join(dir, 'docs'), dir, 1)
     assert.deepEqual(paths(docs.targets), [join(dir, 'docs', 'a.md')])
-    const one = await collectCommitTargets(join(dir, 'other.md'), dir, 'HEAD')
+    const one = await collectRecentTargets(join(dir, 'other.md'), dir, 1)
     assert.deepEqual(paths(one.targets), [join(dir, 'other.md')])
-    assert.equal(one.targets[0].before, 'old other\n')
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
 })
 
-test('提交模式把根提交按新增文件处理', async () => {
+test('最近提交模式跳过工作区已经删除的文件', async () => {
   const dir = await makeRepo()
   try {
     await writeFile(join(dir, 'PROSE.md'), '1. 平铺直叙。\n')
-    await writeFile(join(dir, 'a.md'), '正文\n')
-    await commitAll(dir)
-
-    const { targets } = await collectCommitTargets(dir, dir, 'HEAD')
-    assert.deepEqual(paths(targets).sort(), [join(dir, 'PROSE.md'), join(dir, 'a.md')].sort())
-    assert.equal(targets.every((target) => target.before === undefined), true)
-  } finally {
-    await rm(dir, { recursive: true, force: true })
-  }
-})
-
-test('提交模式拒绝不存在的提交', async () => {
-  const dir = await makeRepo()
-  try {
-    await writeFile(join(dir, 'PROSE.md'), '1. 平铺直叙。\n')
-    await commitAll(dir)
-    await assert.rejects(collectCommitTargets(dir, dir, 'no-such-commit'), /提交不存在/)
-  } finally {
-    await rm(dir, { recursive: true, force: true })
-  }
-})
-
-test('提交模式忽略 CRLF 差异，并用工作区内容作为快照', async () => {
-  const dir = await makeRepo()
-  try {
-    await execFileAsync('git', ['config', 'core.autocrlf', 'true'], { cwd: dir })
-    await writeFile(join(dir, 'PROSE.md'), '1. 平铺直叙。\r\n')
-    await writeFile(join(dir, 'doc.md'), 'old\r\n')
+    await writeFile(join(dir, 'doc.md'), 'old\n')
     await commitAll(dir, 'one')
-    await writeFile(join(dir, 'doc.md'), 'new\r\n')
+    await writeFile(join(dir, 'doc.md'), 'new\n')
     await commitAll(dir, 'two')
+    await rm(join(dir, 'doc.md'))
 
-    const { targets } = await collectCommitTargets(dir, dir, 'HEAD')
-    assert.equal(targets.length, 1)
-    assert.equal(targets[0].after, 'new\r\n')
-    assert.equal(targets[0].before.replace(/\r\n/g, '\n'), 'old\n')
+    const result = await collectRecentTargets(dir, dir, 1)
+    assert.deepEqual(result.targets, [])
+    assert.equal(result.skipped.some((item) => item.filePath.endsWith('doc.md')
+      && item.reason === '工作区缺失的文件'), true)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('仓库没有提交时最近提交模式报错', async () => {
+  const dir = await makeRepo()
+  try {
+    await writeFile(join(dir, 'PROSE.md'), '1. 平铺直叙。\n')
+    await assert.rejects(collectRecentTargets(dir, dir, 1), /仓库还没有提交/)
+    await assert.rejects(collectRecentTargets(dir, dir, 0), /正整数/)
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
