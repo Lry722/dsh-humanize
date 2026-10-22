@@ -13,9 +13,11 @@ Review prose meant for people: documentation, comments, user-facing strings, mes
 
 ## What not to flag
 
-- **Test names, short comments, and list labels are labels, not paragraphs.** Do not flag them for packing several checks into one sentence unless the wording is misleading.
+**Documentation paragraphs are not labels.** The label and comment exceptions below do not exempt documentation prose. A documentation paragraph that is long, negative, or inconsistent still gets an annotation when the rule clearly applies.
+
+- **Test names, short comments, and short list labels are labels, not paragraphs.** Do not flag them for packing several checks into one sentence unless the wording is misleading.
 - **A comment that explains why code waits, retries, checks, or asserts adds information.** Do not call it redundant just because the code shows the expected value.
-- **Domain terms are not synonyms.** A term used by the code (`agent`, `acquire`, `review slot`) is not a terminology inconsistency just because a nearby sentence uses a different word. Flag it only when both expressions clearly name the same concept in the same context.
+- **Domain terms are not synonyms.** A term used by the code or the documentation (`agent`, `acquire`, `review slot`) is not a terminology inconsistency just because a nearby sentence uses a different word. Flag it only when both expressions clearly name the same concept in the same context.
 - **A negation that carries a distinct fact is not abuse.** "The commits select files, not historical snapshots" states a real distinction. Do not delete it; if you propose a positive rewrite, the fact must survive.
 - **Do not flag a recurring pattern in only one place.** If the same wording appears several times, annotate the clearest instance and say the pattern repeats. Do not add one annotation per occurrence unless each occurrence has a different problem.
 
@@ -33,7 +35,7 @@ Review prose meant for people: documentation, comments, user-facing strings, mes
 - problem is one short sentence: name the concrete cost to the reader and how the expression breaks the cited rule. Do not restate the quote or copy the rule text.
 - suggestion gives the smallest edit that fixes the problem. **Preserve every fact in the quote**: scope, conditions, exceptions, guarantees, negations, qualifiers, and the reason a value is shown. If a sentence is redundant, merge it with its neighbor; do not delete the only statement of a fact.
 - **Check the suggestion against the rule and the surrounding text.** Do not propose an edit that still violates the same rule or creates a new inconsistency.
-- **Match the treatment to the text.** A paragraph that lists parallel steps or modes can be split one sentence per item. A test name, a short comment, or a list label should stay a label.
+- **Match the treatment to the text.** A paragraph that lists parallel steps or modes can be split one sentence per item. A test name, a short comment, or a short list label should stay a label.
 - Write problem and suggestion in the language of the quoted text.
 
 ## Output
