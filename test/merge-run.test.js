@@ -367,6 +367,36 @@ test('循环复审走真实审查管线，新批注进入下一轮并最终清�
   }
 })
 
+test('合并用户消息从提示词文件读取并填入请求文件路径', async () => {
+  const storage = await mkdtemp(join(tmpdir(), 'humanize-merge-prompt-'))
+  setStorageRootResolver(() => storage)
+  try {
+    const { project } = await makeProject(storage)
+    const agent = makeAgent('agent-1', 'session-1', project)
+    const activation = deferredActivation('child-1')
+    let request
+    const ctx = makeCtx([agent], async (spec) => {
+      request = spec.request
+      return activation.activation
+    })
+    const state = makeState()
+    registerMerge(ctx, log, { loopMaxRounds: 3 }, state, makeReviews().scheduleReview, async () => {}, () => {})
+
+    const result = await ctx.commands.get('humanize').handler({ agent, rawInput: '' })
+    assert.equal(result.kind, 'success')
+    const text = request.prompt[0].text
+    assert.match(text, /^The merge request is in .+\.merge\.md\./)
+    assert.match(text, /Read that file in parts with the file tools/)
+    assert.match(text, /Do not edit it\./)
+    assert.doesNotMatch(text, /\{\{requestPath\}\}/)
+
+    activation.resolve({ stopReason: 'completed' })
+    await waitFor(() => state.running.size === 0)
+  } finally {
+    await removeStorage(storage)
+  }
+})
+
 test('不同会话的合并运行互斥', async () => {
   const storage = await mkdtemp(join(tmpdir(), 'humanize-merge-global-lock-'))
   setStorageRootResolver(() => storage)

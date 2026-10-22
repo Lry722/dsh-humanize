@@ -4,6 +4,7 @@ Output exactly one JSON object and nothing else. Do not add prose, do not use a 
 {"annotations":[{"rule":1,"quote":"...","problem":"...","suggestion":"..."}]}
 
 Requirements:
+
 - rule is the number of the violated rule, as numbered in the rules text. Use the number that matches the rule; do not invent one.
 - quote is the exact text from the reviewed content and stays short.
 - problem explains what is wrong; suggestion gives the fix.

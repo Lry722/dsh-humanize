@@ -129,6 +129,7 @@ include:
 发给模型的提示词都放在包的根目录 `prompts/` 下，直接编辑即可：
 
 - `prompts/review-system.md`：审查调用的 system 提示词，写入审查和批次审查共用。
+- `prompts/merge-request.md`：派发合并子代理时发给它的用户消息，包含合并请求文件的路径。
 - `prompts/merge-header.md`：合并消息开头的提示词，三种合并触发方式共用。
 - `prompts/human-facing-field.md`：包装工具里 `human_facing` 字段的描述。
 
