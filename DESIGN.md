@@ -130,7 +130,7 @@ include:
 
 include 声明是规范链的属性。链里有 include 声明时，命中模式的文件才进入审查。写入审查和 /humanize-review 都按这条规则执行。链里缺少 include 声明时，规范作用于所有文件。
 
-二进制文件不进入审查。判断取文件开头的样本：出现 NUL 字节或控制字符占比超过一成时按二进制处理，带文本 BOM 的 UTF-16/UTF-32 内容仍按文本处理。写入审查和 /humanize-review 共用这条判断，批次审查在任务说明里报告跳过的数量。
+二进制文件不进入审查。判断交给 isbinaryfile 包：它按文件开头的样本识别常见的二进制格式和编码，带文本 BOM 的 UTF-16/UTF-32 内容仍按文本处理。写入审查和 /humanize-review 共用这条判断，批次审查在任务说明里报告跳过的数量。
 
 ### 审查调用
 
@@ -273,7 +273,7 @@ PATH 是文件时审查这一个文件，是目录时递归展开。
 - `lib/specs.js`，负责加载和渲染 PROSE.md 分层规范。规范搜索以会话工作目录为界。
   - `lib/spec-match.js`，负责 include 模式的编译与匹配。
 - `lib/pipeline.js`，审查管线，负责单次审查的编排。
-- `lib/binary-file.js`，按文件开头的样本判断二进制文件，审查前跳过这类文件。
+- `lib/binary-file.js`，用 isbinaryfile 判断二进制文件，审查前跳过这类文件；读不到文件时按文本处理。
 - `lib/review.js`，负责发起审查调用，并控制审查时长，写入审查和审查批次共用。
 - `lib/annotations.js`，负责解析批注并把它渲染成暂存的 markdown 文件。
 - `lib/review-run.js`，负责执行 /humanize-review 批次，按设定的并发数跑。
