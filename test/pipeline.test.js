@@ -19,8 +19,8 @@ function fakeContext() {
 }
 
 /** 造一个假 agent，模型配置直接由管线配置提供，不读会话。 */
-function fakeAgent() {
-  return { id: 'agent-1', session: { id: 'session-1', header: {} } }
+function fakeAgent(id = 'agent-1', sessionId = 'session-1') {
+  return { id, session: { id: sessionId, header: {} } }
 }
 
 /** 空的提交批注负载，审查通过后清掉暂存。 */
@@ -118,6 +118,86 @@ test('shutdown 前进入待办槽的审查按丢弃结算', async () => {
   assert.equal((await second).kind, 'discarded')
   assert.equal(calls, 1)
   await draining
+  await rm(storage, { recursive: true, force: true })
+})
+
+test('合并锁覆盖的文件直接跳过审查', async () => {
+  const pipeline = createReviewPipeline(fakeContext(), { reviewProvider: 'p', reviewModel: 'm' }, { info() {}, warn() {} })
+  const target = '/tmp/humanize-locked-doc.md'
+  pipeline.state.mergeRun = { agentId: 'agent-c', target: null, files: new Set([target]) }
+  assert.deepEqual(
+    await pipeline.scheduleReview(fakeAgent(), target, undefined, 'x\n'),
+    { kind: 'skipped' },
+  )
+  await pipeline.shutdown()
+})
+
+test('同一文件的待办按 agent 分开，后写入的 agent 不覆盖前一个', async () => {
+  const storage = await mkdtemp(join(tmpdir(), 'humanize-pipeline-agents-'))
+  setStorageRootResolver(() => storage)
+  const project = join(storage, 'project')
+  await mkdir(join(project, '.git'), { recursive: true })
+  await writeFile(join(project, 'PROSE.md'), '1. 平铺直叙。\n', 'utf8')
+  const target = join(project, 'doc.md')
+  await writeFile(target, '第一版。\n', 'utf8')
+
+  let release
+  const gate = new Promise((resolve) => { release = resolve })
+  const ctx = { ...fakeContext(), llm: { stream: () => gatedStream(gate) } }
+  const config = { reviewProvider: 'p', reviewModel: 'm', reviewRetries: 0 }
+  const pipeline = createReviewPipeline(ctx, config, { info() {}, warn() {} })
+  const firstAgent = fakeAgent('agent-a', 'session-a')
+  const secondAgent = fakeAgent('agent-b', 'session-b')
+
+  const first = pipeline.scheduleReview(firstAgent, target, undefined, '第一版。\n')
+  await tick()
+  const second = pipeline.scheduleReview(secondAgent, target, '第一版。\n', '第二版。\n')
+  await tick()
+  // 同一个 agent 再次写入时只合并自己的待办，不碰另一个 agent。
+  const third = pipeline.scheduleReview(firstAgent, target, '第二版。\n', '第三版。\n')
+  await tick()
+
+  const entry = pipeline.state.reviewQueues.get(target)
+  assert.equal(entry.activeAgent, 'agent-a')
+  assert.deepEqual([...entry.pending.keys()].sort(), ['agent-a', 'agent-b'])
+
+  const draining = pipeline.shutdown()
+  release()
+  await Promise.allSettled([first, second, third])
+  await draining
+  await rm(storage, { recursive: true, force: true })
+})
+
+test('合并目标上的其他 agent 审查会被丢弃或中止', async () => {
+  const storage = await mkdtemp(join(tmpdir(), 'humanize-pipeline-discard-'))
+  setStorageRootResolver(() => storage)
+  const project = join(storage, 'project')
+  await mkdir(join(project, '.git'), { recursive: true })
+  await writeFile(join(project, 'PROSE.md'), '1. 平铺直叙。\n', 'utf8')
+  const target = join(project, 'doc.md')
+  await writeFile(target, '第一版。\n', 'utf8')
+
+  let release
+  const gate = new Promise((resolve) => { release = resolve })
+  const ctx = { ...fakeContext(), llm: { stream: () => gatedStream(gate) } }
+  const config = { reviewProvider: 'p', reviewModel: 'm', reviewRetries: 0 }
+  const pipeline = createReviewPipeline(ctx, config, { info() {}, warn() {} })
+  const firstAgent = fakeAgent('agent-a', 'session-a')
+  const secondAgent = fakeAgent('agent-b', 'session-b')
+
+  const first = pipeline.scheduleReview(firstAgent, target, undefined, '第一版。\n')
+  await tick()
+  const second = pipeline.scheduleReview(secondAgent, target, '第一版。\n', '第二版。\n')
+  await tick()
+
+  // 模拟第三个 agent 开始合并这个文件。它要丢掉排队项，并中止在途审查。
+  pipeline.discardReviews('agent-c', [target])
+  assert.equal(pipeline.state.reviewQueues.get(target).pending.size, 0)
+
+  release()
+  assert.equal((await second).kind, 'discarded')
+  assert.ok(['aborted', 'discarded'].includes((await first).kind))
+  await pipeline.shutdown()
   await rm(storage, { recursive: true, force: true })
 })
 

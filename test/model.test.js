@@ -52,3 +52,26 @@ test('仅当会话给出推理等级时，输出才包含 reasoningEffort', () =
   const agent = makeAgent({ provider: 'p', model: 'm' })
   assert.deepEqual(mergeAgentOptions({}, agent), { provider: 'p', model: 'm' })
 })
+
+test('只配置合并 provider 时跟随会话模型，不拼接两个来源', () => {
+  const agent = makeAgent({ provider: 'p', model: 'm', reasoningEffort: 'high' })
+  assert.deepEqual(
+    mergeAgentOptions({ mergeProvider: 'q' }, agent),
+    { provider: 'p', model: 'm', reasoningEffort: 'high' },
+  )
+})
+
+test('只配置合并 model 时跟随会话模型，不拼接两个来源', () => {
+  const agent = makeAgent({ provider: 'p', model: 'm' })
+  assert.deepEqual(
+    mergeAgentOptions({ mergeModel: 'cheap' }, agent),
+    { provider: 'p', model: 'm' },
+  )
+})
+
+test('成对的合并模型配置在没有会话模型时也能使用', () => {
+  assert.deepEqual(
+    mergeAgentOptions({ mergeProvider: 'q', mergeModel: 'cheap' }, makeAgent(undefined)),
+    { provider: 'q', model: 'cheap' },
+  )
+})

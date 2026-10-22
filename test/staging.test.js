@@ -1,13 +1,16 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
+  collectStaged,
   humanizeRoot,
   setRequestRootResolver,
   setStorageRootResolver,
+  stagingPathFor,
   writeRequest,
+  writeStaging,
 } from '../lib/staging.js'
 
 test('storageDir 里的 ~ 会展开成用户目录', () => {
@@ -28,5 +31,25 @@ test('审查请求留档写到指定的临时目录', async () => {
     assert.equal(await readFile(path, 'utf8'), 'request body')
   } finally {
     await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('暂存文件不可读时 collectStaged 抛出错误，不把它当成空目录', {
+  skip: process.platform === 'win32' || process.getuid?.() === 0,
+}, async () => {
+  const storage = await mkdtemp(join(tmpdir(), 'humanize-staging-perm-'))
+  setStorageRootResolver(() => storage)
+  const project = join(storage, 'project')
+  const file = join(project, 'doc.md')
+  try {
+    await mkdir(project, { recursive: true })
+    await writeFile(file, 'x\n')
+    await writeStaging(file, `# ${file}\n\n1. "x"\n`)
+    await chmod(stagingPathFor(file), 0o000)
+    await assert.rejects(collectStaged(file), (error) => error?.code === 'EACCES' || error?.code === 'EPERM')
+  } finally {
+    // 恢复权限，否则清理目录会失败。
+    await chmod(stagingPathFor(file), 0o600).catch(() => undefined)
+    await rm(storage, { recursive: true, force: true })
   }
 })

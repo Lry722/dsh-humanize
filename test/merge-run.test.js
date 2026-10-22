@@ -60,6 +60,7 @@ function makeState() {
     running: new Set(),
     reviewBatchAbort: new Map(),
     reviewQueues: new Map(),
+    mergeRun: null,
   }
 }
 
@@ -361,6 +362,58 @@ test('循环复审走真实审查管线，新批注进入下一轮并最终清�
     const mergeNotices = agent.injected.filter((message) => /已按暂存批注修订/.test(message.content?.[0]?.text ?? ''))
     assert.equal(mergeNotices.length, 2)
     await assert.rejects(readFile(stagingPathFor(target)), /ENOENT/)
+  } finally {
+    await removeStorage(storage)
+  }
+})
+
+test('不同会话的合并运行互斥', async () => {
+  const storage = await mkdtemp(join(tmpdir(), 'humanize-merge-global-lock-'))
+  setStorageRootResolver(() => storage)
+  try {
+    const { project } = await makeProject(storage)
+    const firstAgent = makeAgent('agent-1', 'session-1', project)
+    const secondAgent = makeAgent('agent-2', 'session-2', project)
+    const activation = deferredActivation('child-1')
+    const ctx = makeCtx([firstAgent, secondAgent], async () => activation.activation)
+    const state = makeState()
+    registerMerge(ctx, log, { loopMaxRounds: 3 }, state, makeReviews().scheduleReview, async () => {}, () => {})
+
+    const first = await ctx.commands.get('humanize').handler({ agent: firstAgent, rawInput: '' })
+    assert.equal(first.kind, 'success')
+    assert.equal(state.mergeRun.agentId, 'agent-1')
+
+    const second = await ctx.commands.get('humanize').handler({ agent: secondAgent, rawInput: '' })
+    assert.equal(second.kind, 'error')
+    assert.match(second.text, /已有批注合并运行/)
+
+    activation.resolve({ stopReason: 'completed' })
+    await waitFor(() => state.running.size === 0 && state.mergeRun === null)
+  } finally {
+    await removeStorage(storage)
+  }
+})
+
+test('复审失败时按失败结束，不再宣称收敛', async () => {
+  const storage = await mkdtemp(join(tmpdir(), 'humanize-merge-review-failed-'))
+  setStorageRootResolver(() => storage)
+  try {
+    const { project } = await makeProject(storage)
+    const agent = makeAgent('agent-1', 'session-1', project)
+    const activation = deferredActivation('child-1')
+    const ctx = makeCtx([agent], async () => activation.activation)
+    const state = makeState()
+    const scheduleReview = async () => ({ kind: 'failed', message: 'review provider error' })
+    registerMerge(ctx, log, { loopMaxRounds: 3 }, state, scheduleReview, async () => {}, () => {})
+
+    const result = await ctx.commands.get('humanize-loop').handler({ agent, rawInput: '' })
+    assert.equal(result.kind, 'success')
+    activation.resolve({ stopReason: 'completed' })
+    await waitFor(() => state.running.size === 0)
+
+    assert.match(noticeTexts(agent), /第 1 轮复审有 1 个文件失败/)
+    assert.doesNotMatch(noticeTexts(agent), /循环合并结束/)
+    assert.equal(state.mergeRun, null)
   } finally {
     await removeStorage(storage)
   }

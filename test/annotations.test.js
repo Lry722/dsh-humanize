@@ -56,5 +56,27 @@ test('渲染的编号行能被 countAnnotations 统计出来', () => {
     { ruleText: 'rule two', quote: 'q3', problem: 'p3', suggestion: 's3' },
   ])
   assert.equal(countAnnotations(rendered), 3)
-  assert.equal(countAnnotations('# 没有批注\n', 0), 0)
+  assert.equal(countAnnotations('# 没有批注\n'), 0)
+})
+
+test('批注里的换行不会破坏暂存格式，也不会多算条数', () => {
+  const rendered = renderStaging('/f.md', [
+    { ruleText: 'rule one', quote: 'a\n2. injected', problem: 'p\n3. also', suggestion: 's' },
+  ])
+  assert.equal(countAnnotations(rendered), 1)
+  assert.match(rendered, /1\. "a 2\. injected"/)
+  assert.match(rendered, /Problem: p 3\. also/)
+  assert.doesNotMatch(rendered, /\n2\. injected/)
+})
+
+test('规范化批注时把多行字段压成一行', () => {
+  const { annotations } = normalizeAnnotations({
+    annotations: [{ rule: 1, quote: 'a\nb', problem: 'p\nq', suggestion: 's\n t' }],
+  }, rules)
+  assert.deepEqual(annotations[0], {
+    ruleText: 'rule one',
+    quote: 'a b',
+    problem: 'p q',
+    suggestion: 's t',
+  })
 })
