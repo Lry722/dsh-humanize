@@ -11,6 +11,16 @@ test('前后内容相同时返回 null', () => {
   assert.equal(changedRegions('a\nb\nc', 'a\nb\nc'), null)
 })
 
+test('只有行尾不同时不产生改动区段', () => {
+  assert.equal(changedRegions('a\r\nb\r\nc\r\n', 'a\nb\nc\n'), null)
+})
+
+test('CRLF 内容里的改动仍然能定位', () => {
+  const before = 'a\r\nb\r\nc\r\n'
+  const after = 'a\r\nB\r\nc\r\n'
+  assert.deepEqual(changedRegions(before, after), [{ startLine: 1, endLine: 3 }])
+})
+
 test('改动区段包住改动并保留上下文', () => {
   const after = 'a\nB\nc'
   const changed = changedRegions('a\nb\nc', after)

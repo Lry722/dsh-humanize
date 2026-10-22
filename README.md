@@ -130,11 +130,13 @@ If the plugin reloads during a loop, that run ends. Completed merges still clear
 
 If the profile watches this plugin's directory with HMR, changing the plugin's own source triggers a plugin reload. Reload ends a running merge; run the command again to continue.
 
-Run `/humanize-review <path>` to dispatch a batch review. The scope is the project's git-tracked files.
+Run `/humanize-review <path>` to dispatch a batch review. By default, it reviews every git-tracked file under the target.
+
+Run `/humanize-review --changed <path>` to review only files changed since HEAD. The flag can come before or after the path; omit the path to use the current working directory. Changed files include working-tree modifications, staged changes, and untracked files that git does not ignore. Deleted files are skipped. The full file is still sent, but annotations are limited to the changed regions; new files get a full review. When nothing changed, the task ends as completed and says so.
 
 Review runs in the background as a task. The progress bar updates above the input box. The task list in the session header shows the same task. Review runs in a separate context; what it reads stays separate from the session.
 
-The target must be inside a git repository whose status can be read. If either condition is missing, the task ends as failed with a reason. If there is nothing to review (no git-tracked files, or no file matches the include patterns), the task ends as completed and says so.
+The target must be inside a git repository whose status can be read. If either condition is missing, the task ends as failed with a reason. If there is nothing to review, the task ends as completed and says so. The default mode checks git-tracked files and the include patterns; the incremental mode checks changed files and the include patterns.
 
 ## Prompts
 
