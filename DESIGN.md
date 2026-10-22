@@ -250,6 +250,8 @@ PATH 是文件时审查这一个文件，是目录时递归展开。
 
 审查模型和合并模型下面的测试按钮只在提供 connection 服务的 Web 宿主里有对应的路由。测试请求通过 Connection 的 Fetch 路由发出，需要认证，端口沿用现有设置。
 
+设置页底部的保存位置同样走 Connection 的 Fetch 路由。浏览器拿不到宿主机的临时目录和用户目录，暂存批注和审查请求记录的真实路径统一由宿主算出。
+
 页面把 `{ view, form }` 交给组件。`view: 'summary'` 渲染行内说明，`view: 'page'` 渲染表单。
 
 读取通过 `form.state` 完成，它提供 value、base、user、revision、writable 五个字段。写入是一次原子 `form.mutate(ops, revision)`，path 以 volatile 节点名开头。
@@ -279,6 +281,7 @@ PATH 是文件时审查这一个文件，是目录时递归展开。
 - `lib/model.js`，会话当前模型配置的读取，审查调用和合并子代理共用。
 - `lib/signal.js`，中止信号的转发，审查管线和审查调用共用。
 - `lib/staging.js`，暂存文件读写与孤儿清理。保存位置可通过设置页的 storageDir 修改。审查请求记录和合并请求写到系统临时目录。
+- `lib/path-info.js`，把暂存批注和审查请求记录的真实路径提供给设置页。
 - `lib/settings.js`，设置字段表，Config、运行时读取和边界都由它生成。
 - `lib/paths.js`，命令路径的引号去除和 `~` 展开。
 - `lib/diff.js`，负责整理改动区段。

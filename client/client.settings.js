@@ -93,9 +93,8 @@ window.__ModuleLoader__.load({
       fontSize: '12px',
       fontFamily: 'monospace',
       color: 'var(--dsw-alias-label-secondary)',
-      overflow: 'hidden',
-      textOverflow: 'ellipsis',
-      whiteSpace: 'nowrap',
+      lineHeight: 1.5,
+      overflowWrap: 'anywhere',
     }
 
     function ResetButton(props) {
@@ -209,19 +208,45 @@ window.__ModuleLoader__.load({
       )
     }
 
-    /** 暂存批注和审查请求记录的保存位置。暂存位置可以复制。 */
+    /** 暂存批注和审查请求记录的保存位置。路径由宿主给出，都可以复制。 */
     function StoragePaths(props) {
-      const custom = typeof props.storageDir === 'string' ? props.storageDir.trim() : ''
-      const root = custom.length > 0 ? custom.replace(/[\\/]+$/, '') : '~/.dsh/humanize'
+      const [paths, setPaths] = useState({ status: 'loading' })
+      useEffect(() => {
+        let alive = true
+        setPaths({ status: 'loading' })
+        fetch('api/humanize.paths', {
+          cache: 'no-store',
+          headers: { accept: 'application/json' },
+        }).then(async (response) => {
+          if (!response.ok) throw new Error(`HTTP ${response.status}`)
+          const result = await response.json()
+          if (!alive) return
+          if (typeof result?.staging === 'string' && typeof result?.requests === 'string') {
+            setPaths({ status: 'ready', staging: result.staging, requests: result.requests })
+            return
+          }
+          setPaths({ status: 'error' })
+        }).catch(() => {
+          if (alive) setPaths({ status: 'error' })
+        })
+        return () => { alive = false }
+        // 保存位置改动提交后重新读取，显示的是刚保存的目录。
+      }, [props.storageDir])
+      if (paths.status !== 'ready') {
+        return h('div', { style: fieldStyle },
+          h('p', { style: hintStyle },
+            paths.status === 'error' ? t('paths.unavailable') : t('paths.loading')),
+        )
+      }
       const rows = [
-        { label: t('paths.staging'), path: `${root}/annotations`, copy: true },
-        { label: t('paths.requests'), path: t('paths.requestsValue'), copy: false },
+        { label: t('paths.staging'), path: paths.staging },
+        { label: t('paths.requests'), path: paths.requests },
       ]
       return h('div', { style: fieldStyle },
         rows.map((row) => h('div', { key: row.label, style: storageRowStyle },
           h('span', { style: storageLabelStyle }, row.label),
-          h('span', { style: storagePathStyle }, row.path),
-          row.copy ? h(CopyButton, { text: row.path }) : null,
+          h('span', { style: storagePathStyle, title: row.path }, row.path),
+          h(CopyButton, { text: row.path }),
         )),
       )
     }
