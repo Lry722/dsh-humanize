@@ -59,7 +59,8 @@ test('审查请求带上全文、审查范围和已有批注', async () => {
     const request = await readFile(join(root, 'tmp', 'a.md.request.md'), 'utf8')
     assert.match(request, /## system/)
     assert.match(request, /## user/)
-    assert.doesNotMatch(request, /## Existing annotations/)
+    // 没有已有批注时，用户消息里不出现这个小节。系统提示词里提到它不算。
+    assert.doesNotMatch(wholePrompt, /## Existing annotations/)
 
     const regionCtx = ctxWith([
       { type: 'text-delta', index: 0, text: '{"annotations":[]}' },
@@ -89,8 +90,8 @@ test('审查请求带上全文、审查范围和已有批注', async () => {
 
     // 暂存文件存在但内容为空时，也省略 Existing annotations 小节。
     await runReview(ctx, { reviewProvider: 'p', reviewModel: 'm' }, agent, '/tmp/empty.md', '正文', null, spec, '')
-    const emptyRequest = await readFile(join(root, 'tmp', 'empty.md.request.md'), 'utf8')
-    assert.doesNotMatch(emptyRequest, /## Existing annotations/)
+    const emptyPrompt = seen[2].messages[0].content[0].text
+    assert.doesNotMatch(emptyPrompt, /## Existing annotations/)
   } finally {
     await rm(root, { recursive: true, force: true })
   }

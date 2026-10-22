@@ -102,7 +102,7 @@ When the model writes a file it must declare `human_facing`. Pass true for conte
 
 Reviews of the same file run serially. Writes from different sessions or subagents queue separately, and pending entries are kept per agent without overwriting each other. While a merge runs, the reviews of the agent that started it step aside. Reviews from other agents on the same target files also step aside.
 
-Annotations are staged under `~/.dsh/humanize/annotations/`. The path mirrors the reviewed file. Annotations can be edited directly. The storage location can be changed on the settings page.
+Annotations are staged under `~/.dsh/humanize/annotations/`. The path mirrors the reviewed file. Annotations can be edited directly. Staging groups them by rule, and each rule heading carries its rule number so the next review can reuse it. The storage location can be changed on the settings page.
 
 Run `/humanize <path>` to merge annotations for a file or directory. With no path, it uses the current working directory.
 
