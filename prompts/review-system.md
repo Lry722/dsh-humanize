@@ -10,4 +10,4 @@ Requirements:
 - problem explains what is wrong; suggestion gives the fix.
 - When there are no problems, output {"annotations":[]}. Do not force findings.
 - The message states the review scope. Add new annotations only inside that scope. When the file contains review scope markers, each start marker opens a block and the next end marker closes it; text between blocks is out of scope. The code fence and the markers are not part of the file; do not quote them.
-- When existing annotations are provided, reconcile them against the full file: keep the ones that still hold, drop the ones whose quoted text is gone. Return the complete final list.
+- When existing annotations are provided, keep every existing annotation unless the quoted text it refers to no longer exists in the full file. Do not drop one because it looks minor, already fixed, or because you disagree with it. When in doubt, keep it. Return the complete final list, including all retained existing annotations and any new ones.

@@ -59,6 +59,7 @@ test('审查请求带上全文、审查范围和已有批注', async () => {
     const request = await readFile(join(root, 'tmp', 'a.md.request.md'), 'utf8')
     assert.match(request, /## system/)
     assert.match(request, /## user/)
+    assert.doesNotMatch(request, /## Existing annotations/)
 
     const regionCtx = ctxWith([
       { type: 'text-delta', index: 0, text: '{"annotations":[]}' },
@@ -85,6 +86,11 @@ test('审查请求带上全文、审查范围和已有批注', async () => {
     assert.equal(regionPrompt.match(/review scope ends/g)?.length, 2)
     assert.ok(regionPrompt.indexOf('## Full file content under review') < regionPrompt.indexOf('<!-- dsh-humanize: review scope starts'))
     assert.ok(regionPrompt.indexOf('<!-- dsh-humanize: review scope ends') < regionPrompt.indexOf('## Existing annotations'))
+
+    // 暂存文件存在但内容为空时，同样不拼 Existing annotations 小节。
+    await runReview(ctx, { reviewProvider: 'p', reviewModel: 'm' }, agent, '/tmp/empty.md', '正文', null, spec, '')
+    const emptyRequest = await readFile(join(root, 'tmp', 'empty.md.request.md'), 'utf8')
+    assert.doesNotMatch(emptyRequest, /## Existing annotations/)
   } finally {
     await rm(root, { recursive: true, force: true })
   }
