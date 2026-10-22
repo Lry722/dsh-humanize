@@ -10,12 +10,14 @@ test('单行改动给出带上下文的最小区段', () => {
   const region = changedRegion('a\nb\nc', 'a\nB\nc')
   assert.equal(region.text, 'a\nB\nc')
   assert.equal(region.startLine, 1)
+  assert.equal(region.endLine, 3)
 })
 
 test('新增行落在区段里', () => {
   const region = changedRegion('a\nc', 'a\nb\nc')
   assert.equal(region.text, 'a\nb\nc')
   assert.equal(region.startLine, 1)
+  assert.equal(region.endLine, 3)
 })
 
 test('改动的那一行靠近围栏时，区段扩展到围栏开头', () => {

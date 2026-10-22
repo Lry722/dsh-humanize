@@ -55,7 +55,7 @@ hmr 检测到改动后，会重载这个插件的整个依赖图。做法是把�
 
 规范内容有缓存，文件没变时直接复用缓存。
 
-第三步，写入审查。模型写入时，插件按写入前后的内容算出改动区段，只把改动区段和规范发给模型。新建文件时，以及 /humanize-review 触发的全量审查，都把全文发给模型。
+第三步，写入审查。审查请求固定包含完整文件和审查范围。写入审查的范围是写入后文件里的改动区段，新建文件时以及 /humanize-review 触发的全量审查的范围是全文。全文用于核对术语、体例和已有批注，审查范围用于限定新增批注的位置。
 
 审查交给一次单独的模型调用来做。调用要求模型对照规范逐条批注，产出一份批注列表。审查用哪个模型由插件配置决定，可以选择成本更低的模型。
 
@@ -63,7 +63,7 @@ hmr 检测到改动后，会重载这个插件的整个依赖图。做法是把�
 
 审查在后台进行，失败会自动重试，出错在任务列表告警，主任务照常推进。
 
-第四步，延迟合并。批注先暂存到文件里，对同一文件再次审查时，在已有批注的基础上更新批注内容。
+第四步，延迟合并。批注先暂存到文件里。对同一文件再次审查时，审查调用带着全文，逐条核对已有批注是否仍然成立，再更新批注内容。
 
 合并有三个触发时机。
 
@@ -112,9 +112,9 @@ PROSE.md 的文件头可以带一个 YAML 块，include 声明规范作用的文
 ```markdown
 ---
 include:
-  - '*.md'
-  - 'docs/**/*.txt'
-  - '!drafts/'
+  - "*.md"
+  - "docs/**/*.txt"
+  - "!drafts/"
 ---
 ```
 
@@ -132,7 +132,7 @@ include 声明是规范链的属性。链里有 include 声明时，命中模式
 
 ### 审查调用
 
-ctx.llm.stream 发起一次单独的模型调用。写入审查只发送改动区段，区段两侧各带三行上下文。平台会把这类调用和主任务的请求区分开记录。
+ctx.llm.stream 发起一次单独的模型调用。审查调用固定发送完整文件，并附上一段审查范围。写入审查的范围是改动区段及其行号范围，全量审查的范围是全文。区段两侧各带三行上下文，审查范围用来限定新增批注的位置。平台会把这类调用和主任务的请求区分开记录。
 
 调用参数里可以带一个 purpose 字段，只接受 compaction 和 session-title 两个值。这个字段的作用是让适配器对辅助调用采用不同的传输策略。审查调用把这个字段留空。
 
@@ -294,19 +294,19 @@ chunk 地址随主入口文件变化，浏览器可以长期缓存。改完 chun
 
 ## 服务速查
 
-| 能力           | 入口                       | 所属包         |
-| -------------- | -------------------------- | -------------- |
-| 工具注册与遮蔽 | ctx.tools.register 方法    | dsh-tools      |
-| agent 创建通知 | agent/created 事件         | dsh-agent      |
-| 会话事件       | session/event 事件         | dsh-session    |
-| 主任务通知     | agent.inject 方法          | dsh-agent      |
-| 审查调用       | ctx.llm.stream 方法        | dsh-llm        |
-| 斜杠命令       | ctx.commands.register 方法 | dsh-commands   |
-| 压缩时机       | compaction/end 事件        | dsh-compaction |
-| 文件读写       | node:fs/promises           | —              |
-| 原子写入       | writeFileAtomic 方法       | dsh-atomic-write |
+| 能力           | 入口                       | 所属包                 |
+| -------------- | -------------------------- | ---------------------- |
+| 工具注册与遮蔽 | ctx.tools.register 方法    | dsh-tools              |
+| agent 创建通知 | agent/created 事件         | dsh-agent              |
+| 会话事件       | session/event 事件         | dsh-session            |
+| 主任务通知     | agent.inject 方法          | dsh-agent              |
+| 审查调用       | ctx.llm.stream 方法        | dsh-llm                |
+| 斜杠命令       | ctx.commands.register 方法 | dsh-commands           |
+| 压缩时机       | compaction/end 事件        | dsh-compaction         |
+| 文件读写       | node:fs/promises           | —                      |
+| 原子写入       | writeFileAtomic 方法       | dsh-atomic-write       |
 | 设置读写       | ctx.configForms 服务       | dsh-client-ui-settings |
-| 任务进度       | ctx.jobs.start 方法        | dsh-jobs       |
+| 任务进度       | ctx.jobs.start 方法        | dsh-jobs               |
 
 ## 维护事项
 

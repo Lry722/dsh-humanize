@@ -57,8 +57,43 @@ test('审查按文本 JSON 读批注，请求里只放审查提示词', async ()
     assert.deepEqual(result.annotations.map((annotation) => annotation.ruleText), ['平铺直叙。'])
     // 请求里只放审查提示词，模型只能看到审查所需内容。
     assert.equal(seen[0].tools, undefined)
+    const prompt = seen[0].messages[0].content[0].text
+    assert.match(prompt, /## Full file under review: \/tmp\/a\.md\n正文/)
+    assert.match(prompt, /## Review scope: whole file\nAdd new annotations anywhere in the full file\./)
+    assert.doesNotMatch(prompt, /## Review scope: lines/)
     const request = await readFile(join(root, 'tmp', 'a.md.request.md'), 'utf8')
     assert.match(request, /exactly one JSON object/)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('改动区段审查同时发送全文、审查范围和已有批注', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'humanize-review-region-'))
+  setRequestRootResolver(() => root)
+  const seen = []
+  const ctx = ctxWith([
+    { type: 'text-delta', index: 0, text: '{"annotations":[]}' },
+    finish('stop'),
+  ], seen)
+  try {
+    await runReview(
+      ctx,
+      { reviewProvider: 'p', reviewModel: 'm' },
+      agent,
+      '/tmp/region.md',
+      '第一段\n第二段\n第三段',
+      { text: '第二段', startLine: 2, endLine: 2 },
+      spec,
+      '1. "旧句子"',
+    )
+    const prompt = seen[0].messages[0].content[0].text
+    assert.match(prompt, /## Full file under review: \/tmp\/region\.md\n第一段\n第二段\n第三段/)
+    assert.match(prompt, /## Review scope: lines 2-2\nAdd new annotations only inside the region below\.\n\n第二段/)
+    assert.match(prompt, /## Existing annotations\nReconcile these against the full file\. Return the complete updated list\.\n\n1\. "旧句子"/)
+    // 全文在前、审查范围居中、已有批注在最后，模型先看全文再做对账。
+    assert.ok(prompt.indexOf('## Full file under review') < prompt.indexOf('## Review scope: lines'))
+    assert.ok(prompt.indexOf('## Review scope: lines') < prompt.indexOf('## Existing annotations'))
   } finally {
     await rm(root, { recursive: true, force: true })
   }
