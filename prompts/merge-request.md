@@ -1,5 +1,11 @@
 The merge request is in {{requestPath}}. It contains staged prose annotations.
 
+Accuracy outranks form. Preserve every fact, condition, exception, scope, guarantee, negation, qualifier, and technical distinction. Code comments must strictly match the code they describe.
+
+When changing I18N text, update every language version together.
+
+Before finishing, re-read every changed part and confirm its meaning has not changed.
+
 Merge requirements:
 
 1. First use the read tool to view the file content, and understand the annotations against the rules. Quotes in the annotations are based on the version at review time; when they do not match the current content, the current content prevails.

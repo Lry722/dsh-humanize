@@ -15,7 +15,7 @@ window.__ModuleLoader__.load({
 
     /** 这是设置的命名空间，同时用作宿主条目和 Plugins 页面里本插件行的 id。 */
     const NS = 'dsh-humanize'
-    /** Config 里承载可编辑设置的 volatile 节点名，写入路径以它为前缀。 */
+    /** Config 里承载设置的 volatile 节点名，写入路径以它为前缀。 */
     const SETTINGS_KEY = 'settings'
     // 插槽传入的翻译函数。插槽没提供时，直接用 key 当作文案显示。
     let t = (key) => key
@@ -98,7 +98,7 @@ window.__ModuleLoader__.load({
     }
 
     function ResetButton(props) {
-      // 没改过这个字段时不渲染按钮，标签行里不会留下空位。
+      // 字段被覆盖时才渲染按钮，标签行保持紧凑。
       if (!props.overridden) return null
       return h('button', { type: 'button', style: resetStyle, onClick: props.onReset }, t('common.reset'))
     }
@@ -208,12 +208,13 @@ window.__ModuleLoader__.load({
       )
     }
 
-    /** 暂存批注和审查请求记录的保存位置。路径由宿主给出，都可以复制。 */
+    /** 展示暂存批注和审查请求记录的保存位置。 */
     function StoragePaths(props) {
       const [paths, setPaths] = useState({ status: 'loading' })
       useEffect(() => {
         let alive = true
         setPaths({ status: 'loading' })
+        // 两条路径都由宿主算出来，浏览器这边读不到这些目录。
         fetch('api/humanize.paths', {
           cache: 'no-store',
           headers: { accept: 'application/json' },
@@ -230,7 +231,7 @@ window.__ModuleLoader__.load({
           if (alive) setPaths({ status: 'error' })
         })
         return () => { alive = false }
-        // 保存位置改动提交后重新读取，显示的是刚保存的目录。
+        // 保存位置改动提交后重新读取，显示刚保存的位置。
       }, [props.storageDir])
       if (paths.status !== 'ready') {
         return h('div', { style: fieldStyle },
@@ -238,6 +239,7 @@ window.__ModuleLoader__.load({
             paths.status === 'error' ? t('paths.unavailable') : t('paths.loading')),
         )
       }
+      // 每条路径旁边都配一个复制按钮。
       const rows = [
         { label: t('paths.staging'), path: paths.staging },
         { label: t('paths.requests'), path: paths.requests },
@@ -365,7 +367,7 @@ window.__ModuleLoader__.load({
       const model = value[`${prefix}Model`] ?? ''
       const info = groups?.find((g) => g.id === provider)?.models.find((m) => m.id === model)
       const efforts = info?.reasoning?.efforts
-      // 缺模型或不支持推理等级时改为手动填写。
+      // 没有选择模型或不支持推理等级时改为手动填写。
       if (catalogFailed || provider === '' || model === '' || efforts === undefined || efforts.length === 0) {
         return h(TextField, {
           label: t(prefix === 'review' ? 'model.reviewEffort' : 'model.mergeEffort'),

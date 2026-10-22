@@ -1,6 +1,6 @@
 /**
  * 审查管线生命周期的单元测试。模拟一次受控的审查流，验证插件停止
- * 接受新审查后的行为：关门、排空在途调用、丢弃排队中的待办。
+ * 接受新审查后的行为：关门、排空在途审查、丢弃排队中的待办。
  */
 import test from 'node:test'
 import assert from 'node:assert/strict'
@@ -11,14 +11,14 @@ import { createReviewPipeline } from '../lib/pipeline.js'
 import { setStorageRootResolver, stagingPathFor, writeStaging } from '../lib/staging.js'
 
 /**
- * 造一个假 ctx。审查管线只用到 ctx.get。jobs 服务缺省返回 undefined，
- * 告警走降级路径。
+ * 造一个假 ctx。审查管线只用到 ctx.get。
  */
 function fakeContext() {
+  // jobs 服务拿不到，告警走降级路径。
   return { get: () => undefined, logger: () => ({ info() {}, warn() {} }) }
 }
 
-/** 造一个假 agent，模型配置直接由管线配置提供，不读会话。 */
+/** 造一个假 agent，模型配置只从管线配置读取。 */
 function fakeAgent(id = 'agent-1', sessionId = 'session-1') {
   return { id, session: { id: sessionId, header: {} } }
 }
@@ -153,7 +153,7 @@ test('同一文件的待办按 agent 分开，后写入的 agent 不覆盖前一
   await tick()
   const second = pipeline.scheduleReview(secondAgent, target, '第一版。\n', '第二版。\n')
   await tick()
-  // 同一个 agent 再次写入时只合并自己的待办，不碰另一个 agent。
+  // 同一个 agent 再次写入时只合并自己的待办，各 agent 的待办互相独立。
   const third = pipeline.scheduleReview(firstAgent, target, '第二版。\n', '第三版。\n')
   await tick()
 
@@ -287,7 +287,7 @@ test('部分批注对不上编号时保留有效批注，并记一条丢弃日�
   await rm(storage, { recursive: true, force: true })
 })
 
-test('二进制文件不进入审查', async () => {
+test('二进制文件跳过审查', async () => {
   const storage = await mkdtemp(join(tmpdir(), 'humanize-pipeline-binary-'))
   setStorageRootResolver(() => storage)
   const project = join(storage, 'project')
@@ -308,7 +308,7 @@ test('二进制文件不进入审查', async () => {
     await pipeline.scheduleReview(fakeAgent(), target, undefined, ''),
     { kind: 'binary' },
   )
-  // 二进制文件连审查请求都不发。
+  // 二进制文件直接按 binary 返回，审查请求数为 0。
   assert.equal(calls, 0)
   await pipeline.shutdown()
   await rm(storage, { recursive: true, force: true })
