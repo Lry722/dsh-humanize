@@ -8,8 +8,16 @@ Review prose meant for people: documentation, comments, user-facing strings, mes
 
 - Cite a rule only when that rule directly explains the problem. If no rule fits, do not annotate.
 - "Abuse" means overuse or a clear cost to the reader. A necessary negation, parenthesis, adjective, semicolon, or dash is not a violation. Follow exceptions stated in the rule itself.
-- Report only findings a careful human editor would agree with. An empty list is better than weak findings.
+- **Prefer an empty list over weak findings.** Report only findings a careful human editor would agree with. A short list is better than a long list padded with nitpicks.
 - One annotation per distinct problem. If several rules apply, cite the most specific one. Do not report the same expression under multiple rules.
+
+## What not to flag
+
+- **Test names, short comments, and list labels are labels, not paragraphs.** Do not flag them for packing several checks into one sentence unless the wording is misleading.
+- **A comment that explains why code waits, retries, checks, or asserts adds information.** Do not call it redundant just because the code shows the expected value.
+- **Domain terms are not synonyms.** A term used by the code (`agent`, `acquire`, `review slot`) is not a terminology inconsistency just because a nearby sentence uses a different word. Flag it only when both expressions clearly name the same concept in the same context.
+- **A negation that carries a distinct fact is not abuse.** "The commits select files, not historical snapshots" states a real distinction. Do not delete it; if you propose a positive rewrite, the fact must survive.
+- **Do not flag a recurring pattern in only one place.** If the same wording appears several times, either annotate every clear instance or annotate the clearest one and say the pattern repeats.
 
 ## Quotes
 
@@ -23,7 +31,9 @@ Review prose meant for people: documentation, comments, user-facing strings, mes
 ## Problems and suggestions
 
 - problem is one short sentence: name the concrete cost to the reader and how the expression breaks the cited rule. Do not restate the quote or copy the rule text.
-- suggestion gives the smallest edit that fixes the problem. Preserve facts, conditions, exceptions, negations, qualifiers, and technical terms. Do not rewrite the whole paragraph.
+- suggestion gives the smallest edit that fixes the problem. **Preserve every fact in the quote**: scope, conditions, exceptions, guarantees, negations, qualifiers, and the reason a value is shown. If a sentence is redundant, merge it with its neighbor; do not delete the only statement of a fact.
+- **Check the suggestion against the rule and the surrounding text.** Do not propose an edit that still violates the same rule or creates a new inconsistency.
+- **Match the treatment to the text.** A paragraph that lists parallel steps or modes can be split one sentence per item. A test name, a short comment, or a list label should stay a label.
 - Write problem and suggestion in the language of the quoted text.
 
 ## Output
@@ -37,6 +47,16 @@ Requirements:
 - rule is the global number at the start of a rule line in the rules text, for example the 3 in "3. ...". Ignore numbers that appear inside example code blocks within a rule. Do not invent a number.
 - Every annotation has all four fields. For a retained existing annotation, a field may be an empty string when the source has nothing to copy. A new annotation needs a non-empty quote, problem, and suggestion.
 - When there are no clear violations, output {"annotations":[]}.
+
+## Self-check
+
+Before returning, review each annotation:
+
+- Does the cited rule directly explain the problem?
+- Would a careful human editor agree with it?
+- Does the suggestion keep every fact and avoid introducing a new violation?
+
+If any answer is no, rewrite the annotation or drop it. **A shorter list is better than a list with weak findings.**
 
 ## Review scope
 
