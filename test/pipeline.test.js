@@ -286,3 +286,30 @@ test('部分批注对不上编号时保留有效批注，并记一条丢弃日�
   assert.equal(warnings.some((args) => String(args[0]).includes('unknown rule numbers')), true)
   await rm(storage, { recursive: true, force: true })
 })
+
+test('二进制文件不进入审查', async () => {
+  const storage = await mkdtemp(join(tmpdir(), 'humanize-pipeline-binary-'))
+  setStorageRootResolver(() => storage)
+  const project = join(storage, 'project')
+  await mkdir(join(project, '.git'), { recursive: true })
+  await writeFile(join(project, 'PROSE.md'), '1. 平铺直叙。\n', 'utf8')
+  const target = join(project, 'image.png')
+  await writeFile(target, Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00]))
+
+  let calls = 0
+  const ctx = {
+    ...fakeContext(),
+    llm: { stream: () => { calls += 1; return submitStream({ annotations: [] }) } },
+  }
+  const config = { reviewProvider: 'p', reviewModel: 'm', reviewRetries: 0 }
+  const pipeline = createReviewPipeline(ctx, config, { info() {}, warn() {} })
+
+  assert.deepEqual(
+    await pipeline.scheduleReview(fakeAgent(), target, undefined, ''),
+    { kind: 'binary' },
+  )
+  // 二进制文件连审查请求都不发。
+  assert.equal(calls, 0)
+  await pipeline.shutdown()
+  await rm(storage, { recursive: true, force: true })
+})
