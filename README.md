@@ -1,73 +1,75 @@
 # dsh-humanize
 
-> 让推理模型专注干活，让交付内容好好说人话。
+English | [简体中文](README.zh.md)
 
-`dsh-humanize` 是一个面向 `deepseek-harness` 的插件，旨在解决编码特化模型在复杂任务中输出机器化黑话的问题。
+> Let reasoning models focus on the work. Let what they deliver read like a person wrote it.
 
----
-
-## 为什么需要它？
-
-编码特化模型能处理复杂工程推理，但输出的文字偏向机器化黑话。人类阅读这类文字要多花一份心思。
-
-在主提示词里堆叠大量风格与修辞约束，会分散模型的推理注意力。复杂任务的效率随之下降。
+`dsh-humanize` is a plugin for `deepseek-harness`. It targets the machine-sounding jargon that coding-specialized models produce on complex tasks.
 
 ---
 
-## 核心构想
+## Why it exists
 
-`dsh-humanize` 的核心理念是**将逻辑推理与文风润色解耦**：
+Coding-specialized models handle complex engineering reasoning, but their prose drifts toward machine jargon. That costs the reader extra effort.
 
-- **按标记区分**：在内容写入时，先区分纯代码或数据与面向人类阅读的内容。只有面向人类阅读的内容会触发写入审查。
-- **风格约定**：引入 `PROSE.md`，作为统一行文表达的标准。
-- **逐条溯源**：审查过程对照 `PROSE.md` 中的规范分点进行批注，定位表达不当之处。
-- **延迟应用**：审查在后台进行，主会话照常往下走，批注等用户需要时再合并。
+Packing many style and rhetoric constraints into the main prompt splits the model's reasoning attention, and complex tasks get slower.
 
 ---
 
-## 安装
+## How it works
 
-从 GitHub 安装：
+`dsh-humanize` separates logical reasoning from prose polish:
+
+- **Mark at write time**: when content is written, separate code and data from text meant for people. Only human-facing writes trigger review.
+- **One style contract**: `PROSE.md` defines how prose should read.
+- **Cite each rule**: the reviewer annotates against individual `PROSE.md` rules and points at the expression that violates the rule.
+- **Apply later**: review runs in the background while the main session keeps moving. Annotations merge when the user asks for them.
+
+---
+
+## Install
+
+Install from GitHub:
 
 ```sh
 dsh plugin --profile web add github:Lry722/dsh-humanize
 ```
 
-本地开发时用 link 方式装载当前目录：
+For local development, link the current directory:
 
 ```sh
 dsh plugin --profile web add link:/path/to/dsh-humanize
 ```
 
-安装完成后重启 dsh 才会生效。
+Restart dsh after installation.
 
-## 配置
+## Configuration
 
-在设置页的插件列表中找到 dsh-humanize，打开那一行的配置。设置页底部展示暂存批注和审查请求记录的实际保存位置，两条路径旁边都有复制按钮。下面这些参数改完之后立即生效：
+Open the dsh-humanize row in the Plugins list and edit its configuration. The bottom of the settings page shows where staged annotations and review request records are stored, with a copy button beside each path. These settings take effect immediately:
 
-- `reviewProvider` 与 `reviewModel`：审查用的模型，从宿主模型目录里下拉选择。默认跟随会话当前使用的模型。
-- `reviewReasoningEffort`：审查模型的推理等级，从所选模型公布的等级里下拉选择。默认采用模型自身的默认值。
-- `mergeProvider` 与 `mergeModel`：合并子代理用的模型，界面和审查模型一致。合并子代理包括 `/humanize`、`/humanize-loop` 和压缩触发的合并。默认跟随主会话当前使用的模型。两项必须成对填写，只填一项时整对跟随主会话。
-- `mergeReasoningEffort`：合并子代理的推理等级，从所选模型公布的等级里下拉选择。默认跟随主会话当前使用的推理等级。
-- `reviewConcurrency`：批次审查的并发数，最小值为 1，默认值为 3。
-- `reviewRetries`：失败重试次数，最小值为 0，最大值为 3，默认值为 1。
-- `loopMaxRounds`：循环合并的轮次上限，最小值为 1，最大值为 10，默认值为 3。
-- `mergeOnCompaction`：上下文压缩结束时是否自动合并整个项目的暂存批注，默认值为 true。关掉这一项后，只在手动执行 `/humanize` 或 `/humanize-loop` 时合并。
-- `storageDir`：暂存批注的保存位置，留空使用默认位置 `~/.dsh/humanize`。
+- `reviewProvider` and `reviewModel`: the model used for review, picked from the host model catalog. Defaults to the model the session is using.
+- `reviewReasoningEffort`: reasoning effort for the review model, picked from the efforts that model publishes. Defaults to the model's own default.
+- `mergeProvider` and `mergeModel`: the model used by the merge subagent, with the same controls as the review model. The merge subagent covers `/humanize`, `/humanize-loop` and compaction-triggered merges. Defaults to the model the main session is using. Set both fields together; if only one is set, both follow the session model.
+- `mergeReasoningEffort`: reasoning effort for the merge subagent, picked from the efforts that model publishes. Defaults to the reasoning effort the main session is using.
+- `reviewConcurrency`: concurrency for batch review. Minimum 1, default 3.
+- `reviewRetries`: number of retries after a failure. Minimum 0, maximum 3, default 1.
+- `loopMaxRounds`: maximum rounds for loop merge. Minimum 1, maximum 10, default 3.
+- `mergeOnCompaction`: whether to merge all staged annotations in the project when context compaction ends. Default true. When off, merges only run on `/humanize` or `/humanize-loop`.
+- `storageDir`: where staged annotations are stored. Leave empty for the default `~/.dsh/humanize`.
 
-审查模型和合并子代理的模型下面各有一个测试按钮，发一条最小请求确认提供方、模型和推理等级能正常返回。模型选择留空表示跟随会话模型，两项都选好之后才能点测试按钮。
+Each of the review and merge model sections has a test button. It sends a minimal request to confirm the provider, model and reasoning effort respond. An empty model selection follows the session model for review; the test button requires both fields to be set.
 
-审查调用记录另存到系统临时目录，具体位置显示在设置页底部。审查结果解析失败时，模型的原始响应也写在调用记录旁边，便于排查时对照。
+Review call records are stored separately in the system temp directory; the exact path appears at the bottom of the settings page. When a review response cannot be parsed, the raw response is written next to the call record for comparison.
 
-相对路径按进程工作目录解析。改动保存位置后，旧目录里的内容留在原处。
+Relative paths resolve against the process working directory. Changing the storage location leaves the old contents in place.
 
-批次审查的并发数最多等于待审文件的数量。并发过高时可能触发模型提供方的速率限制。
+Batch review concurrency is capped by the number of files to review. High concurrency can hit the model provider's rate limit.
 
-触发速率限制的调用记为失败并重试。审查调用超时会被中止，这次审查按中止结束，不进入重试。其余失败每重试一次，间隔就比上一次长一点，超过重试次数记为失败。写入审查和批次审查共用这套重试。
+A call that hits a rate limit is recorded as failed and retried. A review that times out is aborted; that review ends as aborted and is not retried. Other failures wait longer before each retry; after the retry budget is spent, the review is marked failed. Write review and batch review share this retry behavior.
 
-批次审查结束后，会列出仍然失败的文件和原因，最多列出三条，其余只统计条数。写入审查连续失败时，任务列表会出现一条失败记录，提示检查审查模型的配置。
+When a batch review ends, it lists the files that still failed and why, up to three entries; the rest are counted only. If write reviews keep failing, a failed record appears in the task list and points at the review model configuration.
 
-也可以在 profile 的 `cordis.patch.yml` 里为 `dsh-humanize` 条目传入同样的配置：
+You can also pass the same settings to the `dsh-humanize` entry in the profile's `cordis.patch.yml`:
 
 ```yaml
 - id: dsh-humanize
@@ -77,11 +79,11 @@ dsh plugin --profile web add link:/path/to/dsh-humanize
       reviewModel: deepseek-chat
 ```
 
-## 使用
+## Usage
 
-在被审查文件的目录或上级目录放 `PROSE.md` 规范，用户全局规范放在 `~/.dsh/PROSE.md`。多级目录的规范逐级叠加，范围越小的规范优先级越高。
+Put a `PROSE.md` in the directory of the file under review or in a parent directory. The user-wide spec goes at `~/.dsh/PROSE.md`. Specs stack by directory; the narrower the scope, the higher the priority.
 
-PROSE.md 的文件头可以用 include 声明规范作用的文件范围，语法参考 .gitignore：
+The front matter of `PROSE.md` can declare which files the spec covers with `include`, using .gitignore syntax:
 
 ```markdown
 ---
@@ -92,55 +94,55 @@ include:
 ---
 ```
 
-include 是整条规范链的属性。链里任何一级声明过 include，命中模式的文件才进入审查。写入审查和批次审查都按这个范围执行。整条链都没有 include 声明时，规范作用于所有文件。
+`include` belongs to the whole spec chain. If any level of the chain declares it, only files that match enter review. Write review and batch review both follow this scope. If no level declares `include`, the spec applies to every file.
 
-图片、压缩包、字体和编译产物这类二进制文件跳过审查。判断取文件开头的样本，写入审查和批次审查都适用。批次审查的任务说明会报告跳过的文件数量。
+Binary files such as images, archives, fonts and build output skip review. Detection samples the start of the file; write review and batch review both use it. A batch review reports how many files it skipped.
 
-模型写文件时必须声明 `human_facing`。面向人类阅读的内容传入 true，纯代码或数据传入 false。标记为 true 的写入会进入审查，其余写入跳过。程序化调用缺少这个字段时按 false 处理，并记一条警告。审查只看本次改动的区段。
+When the model writes a file it must declare `human_facing`. Pass true for content meant for people, false for pure code or data. Writes marked true enter review; the rest are skipped. A programmatic call that omits the field is treated as false and logs a warning. Review looks only at the regions changed in this write.
 
-同一文件的审查串行执行。不同会话或子代理的写入各自排队，待办按 agent 分开，互不覆盖。合并运行期间，发起合并的 agent 的审查让路。其他 agent 在这些目标文件上的审查同样让路。
+Reviews of the same file run serially. Writes from different sessions or subagents queue separately, and pending entries are kept per agent without overwriting each other. While a merge runs, the reviews of the agent that started it step aside. Reviews from other agents on the same target files also step aside.
 
-批注暂存在 `~/.dsh/humanize/annotations/` 下。保存位置与被审查文件的路径一一对应。批注可以直接编辑。保存位置可以在设置页修改。
+Annotations are staged under `~/.dsh/humanize/annotations/`. The path mirrors the reviewed file. Annotations can be edited directly. The storage location can be changed on the settings page.
 
-输入 `/humanize 路径` 合并指定文件或目录的批注。省略路径时使用当前工作目录。
+Run `/humanize <path>` to merge annotations for a file or directory. With no path, it uses the current working directory.
 
-批注合并在单独的上下文里进行。合并完成后，主会话会收到一份结果说明。
+The merge runs in a separate context. When it finishes, the main session receives a summary.
 
-暂存文件中对应的批注随之清空。
+The staged annotations for the merged files are cleared.
 
-插件随后会对刚改过的文件再跑一次审查，这次审查叫复审。复审产生的新批注同样留在暂存文件中。
+The plugin then runs another review over the files it just changed; this is called re-review. New annotations from re-review also stay in the staging files.
 
-合并结果写在主会话的结果说明里，复审结果写在任务行里。`/humanize` 和 `/humanize-loop` 复审失败时，任务以失败结束，不再判定为收敛，并在主会话补一条说明。
+The merge result appears in the main session summary; the re-review result appears in the task row. If re-review fails for `/humanize` or `/humanize-loop`, the task ends as failed, no longer counts as converged, and a note is added to the main session.
 
-批注合并一开始，先中止正在运行的审查。排队中的审查直接丢弃，已经产出的批注也一并丢弃。其他会话在这些文件上的审查同样让路。
+When a merge starts, running reviews are aborted first. Queued reviews are discarded, and annotations already produced are discarded with them. Reviews from other sessions on the same files also step aside.
 
-合并或复审期间遇到插件重载，这次运行到此结束。已经完成的合并照常清空暂存批注。未完成的合并保留暂存批注，重新执行命令即可继续。
+If the plugin reloads during a merge or re-review, that run ends. Completed merges still clear their staged annotations. Incomplete merges keep them; run the command again to continue.
 
-输入 `/humanize-loop 路径` 循环执行批注合并与复审。每轮批注合并完成后，对刚合并过的文件逐个复审。复审产生的新批注进入下一轮批注合并。复审产出零条新批注或达到轮次上限时，循环结束。
+Run `/humanize-loop <path>` to merge and re-review in a loop. After each merge round, every file just merged is re-reviewed. New annotations from re-review feed the next merge round. The loop ends when re-review produces no new annotations or the round limit is reached.
 
-批注合并的目标、轮次和待复审文件留在内存里。中途暂存的批注为空时，等复审跑完再判断是否还有新批注。同一时间只允许一条合并运行，跨会话也一样。
+The merge target, round and files awaiting re-review stay in memory. If staged annotations are empty mid-run, the loop waits for re-review before deciding whether new annotations remain. Only one merge run is allowed at a time, across sessions.
 
-循环运行期间遇到插件重载时，这次运行到此结束。已经完成的合并照常清空暂存批注。未完成的合并保留暂存批注。
+If the plugin reloads during a loop, that run ends. Completed merges still clear their staged annotations. Incomplete merges keep them.
 
-`/humanize`、`/humanize-loop` 和压缩触发的合并都会登记后台任务。循环合并的进度条显示当前是第几轮，以及本轮有多少条批注。
+`/humanize`, `/humanize-loop` and compaction-triggered merges all register background tasks. The loop progress bar shows the current round and the number of annotations in that round.
 
-`/humanize` 和 `/humanize-loop` 的任务可以在任务列表里取消。循环合并的取消在下一轮开始前生效，已经完成的合并照常清空暂存批注。压缩触发的合并只报告结果，不能取消。
+`/humanize` and `/humanize-loop` tasks can be cancelled from the task list. Cancelling a loop takes effect before the next round; completed merges still clear their staged annotations. Compaction-triggered merges only report results and cannot be cancelled.
 
-在 profile 里配置了 hmr 监听本插件目录时，改动本插件自己的源码会触发插件重载。重载会结束正在进行的合并运行，重新执行命令即可继续。
+If the profile watches this plugin's directory with HMR, changing the plugin's own source triggers a plugin reload. Reload ends a running merge; run the command again to continue.
 
-输入 `/humanize-review 路径`，派发一次批次审查。审查范围是项目中受 git 管理的文件。
+Run `/humanize-review <path>` to dispatch a batch review. The scope is the project's git-tracked files.
 
-审查在后台进行，显示为一个后台任务。进度条在输入框上方更新。会话头部的任务列表同样显示该任务。审查在单独的上下文里进行，读到的内容与会话本身分开。
+Review runs in the background as a task. The progress bar updates above the input box. The task list in the session header shows the same task. Review runs in a separate context; what it reads stays separate from the session.
 
-目标目录需要是 git 仓库，并且仓库状态能正常读取。任一条件缺失时，任务以失败结束并给出原因。目标里没有可审查的文件时（没有受 git 管理，或不符合 include 模式），任务以完成结束，并提示没有可审查的文件。
+The target must be inside a git repository whose status can be read. If either condition is missing, the task ends as failed with a reason. If there is nothing to review (no git-tracked files, or no file matches the include patterns), the task ends as completed and says so.
 
-## 提示词
+## Prompts
 
-发给模型的提示词都放在包的根目录 `prompts/` 下，直接编辑即可：
+Prompts sent to the model live in `prompts/` at the package root; edit them directly:
 
-- `prompts/review-system.md`：审查调用的 system 提示词，写入审查和批次审查共用。
-- `prompts/merge-request.md`：派发合并子代理时发给它的用户消息，包含合并请求文件的路径。
-- `prompts/merge-header.md`：合并消息开头的提示词，三种合并触发方式共用。
-- `prompts/human-facing-field.md`：包装工具里 `human_facing` 字段的描述。
+- `prompts/review-system.md`: system prompt for review calls, shared by write review and batch review.
+- `prompts/merge-request.md`: user message sent to the merge subagent; contains the path to the merge request file.
+- `prompts/merge-header.md`: prompt at the start of the merge message, shared by all three merge triggers.
+- `prompts/human-facing-field.md`: description of the `human_facing` field in the wrapped tool.
 
-审查和合并每次调用都会重新读取对应的提示词文件。`human_facing` 字段的说明在注册包装工具时读取，改完后对新会话生效。
+Review and merge read their prompt files on every call. The `human_facing` description is read when the wrapped tools are registered, so changes apply to new sessions.

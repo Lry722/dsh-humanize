@@ -42,6 +42,7 @@
     "cordis.patch.yml",
     "PROSE.md",
     "README.md",
+    "README.zh.md",
     "DESIGN.md"
   ],
   "dependencies": {
