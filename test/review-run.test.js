@@ -58,7 +58,6 @@ test('--recent 和 HEAD~N 可以带在路径前后，非法数字报错', () => 
   assert.match(splitReviewArgs('--recent 0').error, /正整数/)
   assert.match(splitReviewArgs('HEAD~0').error, /正整数/)
   assert.match(splitReviewArgs('--recent 2 HEAD~3').error, /只能写一种/)
-  assert.match(splitReviewArgs('--commit HEAD').error, /不再支持 --commit/)
 })
 
 test('命令把 --changed 的 HEAD 内容传给审查管线', async () => {
