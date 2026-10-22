@@ -34,7 +34,7 @@ test('未闭合的围栏同样让区段扩展到围栏开头', () => {
   assert.ok(region.text.startsWith('```js'))
 })
 
-test('长代码块中段改动时区段包含闭合围栏', () => {
+test('长代码块中段发生改动时，区段包含闭合围栏', () => {
   const lines = ['l0', '```js', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', '```', 'l13', 'l14']
   const after = lines.map((line, index) => (index === 6 ? 'E' : line)).join('\n')
   const region = changedRegion(lines.join('\n'), after)

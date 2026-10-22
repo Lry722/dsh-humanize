@@ -1,6 +1,6 @@
 /**
- * 合并运行的测试。用假的子代理和审查调度验证：单次合并跑完就结束，
- * 循环合并复审出新批注才继续下一轮，合并失败时暂存批注保留。
+ * 合并运行的测试。用假的子代理和审查调度验证三种情况。单次合并跑完就
+ * 结束，循环合并复审出新批注才继续下一轮，合并失败时暂存批注保留。
  */
 import test from 'node:test'
 import assert from 'node:assert/strict'
@@ -13,10 +13,6 @@ import { setStorageRootResolver, stagingPathFor, writeStaging } from '../lib/sta
 
 const log = { info() {}, warn() {} }
 
-/**
- * 造一个假 ctx。jobs 服务缺失，任务进度走空实现。agents.list 返回
- * 注册表里的全部 agent，派发前的合并子代理检查靠它。
- */
 function makeCtx(agents, activation, llm) {
   const list = [...agents]
   const byId = new Map(list.map((agent) => [agent.id, agent]))
@@ -25,9 +21,11 @@ function makeCtx(agents, activation, llm) {
   const listeners = new Map()
   return {
     logger: () => log,
+    // jobs 服务缺失，取用外部服务一律返回 undefined。
     get: () => undefined,
     agents: {
       get: (id) => byId.get(id) ?? bySession.get(id),
+      // 派发前的合并子代理检查要看全部 agent，这里原样返回注册表。
       list: () => list,
     },
     subagents: { startActivation: activation },
@@ -45,6 +43,7 @@ function makeCtx(agents, activation, llm) {
         if (index >= 0) callbacks.splice(index, 1)
       }
     },
+    // 副作用和注入走空实现，任务进度也就没有进度行可画。
     effect() {},
     inject() {},
     emit(event, ...args) {
@@ -119,7 +118,7 @@ async function waitFor(predicate, timeoutMs = 3000) {
 }
 
 async function removeStorage(storage) {
-  // 后台循环可能刚好在写真暂存，删除目录时重试几次。
+  // 后台循环可能正在写暂存文件，删除目录时重试几次。
   for (let attempt = 0; attempt < 20; attempt += 1) {
     try {
       await rm(storage, { recursive: true, force: true })
@@ -145,7 +144,7 @@ function noticeTexts(agent) {
   return agent.injected.map((message) => message.content?.[0]?.text ?? '').join('\n')
 }
 
-test('一轮合并后复查没有新批注时正常结束', async () => {
+test('一轮合并后复审没有新批注时正常结束', async () => {
   const storage = await mkdtemp(join(tmpdir(), 'humanize-loop-'))
   setStorageRootResolver(() => storage)
   try {
@@ -164,7 +163,7 @@ test('一轮合并后复查没有新批注时正常结束', async () => {
     await waitFor(() => state.running.size === 0)
     assert.equal(reviews.calls.length, 1)
     assert.match(noticeTexts(agent), /已按暂存批注修订/)
-    // 折叠行摘要是概括，完整文件清单留在正文里，不受摘要长度上限影响。
+    // 摘要长度上限只作用于折叠行，正文的完整文件清单照常显示。
     const notice = agent.injected.find((message) => message.source?.form === 'notice')
     assert.equal(notice.source.summary, '已按暂存批注修订 1 个文件。')
     assert.match(notice.content[0].text, /doc\.md/)
@@ -209,7 +208,7 @@ test('复审产生新批注后继续下一轮，收敛才结束', async () => {
     const ctx = makeCtx([agent], async () => {
       starts += 1
       const activation = deferredActivation(`child-${starts}`)
-      // 子代理总是立刻完成，第二轮要看复审是否真的又排了一轮。
+      // 合并子代理总是立刻完成，第二轮要看复审是否真的又排了一轮。
       queueMicrotask(() => activation.resolve({ stopReason: 'completed' }))
       return activation.activation
     })
@@ -238,7 +237,7 @@ test('复审产生新批注后继续下一轮，收敛才结束', async () => {
   }
 })
 
-test('合并失败时保留暂存批注，不再开下一轮', async () => {
+test('合并失败时保留暂存批注，停在当前轮', async () => {
   const storage = await mkdtemp(join(tmpdir(), 'humanize-loop-failed-'))
   setStorageRootResolver(() => storage)
   try {
@@ -260,7 +259,7 @@ test('合并失败时保留暂存批注，不再开下一轮', async () => {
     await waitFor(() => state.running.size === 0)
 
     assert.equal(reviews.calls.length, 0)
-    // 失败原因要带回主会话，用户不用打开子代理会话也能看到。
+    // 失败原因要带回主会话，用户在主会话就能看到。
     assert.match(noticeTexts(agent), /429 quota exceeded/)
     assert.equal(await readFile(stagingPathFor(target), 'utf8').then(() => true), true)
   } finally {
@@ -390,7 +389,7 @@ test('一次 /humanize 合并照常清暂存并排复审', async () => {
   }
 })
 
-test('一次 /humanize 复审还有批注也到此为止，不再开下一轮', async () => {
+test('一次 /humanize 复审还有批注也到此为止，只跑这一轮', async () => {
   const storage = await mkdtemp(join(tmpdir(), 'humanize-run-once-annotations-'))
   setStorageRootResolver(() => storage)
   try {
@@ -419,14 +418,14 @@ test('一次 /humanize 复审还有批注也到此为止，不再开下一轮', 
     assert.equal(starts, 1)
     assert.equal(reviews, 1)
     assert.match(noticeTexts(agent), /已按暂存批注修订/)
-    // 单次合并不跟进下一轮，复审产生的批注留在暂存里。
+    // 单次合并只跑一轮，复审产生的批注留在暂存里。
     assert.equal(await readFile(stagingPathFor(target), 'utf8').then(() => true), true)
   } finally {
     await removeStorage(storage)
   }
 })
 
-test('插件重载后运行结束，已完成的合并不再复审', async () => {
+test('插件重载后运行结束，已完成的合并直接收尾', async () => {
   const storage = await mkdtemp(join(tmpdir(), 'humanize-loop-reload-'))
   setStorageRootResolver(() => storage)
   try {
@@ -445,7 +444,7 @@ test('插件重载后运行结束，已完成的合并不再复审', async () =>
     await waitFor(() => state.running.size === 0)
 
     assert.equal(reviews.calls.length, 0)
-    // 子代理已完成时合并照常收尾：清暂存并留下成功说明。
+    // 子代理已完成时合并照常收尾。清掉暂存，并留下成功说明。
     await assert.rejects(readFile(stagingPathFor(target), 'utf8'), /ENOENT/)
     assert.match(noticeTexts(agent), /已按暂存批注修订/)
   } finally {
@@ -453,7 +452,7 @@ test('插件重载后运行结束，已完成的合并不再复审', async () =>
   }
 })
 
-test('合并期间写入的新暂存批注不会被旧快照清掉', async () => {
+test('合并期间写入的新暂存批注按新内容保留', async () => {
   const storage = await mkdtemp(join(tmpdir(), 'humanize-merge-new-staging-'))
   setStorageRootResolver(() => storage)
   try {

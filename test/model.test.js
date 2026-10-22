@@ -1,15 +1,15 @@
 /**
- * mergeAgentOptions 的取值顺序：插件配置优先，留空跟随主会话最近一次
- * 请求使用的模型，推理等级单独覆盖。
+ * mergeAgentOptions 的取值顺序如下。插件配置优先，留空时跟随主会话最近
+ * 一次请求使用的模型，推理等级单独覆盖。
  */
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { mergeAgentOptions } from '../lib/model.js'
 
-/** 造一个带最近请求模型配置的假 agent。 */
 function makeAgent(config) {
   return {
     session: {
+      // 最近一次请求头里的模型配置，undefined 表示这个头为空。
       requestHeader: () => (config === undefined ? undefined : { config }),
     },
   }
@@ -48,7 +48,7 @@ test('配置了推理等级但跟随会话模型时同样生效', () => {
   )
 })
 
-test('会话没有推理等级时输出里不带 reasoningEffort', () => {
+test('仅当会话给出推理等级时，输出才包含 reasoningEffort', () => {
   const agent = makeAgent({ provider: 'p', model: 'm' })
   assert.deepEqual(mergeAgentOptions({}, agent), { provider: 'p', model: 'm' })
 })

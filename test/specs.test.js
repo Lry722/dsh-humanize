@@ -22,14 +22,14 @@ test('缩进的编号同样进入规则列表，校验和提示词用同一份�
   assert.deepEqual(rules.map((rule) => rule.text), ['one', 'nested', 'two'])
 })
 
-test('代码块里的编号保持原样，不进入规则列表', () => {
+test('反引号围栏里的编号保持原样，规则列表只收正文编号', () => {
   const chain = [{ path: '/proj/PROSE.md', content: '1. one\n```\n1. sample\n```\n2. two', include: undefined }]
   const { text, rules } = buildSpecRules(chain)
   assert.ok(text.includes('1. sample'))
   assert.deepEqual(rules.map((rule) => rule.text), ['one', 'two'])
 })
 
-test('CRLF 规范里的编号全部保留，编号不会重复', () => {
+test('CRLF 规范里的编号全部保留，编号保持唯一', () => {
   const chain = [{ path: '/proj/PROSE.md', content: '1. one\r\n2. two\r\n' }]
   const { text, rules } = buildSpecRules(chain)
   assert.deepEqual(rules.map((rule) => rule.text), ['one', 'two'])
@@ -37,14 +37,14 @@ test('CRLF 规范里的编号全部保留，编号不会重复', () => {
   assert.ok(text.includes('2. two'))
 })
 
-test('波浪线围栏里的编号同样不进入规则列表', () => {
+test('波浪线围栏里的编号同样保持原样，规则列表只收正文编号', () => {
   const chain = [{ path: '/proj/PROSE.md', content: '1. one\n~~~\n1. sample\n~~~\n2. two', include: undefined }]
   const { text, rules } = buildSpecRules(chain)
   assert.ok(text.includes('1. sample'))
   assert.deepEqual(rules.map((rule) => rule.text), ['one', 'two'])
 })
 
-test('四反引号围栏里的三反引号示例不会提前结束围栏', () => {
+test('四反引号围栏按最长反引号序列闭合', () => {
   const chain = [{
     path: '/proj/PROSE.md',
     content: '````md\n```\n1. sample\n```\n````\n1. real',

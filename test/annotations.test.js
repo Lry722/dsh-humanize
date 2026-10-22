@@ -16,7 +16,7 @@ test('用同一份规范快照，把编号还原成对应的条文', () => {
   assert.equal(dropped, 0)
 })
 
-test('规则集合里没有的编号，条目丢掉并计入丢弃数', () => {
+test('规则集合之外的编号，条目直接丢弃，并计入丢弃数', () => {
   const { annotations, dropped } = normalizeAnnotations({
     annotations: [
       { rule: 99, quote: 'q', problem: 'p', suggestion: 's' },
@@ -27,7 +27,7 @@ test('规则集合里没有的编号，条目丢掉并计入丢弃数', () => {
   assert.equal(dropped, 2)
 })
 
-test('缺少 annotations 数组时抛错', () => {
+test('缺少 annotations 数组时抛出错误', () => {
   assert.throws(() => normalizeAnnotations({}, rules))
   assert.throws(() => normalizeAnnotations(null, rules))
 })
@@ -45,11 +45,11 @@ test('解析整段文本时只取中间的 JSON', () => {
   assert.equal(dropped, 0)
 })
 
-test('传入的文本里没有 JSON 对象时抛错', () => {
+test('传入的文本里没有 JSON 对象时抛出错误', () => {
   assert.throws(() => parseAnnotations('no json here', rules))
 })
 
-test('渲染的编号行能被 countAnnotations 数回来', () => {
+test('渲染的编号行能被 countAnnotations 统计出来', () => {
   const rendered = renderStaging('/f.md', [
     { ruleText: 'rule one', quote: 'q1', problem: 'p1', suggestion: 's1' },
     { ruleText: 'rule one', quote: 'q2', problem: '', suggestion: '' },

@@ -11,8 +11,8 @@ import { createReviewPipeline } from '../lib/pipeline.js'
 import { setStorageRootResolver, stagingPathFor, writeStaging } from '../lib/staging.js'
 
 /**
- * 造一个假 ctx。审查管线只用到 ctx.get（jobs 服务缺省返回
- * undefined，告警走降级路径）。
+ * 造一个假 ctx。审查管线只用到 ctx.get。jobs 服务缺省返回 undefined，
+ * 告警走降级路径。
  */
 function fakeContext() {
   return { get: () => undefined, logger: () => ({ info() {}, warn() {} }) }
@@ -26,10 +26,7 @@ function fakeAgent() {
 /** 空的提交批注负载，审查通过后清掉暂存。 */
 const EMPTY_SUBMIT = JSON.stringify({ annotations: [] })
 
-/**
- * 造一个可手动放行的审查流。gate 之前的块先发不消费，调用 release
- * 后一次性交出全部块并结束。
- */
+/** 造一个能手动放行的审查流。 */
 function gatedStream(gate) {
   const chunks = [
     { type: 'block-start', index: 0, blockType: 'tool-call' },
@@ -41,6 +38,7 @@ function gatedStream(gate) {
       let i = 0
       return {
         async next() {
+          // 每次取块都先等 gate。release 之后一次性交出全部块，然后结束。
           await gate
           if (i >= chunks.length) return { done: true, value: undefined }
           i += 1
@@ -76,7 +74,7 @@ test('shutdown 关门：新审查直接跳过，在途审查照常跑完', async
 
   const draining = pipeline.shutdown()
   assert.equal(pipeline.state.disposed, true)
-  // 关门后排队的复审请求直接跳过，不再发起调用。
+  // 关门后排队的审查直接跳过。
   assert.deepEqual(await pipeline.scheduleReview(agent, target, undefined, '又一次写入。\n'), { kind: 'skipped' })
 
   // 放行在途审查的流，shutdown 等它自然结束。
@@ -87,7 +85,7 @@ test('shutdown 关门：新审查直接跳过，在途审查照常跑完', async
   await rm(storage, { recursive: true, force: true })
 })
 
-test('shutdown 前排进待办槽的审查按丢弃结算，不再发起调用', async () => {
+test('shutdown 前进入待办槽的审查按丢弃结算', async () => {
   const storage = await mkdtemp(join(tmpdir(), 'humanize-pipeline-'))
   setStorageRootResolver(() => storage)
   const project = join(storage, 'project')
@@ -109,21 +107,21 @@ test('shutdown 前排进待办槽的审查按丢弃结算，不再发起调用',
 
   const first = pipeline.scheduleReview(agent, target, undefined, '第一版。\n')
   await tick()
-  // 在途审查未结束时再写一次，进入待办槽。
+  // 趁在途审查还在跑再写一次，进入待办槽。
   const second = pipeline.scheduleReview(agent, target, '第一版。\n', '第二版。\n')
   await tick()
 
   const draining = pipeline.shutdown()
   release()
   assert.equal((await first).kind, 'ok')
-  // 待办槽的审查没有等到第二次调用，直接按丢弃结算。
+  // 待办槽的审查直接按丢弃结算，调用次数为 1。
   assert.equal((await second).kind, 'discarded')
   assert.equal(calls, 1)
   await draining
   await rm(storage, { recursive: true, force: true })
 })
 
-/** 构造一个提交指定批注负载的审查流。 */
+/** 造一个提交指定批注负载的审查流。 */
 function submitStream(payload) {
   const chunks = [
     { type: 'block-start', index: 0, blockType: 'tool-call' },
@@ -169,9 +167,9 @@ test('批注全部对不上规则编号时按失败处理，暂存批注保留',
 
   const outcome = await pipeline.scheduleReview(fakeAgent(), target, undefined, '写给人看的文档。\n')
   assert.equal(outcome.kind, 'failed')
-  // 暂存没有被当成“审查通过”清掉。
+  // 暂存原样保留。
   assert.equal(await readFile(stagingPathFor(target), 'utf8').then(() => true), true)
-  // 审查请求不申请工具，模型直接输出文本 JSON。
+  // 审查请求的 tools 参数为 undefined，模型直接输出文本 JSON。
   assert.equal(seenTools, undefined)
   await rm(storage, { recursive: true, force: true })
 })

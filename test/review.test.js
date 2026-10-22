@@ -35,12 +35,12 @@ function finish(kind) {
 
 /** 从错误信息里取出响应留档的路径。 */
 function dumpPathOf(error) {
-  const match = /raw response: (.+)$/m.exec(error.message)
+  const match = /raw response: (.+)$/im.exec(error.message)
   assert.ok(match, `错误信息里没有留档路径：${error.message}`)
   return match[1]
 }
 
-test('审查按文本 JSON 读批注，不申请工具', async () => {
+test('审查按文本 JSON 读批注，请求里只放审查提示词', async () => {
   const root = await mkdtemp(join(tmpdir(), 'humanize-review-'))
   setRequestRootResolver(() => root)
   const seen = []
@@ -55,7 +55,7 @@ test('审查按文本 JSON 读批注，不申请工具', async () => {
   try {
     const result = await runReview(ctx, { reviewProvider: 'p', reviewModel: 'm' }, agent, '/tmp/a.md', '正文', null, spec, undefined)
     assert.deepEqual(result.annotations.map((annotation) => annotation.ruleText), ['平铺直叙。'])
-    // 不带工具，接入方就没有机会把 bash/read 之类的东西塞给模型。
+    // 请求里只放审查提示词，模型只能看到审查所需内容。
     assert.equal(seen[0].tools, undefined)
     const request = await readFile(join(root, 'tmp', 'a.md.request.md'), 'utf8')
     assert.match(request, /exactly one JSON object/)

@@ -18,7 +18,6 @@ function makeJobs() {
     wait() {
       return new Promise(() => {})
     },
-    /** 只删已存在的条目，删不到时报错。 */
     remove(id) {
       if (!store.has(id)) throw new Error(`unknown job: ${id}`)
       store.delete(id)
@@ -49,7 +48,7 @@ test('turn/start 摘除该会话名下已结算的任务行', () => {
   registerJobCleanup(ctx, log)
   const tracked = openJob(ctx, log, { jobs, kind: 'humanize-loop', label: '循环合并', owner: 's1', cancel() {} })
   jobs.settleView(tracked.jobId)
-  // 清理只在同一会话的回合开始时发生，且在途任务会保留。
+  // 清理只在同一会话的回合开始时发生。在途任务会保留。
   listener({ id: 's2' }, { type: 'turn/start' })
   assert.equal(jobs.store.size, 1)
   listener({ id: 's1' }, { type: 'compaction/end' })
@@ -87,7 +86,7 @@ test('dropSettled 只摘除本插件名下已结算的任务行', () => {
   assert.equal(jobs.store.has(other), true)
 })
 
-test('没有 jobs 服务时回合开始不做任何事', () => {
+test('没有 jobs 服务时回合开始直接返回', () => {
   let listener
   const ctx = {
     get: () => undefined,

@@ -78,20 +78,19 @@ function makeHost(options = {}) {
   }
 }
 
-test('插件卸载时不会因为 tools/change 反复重挂工具', async () => {
+test('插件卸载期间工具定义保持原样', async () => {
   const host = makeHost()
   apply(host.ctx, undefined)
-  // 只有 write 解析到了原工具，edit 缺席。
+  // 当前只解析到 write 这一个原工具。
   assert.equal(host.registrations.length, 1)
 
   host.beginTeardown()
   for (const cleanup of host.cleanups) await cleanup()
 
-  // 卸载期间工具定义没有被重新注册，重挂循环没有发生。
   assert.equal(host.registrations.length, 1)
 })
 
-test('工具晚于 agent 就绪时，tools/change 会补上包装', () => {
+test('工具晚于 agent 就绪时，tools/change 会补上新工具的重新注册', () => {
   const host = makeHost({ available: false })
   apply(host.ctx, undefined)
   assert.equal(host.registrations.length, 0)

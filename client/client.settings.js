@@ -2,9 +2,7 @@
  * dsh-humanize 浏览器端设置卡片，由通用表单控件和业务字段两部分组成。
  * 通用表单控件包括文本、数字、开关和恢复默认值。
  *
- * 业务字段按用途分组。审查模型和审查推理等级、合并模型和合并推理等级
- * 负责模型选择。并行批次大小、审查失败重试次数和循环合并轮次上限负责
- * 批量与重试。上下文压缩时的自动合并和保存位置归到同一组。
+ * 业务字段按用途依次排列，具体分组在字段定义处说明。
  */
 window.__ModuleLoader__.load({
   id: 'dsh-humanize',
@@ -19,10 +17,9 @@ window.__ModuleLoader__.load({
     const NS = 'dsh-humanize'
     /** Config 里承载可编辑设置的 volatile 节点名，写入路径以它为前缀。 */
     const SETTINGS_KEY = 'settings'
-    // 插槽传入的翻译函数；没传时直接用原文，保证中文默认可用。
+    // 插槽传入的翻译函数。插槽没提供时，直接用 key 当作文案显示。
     let t = (key) => key
-    // 数值字段的默认值和边界。client chunk 不能 import 服务器模块，
-    // 这里跟 lib/settings.js 的字段表手动对齐；schema 仍然以服务器为准。
+    // 数值字段的默认值，需要和 lib/settings.js 的字段表手动对齐。
     const FIELD_DEFAULTS = { reviewConcurrency: 3, reviewRetries: 1, loopMaxRounds: 3 }
     const FIELD_LIMITS = {
       reviewConcurrency: { min: 1 },
@@ -101,7 +98,7 @@ window.__ModuleLoader__.load({
       whiteSpace: 'nowrap',
     }
 
-    /** 字段被用户覆盖时给出恢复默认值的入口。 */
+    /** 用户没改过这个字段时整个按钮都不渲染，标签行里也就不会留下空位。 */
     function ResetButton(props) {
       if (!props.overridden) return null
       return h('button', { type: 'button', style: resetStyle, onClick: props.onReset }, t('common.reset'))
@@ -156,8 +153,7 @@ window.__ModuleLoader__.load({
     })
 
     /**
-     * 测试审查模型或合并模型是否可用。请求走宿主的受认证路由，用一条
-     * 最小请求确认提供方、模型和推理等级能正常返回。
+     * 测试审查模型或合并子代理的模型能否正常调用，结果就近显示在按钮右侧。
      */
     function ModelTest(props) {
       const { prefix, value, writable } = props
@@ -280,7 +276,7 @@ window.__ModuleLoader__.load({
       const pickProvider = (next) => {
         if (next === '') unset(providerKey)
         else set(providerKey, next)
-        // 换模型提供方后清掉旧模型，因为旧模型一般只属于原提供方。
+        // 换模型提供方后清掉旧模型，因为旧模型一般只属于原模型提供方。
         const nextGroup = groups === null ? undefined : groups.find((g) => g.id === next)
         if (model !== '' && (nextGroup === undefined || !nextGroup.models.some((m) => m.id === model))) {
           unset(modelKey)
@@ -568,7 +564,7 @@ window.__ModuleLoader__.load({
 
     /**
      * 渲染期错误边界。插槽条目渲染抛错时会被静默摘除，插槽位置会变成空白。
-     * 这里把异常显示成文字，省得再对着空白页排查。
+     * 这里把异常显示成文字，方便直接看到渲染失败的原因。
      */
     class DiagBoundary extends React.Component {
       constructor(props) {

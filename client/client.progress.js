@@ -2,7 +2,6 @@
  * dsh-humanize 浏览器端进度条，显示在输入框上方。数据来自宿主注册
  * 的后台任务。
  */
-// 进度条通过模块加载器懒加载。
 window.__ModuleLoader__.load({
   id: 'dsh-humanize',
   chunk: 'client.progress.js',
@@ -44,7 +43,7 @@ window.__ModuleLoader__.load({
       return { pct: row.status === 'completed' ? 100 : null, meta: row.detail ?? '', done: row.status === 'completed' }
     }
 
-    // 外框对齐官方 todo 条的容器规范，宽度与 composer 卡片一致。
+    // 外框对齐官方 todo 条的容器规范，宽度与输入框卡片一致。
     const dockRootStyle = {
       boxSizing: 'border-box',
       width: 'calc(100% - var(--dsh-composer-side-clearance) - var(--dsh-composer-side-clearance) - var(--dsh-composer-dock-inset) - var(--dsh-composer-dock-inset) - var(--dsh-composer-dock-inset) - var(--dsh-composer-dock-inset))',
@@ -81,8 +80,8 @@ window.__ModuleLoader__.load({
       background: 'var(--dsw-alias-border-l2)',
       overflow: 'hidden',
     }
-    // 终态说明可能很长（失败清单、轮次上限的未收敛批注数）。这里让它换行，
-    // 不做单行省略，否则用户读不到完整的结果。
+    // 终态说明可能很长，例如失败清单，或轮次上限的未收敛批注数。
+    // 这里让它换行，完整展示结果。
     const dockMetaStyle = {
       minWidth: 0,
       flex: 'auto',
@@ -93,7 +92,7 @@ window.__ModuleLoader__.load({
       overflowWrap: 'anywhere',
     }
 
-    /** 输入框上方的审查进度条。任务进行中时一直显示，结束后隐藏。 */
+    /** 输入框上方的进度条。任务进行中时一直显示，结束后隐藏。 */
     function ProgressDock(props) {
       const { jobs, sessionId } = props
       const t = typeof props.t === 'function' ? props.t : (key) => key

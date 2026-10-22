@@ -2,9 +2,9 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { registerHumanFacingPrompt, wrapAgentTools } from '../lib/wrap.js'
 
-/** 造一个只提供 write 工具的假上下文，登记下来的定义收在 registered 里。 */
 function makeCtx() {
   const registered = []
+  // 原工具的定义，用来确认包装之后它的参数表保持原样。
   const original = {
     name: 'write',
     description: 'write a file',
@@ -40,14 +40,14 @@ function makeAgent() {
   }
 }
 
-test('包装后的 schema 追加必填的 human_facing，原 schema 保持原样', () => {
+test('包装后的参数表追加必填的 human_facing，原参数表保持原样', () => {
   const ctx = makeCtx()
   const agent = makeAgent()
   wrapAgentTools(ctx, () => {}, agent, () => {})
   const definition = agent.registered[0]
   assert.equal(definition.parameters.required.includes('human_facing'), true)
   assert.equal(definition.parameters.properties.path.type, 'string')
-  // 原工具的参数表没有被改动。
+  // 这条断言防止包装时误改原工具的参数表。
   assert.deepEqual(ctx.original.parameters.required, ['path'])
 })
 

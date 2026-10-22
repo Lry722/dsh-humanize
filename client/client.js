@@ -1,13 +1,13 @@
 /**
  * dsh-humanize 浏览器端入口，只做懒加载和插槽注册。
  *
+ * 设置卡片提供审查模型、合并子代理的模型，以及两者各自的推理等级。
+ * 进度条展示审查批次、单次合并和循环合并三种后台任务。
+ *
  * 各 chunk 的 URL 版本号由本文件的元数据算出。改完 chunk 后跑
  * `npm run stamp:client` 更新下面的 `// chunks:` 标记。
- *
- * 2026-10-21：设置页新增合并子代理的模型与推理等级选择。
- * 2026-10-21：进度条纳入单次合并与压缩触发的合并任务。
  */
-// chunks: ec8ac9d0
+// chunks: 72c5a442
 window.__ModuleLoader__.load({
   id: 'dsh-humanize',
   factory: (require) => {
@@ -31,8 +31,7 @@ window.__ModuleLoader__.load({
       void (async () => {
         // 文案表放在独立 chunk 里，加载完再注册 locale 和插槽。
         const { dictionaries } = await require.async('./client.locales.js')
-        // 逐语言注册，新增语言时只要在 locales chunk 里加一份字典，
-        // 这里不用假设只有 en/zh。
+        // 逐语言注册，新增语言时只要在 locales chunk 里加一份字典即可。
         ctx.effect(() => {
           const disposers = Object.entries(dictionaries)
             .map(([locale, dict]) => ctx.locale.register(NS, locale, dict))
@@ -50,10 +49,10 @@ window.__ModuleLoader__.load({
             h(LazyProgressDock, { jobs, sessionId: String(owner.sessionId), t: owner.t }))))
         })
         ctx.inject(['configForms'], (formCtx) => {
-          // remote 是按命名空间追踪的代理。渲染的时候访问哪个命名空间，
-          // 就要在 inject 里声明哪个命名空间。
+          // remote 代理按命名空间划分，inject 里声明过的命名空间才能访问。
           formCtx.inject(['remote', 'remote.session'], (remCtx) => {
             const configForms = formCtx.configForms
+            // 读取模型目录要用会话级命名空间。
             const sessionRemote = remCtx.remote.session
             const modelCatalog = typeof sessionRemote?.modelCatalog === 'function'
               ? sessionRemote.modelCatalog.bind(sessionRemote)

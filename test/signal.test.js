@@ -16,7 +16,7 @@ test('上游已中止时立即中止并带上原因', () => {
   assert.equal(controller.signal.reason, 'merge started')
 })
 
-test('上游后中止时转发中止和原因', () => {
+test('上游稍后中止时，自身也随之中止并转发原因', () => {
   const source = new AbortController()
   const { controller } = fuseAbortSignal(source.signal)
   source.abort('cancelled')
