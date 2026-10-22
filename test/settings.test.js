@@ -17,14 +17,11 @@ test('显式设置覆盖缺省值', () => {
   assert.equal(settings.loopMaxRounds, 5)
 })
 
-test('数值字段在字段表里带边界', () => {
+test('数值字段带边界，超出范围的配置在激活时被拒绝', async () => {
   assert.equal(SETTINGS_FIELDS.reviewConcurrency.min, 1)
   assert.equal(SETTINGS_FIELDS.reviewRetries.min, 0)
   assert.equal(SETTINGS_FIELDS.reviewRetries.max, 3)
   assert.equal(SETTINGS_FIELDS.loopMaxRounds.max, 10)
-})
-
-test('超出范围的数值在配置激活时被拒绝', async () => {
   const { Config } = await import('../lib/settings.js')
   assert.throws(() => Config({ settings: { reviewRetries: 9 } }), /reviewRetries/)
   assert.throws(() => Config({ settings: { loopMaxRounds: 0 } }), /loopMaxRounds/)

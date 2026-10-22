@@ -20,56 +20,42 @@ test('配置和会话都留空时返回 undefined', () => {
 })
 
 test('配置留空时跟随主会话的模型和推理等级', () => {
-  const agent = makeAgent({ provider: 'p', model: 'm', reasoningEffort: 'high' })
-  assert.deepEqual(mergeAgentOptions({}, agent), { provider: 'p', model: 'm', reasoningEffort: 'high' })
+  assert.deepEqual(
+    mergeAgentOptions({}, makeAgent({ provider: 'p', model: 'm', reasoningEffort: 'high' })),
+    { provider: 'p', model: 'm', reasoningEffort: 'high' },
+  )
+  assert.deepEqual(
+    mergeAgentOptions({}, makeAgent({ provider: 'p', model: 'm' })),
+    { provider: 'p', model: 'm' },
+  )
 })
 
-test('配置了合并模型时覆盖会话模型，推理等级留空跟随会话', () => {
+test('成对配置覆盖会话模型，推理等级单独覆盖', () => {
   const agent = makeAgent({ provider: 'p', model: 'm', reasoningEffort: 'high' })
   assert.deepEqual(
     mergeAgentOptions({ mergeProvider: 'q', mergeModel: 'cheap' }, agent),
     { provider: 'q', model: 'cheap', reasoningEffort: 'high' },
   )
-})
-
-test('配置了推理等级时覆盖会话的推理等级', () => {
-  const agent = makeAgent({ provider: 'p', model: 'm', reasoningEffort: 'high' })
   assert.deepEqual(
     mergeAgentOptions({ mergeProvider: 'q', mergeModel: 'cheap', mergeReasoningEffort: 'low' }, agent),
     { provider: 'q', model: 'cheap', reasoningEffort: 'low' },
   )
-})
-
-test('配置了推理等级但跟随会话模型时同样生效', () => {
-  const agent = makeAgent({ provider: 'p', model: 'm' })
   assert.deepEqual(
-    mergeAgentOptions({ mergeReasoningEffort: 'low' }, agent),
+    mergeAgentOptions({ mergeReasoningEffort: 'low' }, makeAgent({ provider: 'p', model: 'm' })),
     { provider: 'p', model: 'm', reasoningEffort: 'low' },
   )
 })
 
-test('仅当会话给出推理等级时，输出才包含 reasoningEffort', () => {
-  const agent = makeAgent({ provider: 'p', model: 'm' })
-  assert.deepEqual(mergeAgentOptions({}, agent), { provider: 'p', model: 'm' })
-})
-
-test('只配置合并 provider 时跟随会话模型，不拼接两个来源', () => {
+test('只配一半时整对跟随会话，成对配置在没有会话模型时也能用', () => {
   const agent = makeAgent({ provider: 'p', model: 'm', reasoningEffort: 'high' })
   assert.deepEqual(
     mergeAgentOptions({ mergeProvider: 'q' }, agent),
     { provider: 'p', model: 'm', reasoningEffort: 'high' },
   )
-})
-
-test('只配置合并 model 时跟随会话模型，不拼接两个来源', () => {
-  const agent = makeAgent({ provider: 'p', model: 'm' })
   assert.deepEqual(
-    mergeAgentOptions({ mergeModel: 'cheap' }, agent),
+    mergeAgentOptions({ mergeModel: 'cheap' }, makeAgent({ provider: 'p', model: 'm' })),
     { provider: 'p', model: 'm' },
   )
-})
-
-test('成对的合并模型配置在没有会话模型时也能使用', () => {
   assert.deepEqual(
     mergeAgentOptions({ mergeProvider: 'q', mergeModel: 'cheap' }, makeAgent(undefined)),
     { provider: 'q', model: 'cheap' },

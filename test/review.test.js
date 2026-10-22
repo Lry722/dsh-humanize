@@ -40,45 +40,32 @@ function dumpPathOf(error) {
   return match[1]
 }
 
-test('审查按文本 JSON 读批注，请求里只放审查提示词', async () => {
+test('审查请求带上全文、审查范围和已有批注', async () => {
   const root = await mkdtemp(join(tmpdir(), 'humanize-review-'))
   setRequestRootResolver(() => root)
   const seen = []
   const ctx = ctxWith([
-    {
-      type: 'text-delta',
-      index: 0,
-      text: '{"annotations":[{"rule":1,"quote":"q","problem":"p","suggestion":"s"}]}',
-    },
+    { type: 'text-delta', index: 0, text: '{"annotations":[{"rule":1,"quote":"q","problem":"p","suggestion":"s"}]}' },
     finish('stop'),
   ], seen)
   try {
-    const result = await runReview(ctx, { reviewProvider: 'p', reviewModel: 'm' }, agent, '/tmp/a.md', '正文', null, spec, undefined)
-    assert.deepEqual(result.annotations.map((annotation) => annotation.ruleText), ['平铺直叙。'])
-    // 请求里只放审查提示词，模型只能看到审查所需内容。
+    const whole = await runReview(ctx, { reviewProvider: 'p', reviewModel: 'm' }, agent, '/tmp/a.md', '正文', null, spec, undefined)
+    assert.deepEqual(whole.annotations.map((annotation) => annotation.ruleText), ['平铺直叙。'])
     assert.equal(seen[0].tools, undefined)
-    const prompt = seen[0].messages[0].content[0].text
-    assert.match(prompt, /## Full file under review: \/tmp\/a\.md\n正文/)
-    assert.match(prompt, /## Review scope: whole file\nAdd new annotations anywhere in the full file\./)
-    assert.doesNotMatch(prompt, /## Review scope: lines/)
+    const wholePrompt = seen[0].messages[0].content[0].text
+    assert.match(wholePrompt, /## Writing rules\n1\. 平铺直叙。/)
+    assert.match(wholePrompt, /## Full file under review: \/tmp\/a\.md\n正文/)
+    assert.match(wholePrompt, /## Review scope: whole file/)
     const request = await readFile(join(root, 'tmp', 'a.md.request.md'), 'utf8')
-    assert.match(request, /exactly one JSON object/)
-  } finally {
-    await rm(root, { recursive: true, force: true })
-  }
-})
+    assert.match(request, /## system/)
+    assert.match(request, /## user/)
 
-test('改动区段审查同时发送全文、审查范围和已有批注', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'humanize-review-region-'))
-  setRequestRootResolver(() => root)
-  const seen = []
-  const ctx = ctxWith([
-    { type: 'text-delta', index: 0, text: '{"annotations":[]}' },
-    finish('stop'),
-  ], seen)
-  try {
+    const regionCtx = ctxWith([
+      { type: 'text-delta', index: 0, text: '{"annotations":[]}' },
+      finish('stop'),
+    ], seen)
     await runReview(
-      ctx,
+      regionCtx,
       { reviewProvider: 'p', reviewModel: 'm' },
       agent,
       '/tmp/region.md',
@@ -87,13 +74,13 @@ test('改动区段审查同时发送全文、审查范围和已有批注', async
       spec,
       '1. "旧句子"',
     )
-    const prompt = seen[0].messages[0].content[0].text
-    assert.match(prompt, /## Full file under review: \/tmp\/region\.md\n第一段\n第二段\n第三段/)
-    assert.match(prompt, /## Review scope: lines 2-2\nAdd new annotations only inside the region below\.\n\n第二段/)
-    assert.match(prompt, /## Existing annotations\nReconcile these against the full file\. Return the complete updated list\.\n\n1\. "旧句子"/)
+    const regionPrompt = seen[1].messages[0].content[0].text
+    assert.match(regionPrompt, /## Full file under review: \/tmp\/region\.md\n第一段\n第二段\n第三段/)
+    assert.match(regionPrompt, /## Review scope: lines 2-2\nAdd new annotations only inside the region below\.\n\n第二段/)
+    assert.match(regionPrompt, /## Existing annotations[\s\S]*1\. "旧句子"/)
     // 全文在前、审查范围居中、已有批注在最后，模型先看全文再做对账。
-    assert.ok(prompt.indexOf('## Full file under review') < prompt.indexOf('## Review scope: lines'))
-    assert.ok(prompt.indexOf('## Review scope: lines') < prompt.indexOf('## Existing annotations'))
+    assert.ok(regionPrompt.indexOf('## Full file under review') < regionPrompt.indexOf('## Review scope: lines'))
+    assert.ok(regionPrompt.indexOf('## Review scope: lines') < regionPrompt.indexOf('## Existing annotations'))
   } finally {
     await rm(root, { recursive: true, force: true })
   }

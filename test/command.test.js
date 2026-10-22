@@ -11,11 +11,8 @@ test('留空时用会话工作目录', () => {
   assert.equal(resolveCommandTarget(agent, '   '), cwd)
 })
 
-test('带空格的路径不需要引号', () => {
+test('路径里的空格不需要引号，整体包住的引号会去掉', () => {
   assert.equal(resolveCommandTarget(agent, 'docs/a b.md'), join(cwd, 'docs/a b.md'))
-})
-
-test('整体包住的引号会去掉', () => {
   assert.equal(resolveCommandTarget(agent, '"docs/a b.md"'), join(cwd, 'docs/a b.md'))
   assert.equal(resolveCommandTarget(agent, "'docs/a b.md'"), join(cwd, 'docs/a b.md'))
 })

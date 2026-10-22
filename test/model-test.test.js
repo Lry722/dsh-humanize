@@ -15,22 +15,18 @@ function ctxWith(chunks) {
   }
 }
 
-test('模型正常返回时测试通过', async () => {
-  const ctx = ctxWith([
+test('模型正常返回或达到 token 上限时测试通过', async () => {
+  const normal = ctxWith([
     { type: 'text-delta', index: 0, text: 'OK' },
     { type: 'finish', reason: { kind: 'stop' } },
   ])
-  const result = await probeModel(ctx, { provider: 'p', model: 'm' })
-  assert.deepEqual(result, { ok: true })
-})
+  assert.deepEqual(await probeModel(normal, { provider: 'p', model: 'm' }), { ok: true })
 
-test('测试请求达到 token 上限也算模型可用', async () => {
-  const ctx = ctxWith([
+  const truncated = ctxWith([
     { type: 'text-delta', index: 0, text: 'O' },
     { type: 'finish', reason: { kind: 'max-tokens' } },
   ])
-  const result = await probeModel(ctx, { provider: 'p', model: 'm' })
-  assert.deepEqual(result, { ok: true, truncated: true })
+  assert.deepEqual(await probeModel(truncated, { provider: 'p', model: 'm' }), { ok: true, truncated: true })
 })
 
 test('提供方返回错误时把原因带回设置页', async () => {

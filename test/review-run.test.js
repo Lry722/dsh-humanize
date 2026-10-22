@@ -14,12 +14,15 @@ async function makeProject(specContent) {
 }
 
 test('规范链没有 include 声明时所有文件都视为命中', async () => {
-  const dir = await makeProject('1. 平铺直叙。\n')
+  const withSpec = await makeProject('1. 平铺直叙。\n')
+  const withoutSpec = await makeProject(undefined)
   try {
-    assert.equal(await includeDeclared(join(dir, 'a.md')), true)
-    assert.equal(await includeDeclared(join(dir, 'docs', 'b.js')), true)
+    assert.equal(await includeDeclared(join(withSpec, 'a.md')), true)
+    assert.equal(await includeDeclared(join(withSpec, 'docs', 'b.js')), true)
+    assert.equal(await includeDeclared(join(withoutSpec, 'a.md')), true)
   } finally {
-    await rm(dir, { recursive: true, force: true })
+    await rm(withSpec, { recursive: true, force: true })
+    await rm(withoutSpec, { recursive: true, force: true })
   }
 })
 
@@ -28,15 +31,6 @@ test('规范链有 include 声明时按模式过滤', async () => {
   try {
     assert.equal(await includeDeclared(join(dir, 'a.md')), true)
     assert.equal(await includeDeclared(join(dir, 'a.js')), false)
-  } finally {
-    await rm(dir, { recursive: true, force: true })
-  }
-})
-
-test('规范链没有规范时所有文件都视为命中', async () => {
-  const dir = await makeProject(undefined)
-  try {
-    assert.equal(await includeDeclared(join(dir, 'a.md')), true)
   } finally {
     await rm(dir, { recursive: true, force: true })
   }

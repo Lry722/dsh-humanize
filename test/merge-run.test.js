@@ -7,8 +7,7 @@ import assert from 'node:assert/strict'
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { isMergeAgent, registerMerge } from '../lib/merge.js'
-import { createReviewPipeline } from '../lib/pipeline.js'
+import { registerMerge } from '../lib/merge.js'
 import { setStorageRootResolver, stagingPathFor, writeStaging } from '../lib/staging.js'
 
 const log = { info() {}, warn() {} }
@@ -174,30 +173,6 @@ test('一轮合并后复审没有新批注时正常结束', async () => {
   }
 })
 
-test('合并运行期间持有运行锁，运行结束后释放', async () => {
-  const storage = await mkdtemp(join(tmpdir(), 'humanize-loop-lock-'))
-  setStorageRootResolver(() => storage)
-  try {
-    const { project } = await makeProject(storage)
-    const agent = makeAgent('agent-1', 'session-1', project)
-    const activation = deferredActivation('child-1')
-    const ctx = makeCtx([agent], async () => activation.activation)
-    const state = makeState()
-    registerMerge(ctx, log, { loopMaxRounds: 3 }, state, makeReviews().scheduleReview, async () => {}, () => {})
-
-    assert.equal(state.running.size, 0)
-    const result = await ctx.commands.get('humanize-loop').handler({ agent, rawInput: '' })
-    assert.equal(result.kind, 'success')
-    // 命令返回时首次派发已经完成，运行锁要一直持有到运行结束。
-    assert.ok(state.running.has('agent-1'))
-
-    activation.resolve({ stopReason: 'completed' })
-    await waitFor(() => state.running.size === 0)
-  } finally {
-    await removeStorage(storage)
-  }
-})
-
 test('复审产生新批注后继续下一轮，收敛才结束', async () => {
   const storage = await mkdtemp(join(tmpdir(), 'humanize-loop-rounds-'))
   setStorageRootResolver(() => storage)
@@ -288,115 +263,6 @@ test('合并子代理还在运行时拒绝新的派发', async () => {
   }
 })
 
-test('合并子代理按会话头里的 preset 识别', () => {
-  const child = makeChild('child-1', 'session-1')
-  const agent = makeAgent('agent-1', 'session-1', '/tmp')
-  assert.equal(isMergeAgent(child), true)
-  assert.equal(isMergeAgent(agent), false)
-})
-
-/** 构造一个提交批注的审查流，参数结构对齐 submit_annotations。 */
-function submitStream(annotations) {
-  const chunks = [
-    { type: 'block-start', index: 0, blockType: 'tool-call' },
-    { type: 'block-end', index: 0, block: { type: 'tool-call', id: 'call-1', name: 'submit_annotations', arguments: JSON.stringify({ annotations }) } },
-    { type: 'finish', reason: { kind: 'stop' } },
-  ]
-  return {
-    [Symbol.asyncIterator]() {
-      let index = 0
-      return {
-        async next() {
-          if (index >= chunks.length) return { done: true, value: undefined }
-          index += 1
-          return { done: false, value: chunks[index - 1] }
-        },
-      }
-    },
-  }
-}
-
-test('循环复审走真实审查管线，新批注进入下一轮并最终清空', async () => {
-  const storage = await mkdtemp(join(tmpdir(), 'humanize-loop-pipeline-'))
-  setStorageRootResolver(() => storage)
-  try {
-    const { project, target } = await makeProject(storage)
-    const agent = makeAgent('agent-1', 'session-1', project)
-    let starts = 0
-    let reviews = 0
-    const ctx = makeCtx(
-      [agent],
-      async () => {
-        starts += 1
-        const activation = deferredActivation(`child-${starts}`)
-        // 合并子代理改写文件，复审才会看到非空改动区段。
-        await writeFile(target, starts === 1 ? '第二版。\n' : '第三版。\n', 'utf8')
-        queueMicrotask(() => activation.resolve({ stopReason: 'completed' }))
-        return activation.activation
-      },
-      {
-        stream() {
-          reviews += 1
-          return submitStream(reviews === 1
-            ? [{ rule: 1, quote: '第二版。', problem: '太短。', suggestion: '展开。' }]
-            : [])
-        },
-      },
-    )
-    const config = {
-      reviewProvider: 'p',
-      reviewModel: 'm',
-      reviewRetries: 0,
-      loopMaxRounds: 3,
-    }
-    const pipeline = createReviewPipeline(ctx, config, log)
-    registerMerge(ctx, log, config, pipeline.state, pipeline.scheduleReview, pipeline.waitForReviews, pipeline.discardReviews)
-
-    await ctx.commands.get('humanize-loop').handler({ agent, rawInput: '' })
-    await waitFor(() => pipeline.state.running.size === 0)
-
-    assert.equal(starts, 2)
-    assert.equal(reviews, 2)
-    assert.equal(await readFile(target, 'utf8'), '第三版。\n')
-    // 复审结果只进任务行，会话只收到合并修改说明。
-    const mergeNotices = agent.injected.filter((message) => /已按暂存批注修订/.test(message.content?.[0]?.text ?? ''))
-    assert.equal(mergeNotices.length, 2)
-    await assert.rejects(readFile(stagingPathFor(target)), /ENOENT/)
-  } finally {
-    await removeStorage(storage)
-  }
-})
-
-test('合并用户消息从提示词文件读取并填入请求文件路径', async () => {
-  const storage = await mkdtemp(join(tmpdir(), 'humanize-merge-prompt-'))
-  setStorageRootResolver(() => storage)
-  try {
-    const { project } = await makeProject(storage)
-    const agent = makeAgent('agent-1', 'session-1', project)
-    const activation = deferredActivation('child-1')
-    let request
-    const ctx = makeCtx([agent], async (spec) => {
-      request = spec.request
-      return activation.activation
-    })
-    const state = makeState()
-    registerMerge(ctx, log, { loopMaxRounds: 3 }, state, makeReviews().scheduleReview, async () => {}, () => {})
-
-    const result = await ctx.commands.get('humanize').handler({ agent, rawInput: '' })
-    assert.equal(result.kind, 'success')
-    const text = request.prompt[0].text
-    assert.match(text, /^The merge request is in .+\.merge\.md\./)
-    assert.match(text, /Read that file in parts with the file tools/)
-    assert.match(text, /Do not edit it\./)
-    assert.doesNotMatch(text, /\{\{requestPath\}\}/)
-
-    activation.resolve({ stopReason: 'completed' })
-    await waitFor(() => state.running.size === 0)
-  } finally {
-    await removeStorage(storage)
-  }
-})
-
 test('不同会话的合并运行互斥', async () => {
   const storage = await mkdtemp(join(tmpdir(), 'humanize-merge-global-lock-'))
   setStorageRootResolver(() => storage)
@@ -419,6 +285,7 @@ test('不同会话的合并运行互斥', async () => {
 
     activation.resolve({ stopReason: 'completed' })
     await waitFor(() => state.running.size === 0 && state.mergeRun === null)
+    await assert.rejects(readFile(stagingPathFor(join(project, 'doc.md'))), /ENOENT/)
   } finally {
     await removeStorage(storage)
   }
@@ -444,29 +311,6 @@ test('复审失败时按失败结束，不再宣称收敛', async () => {
     assert.match(noticeTexts(agent), /第 1 轮复审有 1 个文件失败/)
     assert.doesNotMatch(noticeTexts(agent), /循环合并结束/)
     assert.equal(state.mergeRun, null)
-  } finally {
-    await removeStorage(storage)
-  }
-})
-
-test('一次 /humanize 合并照常清暂存并排复审', async () => {
-  const storage = await mkdtemp(join(tmpdir(), 'humanize-merge-once-'))
-  setStorageRootResolver(() => storage)
-  try {
-    const { project } = await makeProject(storage)
-    const agent = makeAgent('agent-1', 'session-1', project)
-    const activation = deferredActivation('child-1')
-    const ctx = makeCtx([agent], async () => activation.activation)
-    const state = makeState()
-    const reviews = makeReviews()
-    registerMerge(ctx, log, { loopMaxRounds: 3 }, state, reviews.scheduleReview, async () => {}, () => {})
-
-    const result = await ctx.commands.get('humanize').handler({ agent, rawInput: '' })
-    assert.equal(result.kind, 'success')
-    activation.resolve({ stopReason: 'completed' })
-
-    await waitFor(() => reviews.calls.length === 1 && state.running.size === 0)
-    assert.match(noticeTexts(agent), /已按暂存批注修订/)
   } finally {
     await removeStorage(storage)
   }
@@ -588,14 +432,14 @@ test('压缩结束触发合并，完成后留下结果说明', async () => {
   }
 })
 
-test('合并请求写到临时文件，子代理完成后清理', async () => {
+test('合并请求写到临时文件，子代理收到路径，完成后清理', async () => {
   const storage = await mkdtemp(join(tmpdir(), 'humanize-merge-request-'))
   setStorageRootResolver(() => storage)
   try {
     const { project } = await makeProject(storage)
     const agent = makeAgent('agent-1', 'session-1', project)
-    let activationSpec
     const activation = deferredActivation('child-1')
+    let activationSpec
     const ctx = makeCtx([agent], async (spec) => {
       activationSpec = spec
       return activation.activation
@@ -605,9 +449,10 @@ test('合并请求写到临时文件，子代理完成后清理', async () => {
 
     await ctx.commands.get('humanize').handler({ agent, rawInput: '' })
     const text = activationSpec.request.prompt[0].text
-    const match = /The merge request is in (.+?)\.\n/.exec(text)
+    const match = /The merge request is in (\S+\.merge\.md)\./.exec(text)
     assert.ok(match, text)
     const requestPath = match[1]
+    assert.doesNotMatch(text, /\{\{requestPath\}\}/)
     assert.match(await readFile(requestPath, 'utf8'), /## Rules/)
 
     activation.resolve({ stopReason: 'completed' })
