@@ -74,7 +74,7 @@ test('波浪线围栏同样按完整围栏扩展区段', () => {
   assert.ok(textOf(after, regions[0]).endsWith('~~~'))
 })
 
-test('未闭合围栏只扩展起点，不把终点扩到全文末尾', () => {
+test('未闭合围栏只扩展起点，终点止于改动处', () => {
   // 改动在未闭合围栏内部，起点扩到围栏开头，终点只覆盖改动本身。
   const lines = ['l0', 'l1', 'l2', 'l3', 'l4', '```js', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j']
   const after = lines.map((line, index) => (index === 6 ? 'A' : line)).join('\n')

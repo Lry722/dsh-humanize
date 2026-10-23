@@ -511,7 +511,7 @@ window.__ModuleLoader__.load({
       const { form, view, modelCatalog } = props
       const [groups, setGroups] = useState(null)
       const [catalogFailed, setCatalogFailed] = useState(false)
-      // 字段元数据由宿主字段表生成，默认值和边界在这里读，不在浏览器端另抄一份。
+      // 字段元数据由宿主字段表生成，默认值和边界都在这里读取，浏览器端直接使用。
       const [fieldInfo, setFieldInfo] = useState({ status: 'loading', fields: {} })
       useEffect(() => {
         // 目录服务不可用时降级为手动填写。
@@ -528,7 +528,8 @@ window.__ModuleLoader__.load({
         return () => { alive = false }
       }, [])
       useEffect(() => {
-        // 元数据只取一次。取不到时不设默认值和边界，等表单快照兜底。
+        // 元数据只取一次。读取失败时字段表为空，数字字段按表单快照里的值显示，
+        // 边界限制随之放开。
         let alive = true
         fetch('api/humanize.fields', {
           cache: 'no-store',

@@ -220,7 +220,7 @@ test('流空闲超过上限时按停顿报错', async (t) => {
   }
 })
 
-test('留档写不进去时不影响审查结果和主错误', async () => {
+test('留档写入失败时，审查结果和主错误照常返回', async () => {
   const parent = await mkdtemp(join(tmpdir(), 'humanize-review-nodump-'))
   // 把留档根路径做成普通文件，写请求和写响应都会失败。
   const root = join(parent, 'root-is-a-file')

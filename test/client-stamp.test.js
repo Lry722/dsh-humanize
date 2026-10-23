@@ -12,9 +12,9 @@ import { fileURLToPath } from 'node:url'
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const chunks = ['client/client.locales.js', 'client/client.settings.js', 'client/client.progress.js']
 
-test('入口文件的 chunks 戳与 chunk 内容一致', async () => {
+test('入口文件的版本戳与 chunk 内容一致', async () => {
   const contents = await Promise.all(chunks.map((file) => readFile(join(root, file))))
-  // 与 scripts/stamp-client.mjs 一致：Buffer 转成字符串后以 \0 拼接再算 sha256。
+  // 与 scripts/stamp-client.mjs 的算法保持一致。
   const hash = createHash('sha256').update(contents.join('\0')).digest('hex').slice(0, 8)
   const entry = await readFile(join(root, 'client/client.js'), 'utf8')
   const marker = /^\/\/ chunks: ([0-9a-f]{8})$/m.exec(entry)
@@ -22,6 +22,6 @@ test('入口文件的 chunks 戳与 chunk 内容一致', async () => {
   assert.equal(
     marker[1],
     hash,
-    `client/client.js 的 chunks 戳已过期（记录 ${marker[1]}，实际 ${hash}），请运行 npm run stamp:client`,
+    `client/client.js 的版本戳已过期（记录 ${marker[1]}，实际 ${hash}），请运行 npm run stamp:client`,
   )
 })

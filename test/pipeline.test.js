@@ -659,7 +659,7 @@ test('runSlot 在内部 try 之前抛错时按失败结算等待方', async () =
 
   const outcome = await pipeline.scheduleReview(fakeAgent(), target, undefined, '写给人看的文档。\n')
   assert.deepEqual(outcome, { kind: 'failed', message: '配置读取失败' })
-  // 失败结算后排队位置被摘掉，没有残留。
+  // 失败结算后排队位置被摘掉。
   await waitFor(() => !pipeline.state.reviewQueues.has(target))
   await pipeline.shutdown()
 })

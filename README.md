@@ -114,7 +114,11 @@ Only numbered lines under `# Rules` take part in global rule numbering. Numbers 
 
 Binary files such as images, archives, fonts and build output skip review. Detection samples the start of the file. Write review and batch review both use it. A batch review reports how many files it skipped.
 
-When the model writes a file it must declare `human_facing`. Pass true for content meant for people, false for pure code or data. Writes marked true enter review. The rest are skipped. A programmatic call that omits the field is treated as false and logs a warning. After each review, the next write review waits one minute by default. Writes during the interval join the next review. Review looks only at the regions changed in this write.
+When the model writes a file it must declare `human_facing`. Pass true for content meant for people, false for pure code or data. Writes marked true enter review. The rest are skipped. A programmatic call that omits the field is treated as false and logs a warning.
+
+After each review, the next write review waits one minute by default. Writes during the interval join the next review.
+
+Review looks only at the regions changed in this write.
 
 Reviews of the same file run serially. Writes from different sessions or subagents queue separately, and queued reviews are kept per agent without overwriting each other. While a merge runs, the reviews of the agent that started it are aborted or discarded. Reviews from other agents on the same target files are treated the same way. Batch reviews and merge re-reviews skip the interval and run immediately.
 
@@ -154,7 +158,9 @@ Changed files include working-tree modifications, staged changes, and untracked 
 
 The full file is still sent, but annotations are limited to the changed regions. New files get a full review. When nothing changed, the task ends as completed and says so.
 
-Run `/humanize-review --recent N <path>` to re-review files touched by the last N commits. The commits only select the file set. Review uses the current working-tree content and covers the whole file. If the repository has fewer than N commits, it falls back to all files at HEAD. Files missing from the working tree are skipped. `--recent` and `--changed` are mutually exclusive.
+Run `/humanize-review --recent N <path>` to re-review files touched by the last N commits. The commits only select the file set. Review uses the current working-tree content and covers the whole file.
+
+If the repository has fewer than N commits, it falls back to all files at HEAD. Files missing from the working tree are skipped. `--recent` and `--changed` are mutually exclusive.
 
 Review runs in the background as a task. The progress bar updates above the input box. The task list in the session header shows the same task. Review runs in a separate context. What it reads stays separate from the session.
 

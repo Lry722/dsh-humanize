@@ -9,7 +9,7 @@ test('带 info string 的反引号围栏连同首尾行一起返回', () => {
   ])
 })
 
-test('波浪号围栏只认同字符的闭合行', () => {
+test('波浪号围栏只接受同字符的闭合行', () => {
   const lines = ['~~~md', 'text', '```', 'still inside', '~~~~', 'tail']
   assert.deepEqual(fenceSpans(lines), [
     { start: 0, end: 4, closed: true, char: '~', length: 3 },
@@ -23,7 +23,7 @@ test('未闭合的围栏结算到最后一行', () => {
   ])
 })
 
-test('更长的围栏包住里面更短的同类围栏', () => {
+test('更长的围栏包住里面更短的同字符围栏', () => {
   const lines = ['````md', '```', 'inner', '```', '````', 'tail']
   assert.deepEqual(fenceSpans(lines), [
     { start: 0, end: 4, closed: true, char: '`', length: 4 },
