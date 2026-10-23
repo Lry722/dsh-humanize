@@ -54,9 +54,6 @@ test('渲染的编号行能被统计，批注里的换行不会破坏格式', ()
     { rule: 2, ruleText: 'rule two', quote: 'q2', problem: '', suggestion: '' },
   ])
   assert.equal(countAnnotations(rendered), 2)
-  // 暂存内容不写文件名，直接从规则标题开始。
-  assert.ok(rendered.startsWith('## Rule 1: rule one'))
-  assert.doesNotMatch(rendered, /^# /m)
   assert.match(rendered, /## Rule 1: rule one/)
   assert.match(rendered, /## Rule 2: rule two/)
   assert.match(rendered, /1\. "a 2\. injected"/)

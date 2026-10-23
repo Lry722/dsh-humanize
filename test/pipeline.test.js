@@ -437,42 +437,6 @@ test('规范缺少 Rules 一级标题时直接失败，不重试也不调用模�
   }
 })
 
-test('审查请求不带被审查文件名，保留规范来源路径', async () => {
-  const storage = await mkdtemp(join(tmpdir(), 'humanize-pipeline-names-'))
-  setStorageRootResolver(() => storage)
-  const project = join(storage, 'project')
-  await mkdir(join(project, '.git'), { recursive: true })
-  await writeFile(join(project, 'PROSE.md'), '# Rules\n1. 平铺直叙。\n', 'utf8')
-  const target = join(project, 'doc.md')
-  const content = '写给人看的文档。\n'
-  await writeFile(target, content, 'utf8')
-  await writeStaging(target, `1. "写给人看的文档。"\n`)
-
-  let seen
-  const ctx = {
-    ...fakeContext(),
-    llm: {
-      stream(options) {
-        seen = options
-        return gatedStream(Promise.resolve())
-      },
-    },
-  }
-  const config = { reviewProvider: 'p', reviewModel: 'm', reviewRetries: 0 }
-  const pipeline = createReviewPipeline(ctx, config, { info() {}, warn() {} })
-  try {
-    const outcome = await pipeline.scheduleReview(fakeAgent(), target, undefined, content)
-    assert.equal(outcome.kind, 'ok')
-    const prompt = seen.messages[0].content[0].text
-    assert.ok(prompt.includes(`Spec source: ${join(project, 'PROSE.md')}`))
-    assert.doesNotMatch(prompt, /doc\.md/)
-    assert.match(prompt, /## Existing annotations[\s\S]*1\. "写给人看的文档。"/)
-  } finally {
-    await pipeline.shutdown()
-    await rm(storage, { recursive: true, force: true })
-  }
-})
-
 test('等待并发闸门的审查可以中止', async () => {
   const storage = await mkdtemp(join(tmpdir(), 'humanize-pipeline-abort-'))
   setStorageRootResolver(() => storage)

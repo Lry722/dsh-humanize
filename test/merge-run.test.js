@@ -455,7 +455,7 @@ test('合并请求写到临时文件，子代理收到路径，完成后清理',
     assert.doesNotMatch(text, /\{\{requestPath\}\}/)
     const request = await readFile(requestPath, 'utf8')
     assert.match(request, /## Rules/)
-    // 暂存内容不带文件名，合并请求在组装时按文件补标题。
+    // 合并请求按文件列出批注。
     assert.ok(request.includes(`# ${target}`))
 
     activation.resolve({ stopReason: 'completed' })
