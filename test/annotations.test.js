@@ -48,7 +48,7 @@ test('解析整段文本时只取中间的 JSON', () => {
   assert.equal(dropped, 0)
 })
 
-test('渲染的编号行能被统计，批注里的换行会被压平，压平后格式保持正确', () => {
+test('渲染的编号行能被统计，批注里的换行不会破坏格式', () => {
   const rendered = renderStaging('/f.md', [
     { rule: 1, ruleText: 'rule one', quote: 'a\n2. injected', problem: 'p\n3. also', suggestion: 's' },
     { rule: 2, ruleText: 'rule two', quote: 'q2', problem: '', suggestion: '' },

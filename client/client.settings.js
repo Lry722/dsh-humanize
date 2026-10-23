@@ -202,7 +202,6 @@ window.__ModuleLoader__.load({
           title: t('model.testHint'),
           onClick: run,
         }, testing ? t('model.testing') : t('model.test')),
-        // 测试结果就近显示在按钮右侧。
         statusText !== ''
           ? h('span', { style: testStatusStyle(state.status), 'aria-live': 'polite' }, statusText)
           : null,

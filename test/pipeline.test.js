@@ -11,7 +11,7 @@ import { createReviewPipeline } from '../lib/pipeline.js'
 import { setStorageRootResolver, stagingPathFor, writeStaging } from '../lib/staging.js'
 
 /**
- * 构造一个假的 ctx。审查管线只用到 ctx.get。
+ * 造一个假 ctx。审查管线只用到 ctx.get。
  */
 function fakeContext() {
   // jobs 服务缺失时，告警走降级路径。
