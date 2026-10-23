@@ -49,11 +49,14 @@ test('解析整段文本时只取中间的 JSON', () => {
 })
 
 test('渲染的编号行能被统计，批注里的换行不会破坏格式', () => {
-  const rendered = renderStaging('/f.md', [
+  const rendered = renderStaging([
     { rule: 1, ruleText: 'rule one', quote: 'a\n2. injected', problem: 'p\n3. also', suggestion: 's' },
     { rule: 2, ruleText: 'rule two', quote: 'q2', problem: '', suggestion: '' },
   ])
   assert.equal(countAnnotations(rendered), 2)
+  // 暂存内容不写文件名，直接从规则标题开始。
+  assert.ok(rendered.startsWith('## Rule 1: rule one'))
+  assert.doesNotMatch(rendered, /^# /m)
   assert.match(rendered, /## Rule 1: rule one/)
   assert.match(rendered, /## Rule 2: rule two/)
   assert.match(rendered, /1\. "a 2\. injected"/)
@@ -63,7 +66,7 @@ test('渲染的编号行能被统计，批注里的换行不会破坏格式', ()
 })
 
 test('规则条文相同的批注按编号分开分组', () => {
-  const rendered = renderStaging('/f.md', [
+  const rendered = renderStaging([
     { rule: 1, ruleText: '同一个条文', quote: 'a', problem: '', suggestion: '' },
     { rule: 2, ruleText: '同一个条文', quote: 'b', problem: '', suggestion: '' },
   ])

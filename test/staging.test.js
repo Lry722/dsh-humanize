@@ -44,7 +44,7 @@ test('暂存文件不可读时 collectStaged 抛出错误，不把它当成空�
   try {
     await mkdir(project, { recursive: true })
     await writeFile(file, 'x\n')
-    await writeStaging(file, `# ${file}\n\n1. "x"\n`)
+    await writeStaging(file, `1. "x"\n`)
     await chmod(stagingPathFor(file), 0o000)
     await assert.rejects(collectStaged(file), (error) => error?.code === 'EACCES' || error?.code === 'EPERM')
   } finally {

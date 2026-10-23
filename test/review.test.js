@@ -74,14 +74,12 @@ test('审查请求带上全文、审查范围和已有批注', async () => {
       '第一段\n第二段\n第三段\n第四段',
       [{ startLine: 2, endLine: 2 }, { startLine: 4, endLine: 4 }],
       spec,
-      '# /tmp/region.md\n\n1. "旧句子"',
+      '1. "旧句子"',
     )
     const regionPrompt = seen[1].messages[0].content[0].text
     assert.match(regionPrompt, /## Full file content under review\n\n```\n第一段\n<!-- dsh-humanize: review scope starts \(lines 2-2\) -->\n第二段\n<!-- dsh-humanize: review scope ends -->\n第三段\n<!-- dsh-humanize: review scope starts \(lines 4-4\) -->\n第四段\n<!-- dsh-humanize: review scope ends -->\n```/)
     assert.doesNotMatch(regionPrompt, /whole file is in scope/)
     assert.match(regionPrompt, /## Existing annotations[\s\S]*1\. "旧句子"/)
-    // 暂存文件开头的路径标题不进入审查请求。
-    assert.doesNotMatch(regionPrompt, /\/tmp\/region\.md/)
     // 全文只出现一次，每段改动各有一对标记，已有批注在最后。
     assert.equal(regionPrompt.match(/第二段/g)?.length, 1)
     assert.equal(regionPrompt.match(/第四段/g)?.length, 1)

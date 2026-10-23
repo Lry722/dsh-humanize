@@ -136,7 +136,7 @@ async function makeProject(storage) {
   await writeFile(join(project, 'PROSE.md'), '# Rules\n1. 平铺直叙。\n', 'utf8')
   const target = join(project, 'doc.md')
   await writeFile(target, '第一版。\n', 'utf8')
-  await writeStaging(target, `# ${target}\n\n1. "第一版。"\n`)
+  await writeStaging(target, `1. "第一版。"\n`)
   return { project, target }
 }
 
@@ -192,7 +192,7 @@ test('复审产生新批注后继续下一轮，收敛才结束', async () => {
     const scheduleReview = async (reviewAgent, filePath) => {
       reviews += 1
       if (reviews === 1) {
-        await writeStaging(filePath, `# ${filePath}\n\n1. "第一版。"\n`)
+        await writeStaging(filePath, `1. "第一版。"\n`)
         return { kind: 'ok', annotations: 1 }
       }
       return { kind: 'ok', annotations: 0 }
@@ -333,7 +333,7 @@ test('一次 /humanize 复审还有批注也到此为止，只跑这一轮', asy
     let reviews = 0
     const scheduleReview = async (reviewAgent, filePath) => {
       reviews += 1
-      await writeStaging(filePath, `# ${filePath}\n\n1. "重写后的行文。"\n`)
+      await writeStaging(filePath, `1. "重写后的行文。"\n`)
       return { kind: 'ok', annotations: 1 }
     }
     registerMerge(ctx, log, { loopMaxRounds: 3 }, state, scheduleReview, async () => {}, () => {})
@@ -388,7 +388,7 @@ test('合并期间写入的新暂存批注按新内容保留', async () => {
     const activation = deferredActivation('child-1')
     // 派发前先改写暂存，模拟合并期间另一次审查写入了新批注。
     const ctx = makeCtx([agent], async () => {
-      await writeStaging(target, `# ${target}\n\n1. "合并期间的新批注。"\n`)
+      await writeStaging(target, `1. "合并期间的新批注。"\n`)
       return activation.activation
     })
     const state = makeState()
@@ -436,7 +436,7 @@ test('合并请求写到临时文件，子代理收到路径，完成后清理',
   const storage = await mkdtemp(join(tmpdir(), 'humanize-merge-request-'))
   setStorageRootResolver(() => storage)
   try {
-    const { project } = await makeProject(storage)
+    const { project, target } = await makeProject(storage)
     const agent = makeAgent('agent-1', 'session-1', project)
     const activation = deferredActivation('child-1')
     let activationSpec
@@ -453,7 +453,10 @@ test('合并请求写到临时文件，子代理收到路径，完成后清理',
     assert.ok(match, text)
     const requestPath = match[1]
     assert.doesNotMatch(text, /\{\{requestPath\}\}/)
-    assert.match(await readFile(requestPath, 'utf8'), /## Rules/)
+    const request = await readFile(requestPath, 'utf8')
+    assert.match(request, /## Rules/)
+    // 暂存内容不带文件名，合并请求在组装时按文件补标题。
+    assert.ok(request.includes(`# ${target}`))
 
     activation.resolve({ stopReason: 'completed' })
     await waitFor(() => state.running.size === 0)

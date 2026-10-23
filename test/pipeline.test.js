@@ -274,7 +274,7 @@ test('批注全部对不上规则编号时按失败处理，暂存批注保留',
   await writeFile(join(project, 'PROSE.md'), '# Rules\n1. 平铺直叙。\n', 'utf8')
   const target = join(project, 'doc.md')
   await writeFile(target, '写给人看的文档。\n', 'utf8')
-  await writeStaging(target, `# ${target}\n\n1. "写给人看的文档。"\n`)
+  await writeStaging(target, `1. "写给人看的文档。"\n`)
 
   let seenTools
   const ctx = {
@@ -446,7 +446,7 @@ test('审查请求不带文件名和规范来源路径', async () => {
   const target = join(project, 'doc.md')
   const content = '写给人看的文档。\n'
   await writeFile(target, content, 'utf8')
-  await writeStaging(target, `# ${target}\n\n1. "写给人看的文档。"\n`)
+  await writeStaging(target, `1. "写给人看的文档。"\n`)
 
   let seen
   const ctx = {
