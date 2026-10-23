@@ -298,38 +298,22 @@ PATH 是文件时合并这一个文件，是目录时合并目录下所有有批
 
 ## 代码布局
 
-宿主端代码放在 lib/ 下，按流程步骤分模块，index.js 只做组合：
+宿主端代码放在 lib/ 下，按子系统分目录，index.js 只做组合：
 
-- `lib/index.js`，插件入口，负责把各部分拼起来，读取设置、包装写入工具、接管钩子和命令。
+- `lib/index.js`，插件入口，读取设置、包装写入工具、接管钩子和命令。
 - `lib/wrap.js`，包装写入工具，给 write/edit 增加必填的 human_facing。
-- `lib/specs.js`，负责加载和渲染 PROSE.md 分层规范。规范搜索以会话工作目录为界。
-  - `lib/spec-match.js`，负责 include 模式的编译与匹配。
-- `lib/pipeline.js`，负责把规范加载、审查调用和批注解析串成一次审查。
-- `lib/binary-file.js`，用 isbinaryfile 判断二进制文件，审查前跳过这类文件。读不到文件时按文本处理。
-- `lib/review.js`，负责发起审查调用，并控制审查时长，写入审查和审查批次共用。
-- `lib/annotations.js`，负责解析批注并把它渲染成暂存的 markdown 文件。
-- `lib/review-run.js`，负责执行 /humanize-review 批次，按设定的并发数并行执行。
-  - `lib/git-files.js`，负责把审查目标展开成受 git 管理、且命中 include 模式的文件。增量模式按 HEAD 差异和未跟踪文件展开，并带回改动前的内容。最近提交模式按最近 N 个提交涉及的文件展开，审查内容取当前工作区。
-- `lib/merge.js`，负责 /humanize、/humanize-loop 和 compaction/end 三种触发方式的合并。命令注册和轮次编排在这个模块。
-  - `lib/merge-agent.js`，合并子代理的派发和收尾。插件把规范和批注写进一个临时请求文件，再派发合并子代理完成合并。临时文件在合并子代理结束后删除。
-  - `lib/merge-lock.js`，合并锁与合并子代理的身份判定。锁跨会话生效。
-  - 合并子代理按本包 cordis.patch.yml 里声明为 humanize-merge 的 preset 派发。
-  - 合并运行的轮次和待复审文件留在内存，插件重载会结束这次运行。
-- `lib/job-track.js`，后台任务的公共部分，负责登记任务并屏蔽完成通知。
-  - 结算记录保留到用户在会话里发起下一个回合。审查批次、合并运行和失败告警共用这份记录。
-  - 回合清理直接遍历 jobs 注册表。插件加载时注册一个监听器，turn/start 时把本插件名下该会话已结算的任务行摘除。
-  - 热重载后旧实例留下的已结算任务行，也会在下一个回合被摘除。
-- `lib/command.js`，负责解析斜杠命令里的路径参数。
-- `lib/semaphore.js`，负责可中止的并发闸门。所有审查调用共用 reviewConcurrency 这个上限。
-- `lib/defaults.js`，存放审查间隔、审查并发、重试次数和循环轮次的默认值与边界，供各处共用。
-- `lib/model.js`，会话当前模型配置的读取，审查调用和合并子代理共用。
-- `lib/signal.js`，中止信号的转发，审查管线和审查调用共用。
-- `lib/staging.js`，暂存文件读写与孤儿清理。保存位置可通过设置页的 storageDir 修改。审查请求记录和合并请求写到系统临时目录。
-- `lib/path-info.js`，把暂存批注和审查请求记录的真实路径提供给设置页。
-- `lib/settings.js`，设置字段表，Config、运行时读取和边界都由它生成。
-- `lib/paths.js`，命令路径的引号去除和 `~` 展开。
-- `lib/diff.js`，负责整理改动区段，多处改动分成多段。
-- `lib/prompts.js`，负责提供提示词资源。
+- `lib/review/`，审查子系统。`command.js` 执行 /humanize-review 批次，按设定的并发数并行；`pipeline.js` 把规范加载、审查调用和批注解析串成一次审查；`call.js` 发起审查调用并控制审查时长；`annotations.js` 解析批注并渲染成暂存的 markdown 文件；`diff.js` 整理改动区段，多处改动分成多段；`binary-file.js` 用 isbinaryfile 判断二进制文件，读不到文件时按文本处理；`git-files.js` 把审查目标展开成受 git 管理、且命中 include 模式的文件，增量模式带回改动前的内容。
+- `lib/merge/`，合并子系统。`command.js` 注册 /humanize、/humanize-loop 和 compaction/end 三种触发方式并编排轮次；`agent.js` 负责合并子代理的派发和收尾，规范和批注经临时请求文件交给子代理，临时文件在子代理结束后删除；`lock.js` 负责跨会话的合并锁和合并子代理的身份判定。合并子代理按本包 cordis.patch.yml 里声明为 humanize-merge 的 preset 派发，运行轮次和待复审文件留在内存，插件重载会结束这次运行。
+- `lib/spec/`，PROSE.md 分层规范。`chain.js` 加载和渲染规范链，搜索以会话工作目录为界；`match.js` 编译和匹配 include 模式。
+- `lib/settings/`，设置。`schema.js` 定义字段表，Config、运行时读取和边界都由它生成；`routes.js` 为设置页提供字段元数据和保存位置；`model-test.js` 处理审查模型和合并模型的测试请求。
+- `lib/shared/`，公共叶子层。`defaults.js` 存放审查间隔、并发、重试次数和循环轮次的默认值与边界；`staging.js` 负责暂存文件读写与孤儿清理，保存位置可通过设置页的 storageDir 修改；`job-track.js` 登记后台任务并屏蔽完成通知；`model.js` 读取会话当前模型配置；`prompts.js` 提供提示词资源；`paths.js` 处理命令路径的引号、`~` 展开和路径边界判断；`semaphore.js` 是可中止的并发闸门，所有审查调用共用 reviewConcurrency 这个上限；`signal.js` 转发中止信号；`markdown.js` 处理围栏代码块；`text.js` 提供单行化和截断工具。
+
+目录约定：
+
+- 目录表示子系统，不按技术层切分。
+- `shared/` 是叶子层，只依赖外部包和同目录文件，不依赖其他子系统。
+- 不建目录级 barrel，模块之间保留直接相对路径。
+- `test/` 镜像 `lib/` 的目录结构，测试文件按模块命名。
 
 浏览器端的 client/ 目录拆为主入口加三个按需加载 chunk，与官方 dsh-client-ui-sidebar-terminal 的 client.js 和 client.terminal.js 是同一模式。主入口负责插槽注册，文案表、设置卡片和进度条各自是一个 chunk。
 
