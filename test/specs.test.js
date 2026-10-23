@@ -135,15 +135,17 @@ test('多个 Rules 章节共用一套编号，围栏里的一级标题不切分�
   assert.ok(text.includes('1. sample'))
 })
 
-test('没有 Rules 一级标题时不产生规则，正文仍作为上下文', () => {
+test('缺少 Rules 一级标题时抛出错误', () => {
   const chain = [{
     path: '/proj/PROSE.md',
     content: '# Glossary\n1. term\n# Notes\n2. note',
   }]
-  const { text, rules } = buildSpecRules(chain)
-  assert.deepEqual(rules, [])
-  assert.ok(text.includes('# Glossary\n1. term'))
-  assert.ok(text.includes('# Notes\n2. note'))
+  assert.throws(
+    () => buildSpecRules(chain),
+    (error) => error.humanizeSpecError === true
+      && /缺少一级标题 # Rules/.test(error.message)
+      && error.message.includes('/proj/PROSE.md'),
+  )
 })
 
 test('Rules 章节没有编号行时保留补充说明，规则列表为空', () => {

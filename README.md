@@ -109,7 +109,7 @@ include:
 Abuse: xxx
 ```
 
-Only numbered lines under `# Rules` take part in global rule numbering. Numbers in other sections stay as written. A spec without a `# Rules` heading produces no rules.
+Only numbered lines under `# Rules` take part in global rule numbering. Numbers in other sections stay as written. A spec without a `# Rules` heading fails review with an error.
 
 Binary files such as images, archives, fonts and build output skip review. Detection samples the start of the file; write review and batch review both use it. A batch review reports how many files it skipped.
 

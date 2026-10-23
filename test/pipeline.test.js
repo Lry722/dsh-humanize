@@ -405,6 +405,38 @@ test('写入审查共用 reviewConcurrency 上限', async () => {
   }
 })
 
+test('规范缺少 Rules 一级标题时直接失败，不重试也不调用模型', async () => {
+  const storage = await mkdtemp(join(tmpdir(), 'humanize-pipeline-spec-'))
+  setStorageRootResolver(() => storage)
+  const project = join(storage, 'project')
+  await mkdir(join(project, '.git'), { recursive: true })
+  await writeFile(join(project, 'PROSE.md'), '# Glossary\n1. 术语\n', 'utf8')
+  const target = join(project, 'doc.md')
+  await writeFile(target, '写给人看的文档。\n', 'utf8')
+
+  let calls = 0
+  const ctx = {
+    ...fakeContext(),
+    llm: {
+      stream() {
+        calls += 1
+        throw new Error('review should not run')
+      },
+    },
+  }
+  const config = { reviewProvider: 'p', reviewModel: 'm', reviewRetries: 2 }
+  const pipeline = createReviewPipeline(ctx, config, { info() {}, warn() {} })
+  try {
+    const outcome = await pipeline.scheduleReview(fakeAgent(), target, undefined, '写给人看的文档。\n')
+    assert.equal(outcome.kind, 'failed')
+    assert.match(outcome.message, /缺少一级标题 # Rules/)
+    assert.equal(calls, 0)
+  } finally {
+    await pipeline.shutdown()
+    await rm(storage, { recursive: true, force: true })
+  }
+})
+
 test('等待并发闸门的审查可以中止', async () => {
   const storage = await mkdtemp(join(tmpdir(), 'humanize-pipeline-abort-'))
   setStorageRootResolver(() => storage)
