@@ -2,6 +2,8 @@
 include:
   - "*.md"
   - "*.js"
+  - "*.mjs"
+  - "*.ts"
   - "!prompts/"
 ---
 
@@ -19,3 +21,30 @@ include:
 10. 英文俚语应当翻译地道，避免翻译腔，例如强行直译。如果很难翻译，就保留英文原文。
 11. 细节注释必须尽量拆到精确的行上，严禁堆在函数上，函数上只保留必要的功能和参数说明。类声明也是同理。
 12. 注释必须保持简洁且精确，有阅读意义，不要重复写代码中显而易见的事实。
+
+# 术语
+
+下表列出各概念在文档、注释和界面文案里的统一说法。
+
+| 英文 | 中文 | 说明 |
+| --- | --- | --- |
+| review | 审查 | 一次审查调用 |
+| write review | 写入审查 | 写入文件后触发的审查 |
+| batch review | 批次审查 | 一次覆盖多个文件的审查 |
+| review batch | 审查批次 | 批次审查对应的后台任务 |
+| re-review | 复审 | 合并后对刚改过的文件再跑的一次审查 |
+| merge | 合并 | 把暂存批注应用到文件 |
+| loop merge | 循环合并 | `/humanize-loop` 的合并与复审循环 |
+| annotation | 批注 | 一条审查意见 |
+| staged annotation | 暂存批注 | 尚未合并的批注 |
+| staging file | 暂存文件 | 按文件保存批注的 markdown 文件 |
+| spec | 规范 | PROSE.md 提供的行文规则 |
+| spec chain | 规范链 | 从全局规范到当前目录的各级规范 |
+| human-facing | 面向人类 | 面向人类阅读的内容 |
+| subagent | 子代理 | 插件派发的独立 agent |
+| changed region | 改动区段 | 本次改动覆盖的文件区段 |
+| incremental mode | 增量模式 | 只审查改动文件 |
+| recent commits mode | 最近提交模式 | 审查最近 N 个提交涉及的文件 |
+| compaction | 压缩 | 上下文压缩 |
+
+命令、字段名和文件名保留英文，例如 `/humanize`、`include`、`human_facing`、`PROSE.md`。
