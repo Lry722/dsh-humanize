@@ -90,3 +90,66 @@ test('规范内容里的分段标记被外层围栏包住', () => {
   assert.ok(text.includes('````\n'))
   assert.ok(text.includes('## Writing rules'))
 })
+
+test('一级标题分块后，只有 Rules 章节的编号行算规则', () => {
+  const chain = [{
+    path: '/proj/PROSE.md',
+    content: [
+      '# Glossary',
+      '1. 滥用：指过度使用。',
+      '',
+      '# Rules',
+      '1. one',
+      '## Details',
+      '1. nested',
+      '',
+      '# Notes',
+      '1. 这不是规则。',
+    ].join('\n'),
+  }]
+  const { text, rules } = buildSpecRules(chain)
+  assert.deepEqual(rules.map((rule) => rule.text), ['one', 'nested'])
+  // 规则之外的章节原样保留，编号不参与全局重排。
+  assert.ok(text.includes('# Glossary\n1. 滥用：指过度使用。'))
+  assert.ok(text.includes('# Notes\n1. 这不是规则。'))
+})
+
+test('多个 Rules 章节共用一套编号，围栏里的一级标题不切分章节', () => {
+  const chain = [{
+    path: '/proj/PROSE.md',
+    content: [
+      '# Rules',
+      '1. one',
+      '# Notes',
+      '```md',
+      '# Rules',
+      '1. sample',
+      '```',
+      '# Rules',
+      '1. two',
+    ].join('\n'),
+  }]
+  const { text, rules } = buildSpecRules(chain)
+  assert.deepEqual(rules.map((rule) => rule.text), ['one', 'two'])
+  assert.deepEqual(rules.map((rule) => rule.index), [1, 2])
+  assert.ok(text.includes('1. sample'))
+})
+
+test('没有 Rules 一级标题时整份文件仍按规则列表解析', () => {
+  const chain = [{
+    path: '/proj/PROSE.md',
+    content: '# Glossary\n1. term\n# Notes\n2. note',
+  }]
+  const { rules } = buildSpecRules(chain)
+  assert.deepEqual(rules.map((rule) => rule.text), ['term', 'note'])
+})
+
+test('Rules 章节没有编号行时保留补充说明，规则列表为空', () => {
+  const chain = [{
+    path: '/proj/PROSE.md',
+    content: '# Rules\n\n# Glossary\n滥用：指过度使用。',
+  }]
+  const { text, rules } = buildSpecRules(chain)
+  assert.deepEqual(rules, [])
+  assert.ok(text.includes('滥用：指过度使用。'))
+})

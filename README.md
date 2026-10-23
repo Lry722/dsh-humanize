@@ -96,6 +96,21 @@ include:
 
 `include` belongs to the whole spec chain. If any level of the chain declares it, only files that match enter review. Write review and batch review both follow this scope. If no level declares `include`, the spec applies to every file.
 
+`PROSE.md` can use level-1 headings to separate sections. Numbered lines under `# Rules` are review rules. Every other level-1 section is passed to review and merge unchanged as supplementary context, such as definitions or a glossary. For example:
+
+```markdown
+# Rules
+
+1. Write plainly.
+2. Avoid brackets in a sentence.
+
+# Terms
+
+Abuse: unnecessary repetition of the same word or punctuation mark.
+```
+
+Only numbered lines under `# Rules` take part in global rule numbering. Numbers in other sections stay as written. A file without a `# Rules` heading is still parsed as one rule list, so existing specs keep working.
+
 Binary files such as images, archives, fonts and build output skip review. Detection samples the start of the file; write review and batch review both use it. A batch review reports how many files it skipped.
 
 When the model writes a file it must declare `human_facing`. Pass true for content meant for people, false for pure code or data. Writes marked true enter review; the rest are skipped. A programmatic call that omits the field is treated as false and logs a warning. Review looks only at the regions changed in this write.

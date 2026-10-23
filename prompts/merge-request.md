@@ -1,4 +1,4 @@
-The merge request is in /tmp/dsh-humanize-1000/merge/91b4f95a-7056-49ca-bfaf-844155813eeb.merge.md. It contains staged prose annotations.
+The merge request is in {{requestPath}}. It contains staged prose annotations and the PROSE.md rules, together with any supplementary sections.
 
 **Accuracy outranks form. Never trade a fact for a shorter sentence.** Preserve every fact and technical distinction. Code comments must strictly match the code they describe.
 
@@ -10,7 +10,7 @@ Merge requirements:
 2. Skip an annotation directly when you consider it inapplicable.
 3. Make changes only within the scope the annotation pertains to; do not modify any additional content.
 4. When a change involves descriptions of business content, **always** analyze the code and understand the context to ensure the change introduces no deviation.
-5. When a change involves frontend strings, evaluate the the change based on its display location.
+5. When a change involves frontend strings, evaluate the change based on its display location.
 
 Read that file in parts with the file tools and begin processing the merge.
 
