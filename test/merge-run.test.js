@@ -7,8 +7,10 @@ import assert from 'node:assert/strict'
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { LOOP_ROUNDS_DEFAULT } from '../lib/defaults.js'
 import { registerMerge } from '../lib/merge.js'
 import { setStorageRootResolver, stagingPathFor, writeStaging } from '../lib/staging.js'
+import { waitFor } from './helpers.js'
 
 const log = { info() {}, warn() {} }
 
@@ -106,14 +108,6 @@ function makeReviews() {
       calls.push({ agent, filePath, before, after })
       return { kind: 'ok', annotations: 0 }
     },
-  }
-}
-
-async function waitFor(predicate, timeoutMs = 3000) {
-  const started = Date.now()
-  while (!(await predicate())) {
-    if (Date.now() - started > timeoutMs) throw new Error('timed out waiting for the merge loop')
-    await new Promise((resolve) => { setTimeout(resolve, 10) })
   }
 }
 
@@ -461,6 +455,61 @@ test('合并请求写到临时文件，子代理收到路径，完成后清理',
     activation.resolve({ stopReason: 'completed' })
     await waitFor(() => state.running.size === 0)
     await assert.rejects(readFile(requestPath, 'utf8'), /ENOENT/)
+  } finally {
+    await removeStorage(storage)
+  }
+})
+
+test('循环轮次上限不是整数时按缺省轮次运行', async () => {
+  const storage = await mkdtemp(join(tmpdir(), 'humanize-loop-fractional-'))
+  setStorageRootResolver(() => storage)
+  try {
+    const { project } = await makeProject(storage)
+    const agent = makeAgent('agent-1', 'session-1', project)
+    let starts = 0
+    const ctx = makeCtx([agent], async () => {
+      starts += 1
+      const activation = deferredActivation(`child-${starts}`)
+      queueMicrotask(() => activation.resolve({ stopReason: 'completed' }))
+      return activation.activation
+    })
+    const state = makeState()
+    // 每轮复审都写回新批注，循环会一直跑到轮次上限。
+    const scheduleReview = async (reviewAgent, filePath) => {
+      await writeStaging(filePath, `1. "重写后的行文。"\n`)
+      return { kind: 'ok', annotations: 1 }
+    }
+    registerMerge(ctx, log, { loopMaxRounds: 1.5 }, state, scheduleReview, async () => {}, () => {})
+
+    await ctx.commands.get('humanize-loop').handler({ agent, rawInput: '' })
+    await waitFor(() => state.running.size === 0)
+
+    // 1.5 不是合法轮次，按缺省值跑满，而不是被截成 1 轮或 2 轮。
+    assert.equal(starts, LOOP_ROUNDS_DEFAULT)
+  } finally {
+    await removeStorage(storage)
+  }
+})
+
+test('PROSE.md 文件头写坏时合并按失败结束，暂存批注保留', async () => {
+  const storage = await mkdtemp(join(tmpdir(), 'humanize-merge-bad-spec-'))
+  setStorageRootResolver(() => storage)
+  try {
+    const { project, target } = await makeProject(storage)
+    // include 声明没有闭合，loadSpecChain 在组装合并请求时抛出规范错误。
+    await writeFile(join(project, 'PROSE.md'), '---\ninclude: [\n---\n# Rules\n1. 平铺直叙。\n', 'utf8')
+    const agent = makeAgent('agent-1', 'session-1', project)
+    const ctx = makeCtx([agent], async () => { throw new Error('不应派发') })
+    const state = makeState()
+    registerMerge(ctx, log, { loopMaxRounds: 3 }, state, makeReviews().scheduleReview, async () => {}, () => {})
+
+    const result = await ctx.commands.get('humanize').handler({ agent, rawInput: '' })
+    assert.equal(result.kind, 'error')
+    // 规范错误要变成一次清楚的合并失败，而不是未处理的异常。
+    assert.match(result.text, /YAML 文件头无法解析/)
+    await waitFor(() => state.running.size === 0 && state.mergeRun === null)
+    // 失败保留暂存批注，修好规范后可以重新执行命令。
+    assert.match(await readFile(stagingPathFor(target), 'utf8'), /第一版/)
   } finally {
     await removeStorage(storage)
   }

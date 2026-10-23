@@ -1,8 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createSemaphore } from '../lib/semaphore.js'
-
-const tick = () => new Promise((resolve) => { setImmediate(resolve) })
+import { tick } from './helpers.js'
 
 test('信号量限制同时进行的获取操作数', async () => {
   const semaphore = createSemaphore(2)

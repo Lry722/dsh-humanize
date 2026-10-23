@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runReview } from '../lib/review.js'
@@ -26,6 +26,14 @@ function ctxWith(chunks, seen = []) {
         })()
       },
     },
+  }
+}
+
+/** 在给定的上下文上挂一个记录警告的日志服务。 */
+function withWarnings(ctx, warnings) {
+  return {
+    ...ctx,
+    logger: () => ({ warn: (...args) => warnings.push(args) }),
   }
 }
 
@@ -115,6 +123,24 @@ test('全文里的代码围栏不会提前闭合外层代码块', async () => {
   }
 })
 
+test('配置和会话都留空时审查退回 agent 的模型设置', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'humanize-review-agent-model-'))
+  setRequestRootResolver(() => root)
+  const seen = []
+  const ctx = ctxWith([
+    { type: 'text-delta', index: 0, text: '{"annotations":[]}' },
+    finish('stop'),
+  ], seen)
+  const agentWithOptions = { ...agent, options: { provider: 'local', model: 'cheap' } }
+  try {
+    await runReview(ctx, {}, agentWithOptions, '/tmp/model.md', '正文', null, spec, undefined)
+    assert.equal(seen[0].provider, 'local')
+    assert.equal(seen[0].model, 'cheap')
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 test('没有 JSON 时把文本、推理和 finish 原因写进响应留档', async () => {
   const root = await mkdtemp(join(tmpdir(), 'humanize-review-dump-'))
   setRequestRootResolver(() => root)
@@ -162,5 +188,86 @@ test('输出达到模型上限时也留档，错误信息带上路径', async ()
     assert.match(dumped, /半截/)
   } finally {
     await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('流空闲超过上限时按停顿报错', async (t) => {
+  // 空闲上限是 120 秒，用 mock 计时器推进，测试本身立刻结束。
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  const root = await mkdtemp(join(tmpdir(), 'humanize-review-idle-'))
+  setRequestRootResolver(() => root)
+  let onStream
+  const streaming = new Promise((resolve) => { onStream = resolve })
+  const ctx = {
+    llm: {
+      stream() {
+        onStream()
+        // 模拟一个永远不给下一块的连接。
+        return (async function* () {
+          await new Promise(() => {})
+        })()
+      },
+    },
+  }
+  try {
+    const pending = runReview(ctx, { reviewProvider: 'p', reviewModel: 'm' }, agent, '/tmp/idle.md', '正文', null, spec, undefined)
+    await streaming
+    // 看门狗在发起读流时就装好了计时器，推进到上限即可触发。
+    t.mock.timers.tick(120_000)
+    await assert.rejects(pending, /review stalled: no chunk for 120 seconds/)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('留档写不进去时不影响审查结果和主错误', async () => {
+  const parent = await mkdtemp(join(tmpdir(), 'humanize-review-nodump-'))
+  // 把留档根路径做成普通文件，写请求和写响应都会失败。
+  const root = join(parent, 'root-is-a-file')
+  await writeFile(root, '')
+  setRequestRootResolver(() => root)
+  const warnings = []
+  try {
+    const success = withWarnings(ctxWith([
+      { type: 'text-delta', index: 0, text: '{"annotations":[{"rule":1,"quote":"q","problem":"p","suggestion":"s"}]}' },
+      finish('stop'),
+    ]), warnings)
+    const result = await runReview(success, { reviewProvider: 'p', reviewModel: 'm' }, agent, '/tmp/ok.md', '正文', null, spec, undefined)
+    assert.equal(result.annotations.length, 1)
+    // warn 收格式串和参数，参数依次是留档类型、文件路径和错误原因。
+    assert.match(String(warnings[0][0]), /failed to write review %s dump/)
+    assert.equal(warnings[0][1], 'request')
+    assert.equal(warnings[0][2], '/tmp/ok.md')
+
+    const truncated = withWarnings(ctxWith([
+      { type: 'text-delta', index: 0, text: '{"annotations":[{"rule":1' },
+      finish('max-tokens'),
+    ]), warnings)
+    await assert.rejects(
+      runReview(truncated, { reviewProvider: 'p', reviewModel: 'm' }, agent, '/tmp/truncated.md', '正文', null, spec, undefined),
+      (error) => {
+        assert.match(error.message, /output limit/)
+        // 留档没写成功时不能带一个不存在的路径。
+        assert.doesNotMatch(error.message, /Raw response:/)
+        return true
+      },
+    )
+
+    const unparsable = withWarnings(ctxWith([
+      { type: 'text-delta', index: 0, text: 'The file looks fine.' },
+      finish('stop'),
+    ]), warnings)
+    await assert.rejects(
+      runReview(unparsable, { reviewProvider: 'p', reviewModel: 'm' }, agent, '/tmp/unparsable.md', '正文', null, spec, undefined),
+      (error) => {
+        assert.match(error.message, /contains no JSON object/)
+        assert.doesNotMatch(error.message, /Raw response:/)
+        return true
+      },
+    )
+    // 三次审查各记一条请求留档警告，两次响应留档再各记一条。
+    assert.equal(warnings.length, 5)
+  } finally {
+    await rm(parent, { recursive: true, force: true })
   }
 })

@@ -52,3 +52,25 @@ test('请求被取消时返回取消状态', async () => {
   assert.equal(result.ok, false)
   assert.equal(result.code, 'aborted')
 })
+
+test('超过总时长上限时返回超时状态', async (t) => {
+  // 总时长上限是 30 秒，用 mock 计时器推进，测试本身立刻结束。
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  const ctx = {
+    llm: {
+      stream(options) {
+        // 模拟一个一直挂到信号中止的连接。
+        return (async function* () {
+          await new Promise((_, reject) => {
+            options.signal.addEventListener('abort', () => reject(options.signal.reason), { once: true })
+          })
+        })()
+      },
+    },
+  }
+  const pending = probeModel(ctx, { provider: 'p', model: 'm' })
+  t.mock.timers.tick(30_000)
+  const result = await pending
+  assert.equal(result.ok, false)
+  assert.equal(result.code, 'timeout')
+})

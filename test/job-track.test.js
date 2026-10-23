@@ -87,3 +87,40 @@ test('没有 jobs 服务时回合开始直接返回', () => {
   assert.equal(typeof listener, 'function')
   assert.doesNotThrow(() => listener({ id: 's1' }, { type: 'turn/start' }))
 })
+
+test('没有 jobs 服务时返回可结算的空操作对象', () => {
+  const tracked = openJob({}, log, {
+    jobs: undefined,
+    kind: 'humanize-review',
+    label: '行文审查',
+    owner: 's1',
+    cancel() {},
+  })
+  assert.equal(tracked.jobId, undefined)
+  assert.equal(tracked.handle, undefined)
+  assert.equal(typeof tracked.settle, 'function')
+  assert.doesNotThrow(() => tracked.settle({ status: 'completed', detail: 'x' }))
+})
+
+test('jobs.start 抛错时记录告警并返回空操作对象', () => {
+  const warnings = []
+  const jobs = {
+    list: () => [],
+    start() {
+      throw new Error('unknown owner')
+    },
+  }
+  const tracked = openJob({}, { warn: (...args) => warnings.push(args) }, {
+    jobs,
+    kind: 'humanize-review',
+    label: '行文审查',
+    owner: 's1',
+    cancel() {},
+  })
+  assert.equal(tracked.jobId, undefined)
+  assert.equal(tracked.handle, undefined)
+  assert.equal(typeof tracked.settle, 'function')
+  assert.doesNotThrow(() => tracked.settle({ status: 'failed', detail: 'x' }))
+  assert.equal(warnings.length, 1)
+  assert.match(String(warnings[0][0]), /cannot start/)
+})

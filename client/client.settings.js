@@ -17,16 +17,20 @@ window.__ModuleLoader__.load({
     const NS = 'dsh-humanize'
     /** Config 里承载设置的 volatile 节点名，写入路径以它为前缀。 */
     const SETTINGS_KEY = 'settings'
-    // 插槽传入的翻译函数。插槽没提供时，直接用 key 当作文案显示。
-    let t = (key) => key
-    // 数值字段的默认值，需要和 lib/settings.js 的字段表手动对齐。
-    const FIELD_DEFAULTS = { reviewConcurrency: 3, reviewRetries: 1, reviewIntervalSeconds: 60, loopMaxRounds: 3 }
-    const FIELD_LIMITS = {
-      reviewConcurrency: { min: 1 },
-      reviewRetries: { min: 0, max: 3 },
-      reviewIntervalSeconds: { min: 0, max: 3600 },
-      loopMaxRounds: { min: 1, max: 10 },
+    // 插槽传入的翻译函数，由 HumanizeCard 放进 context 供各组件读取。
+    // 插槽没提供时，直接用 key 当作文案显示。
+    const T = React.createContext((key) => key)
+    /** 取当前设置页的翻译函数。 */
+    function useT() {
+      return React.useContext(T)
     }
+    // 数值字段按表单顺序排列。标签和说明从文案表取，默认值和边界由宿主字段表提供。
+    const NUMBER_FIELDS = [
+      { key: 'reviewConcurrency', labelKey: 'settings.reviewConcurrency', hintKey: 'settings.reviewConcurrencyHint' },
+      { key: 'reviewRetries', labelKey: 'settings.reviewRetries', hintKey: 'settings.reviewRetriesHint' },
+      { key: 'reviewIntervalSeconds', labelKey: 'settings.reviewIntervalSeconds', hintKey: 'settings.reviewIntervalSecondsHint' },
+      { key: 'loopMaxRounds', labelKey: 'settings.loopMaxRounds', hintKey: 'settings.loopMaxRoundsHint' },
+    ]
 
     const fieldStyle = {
       display: 'flex',
@@ -99,6 +103,7 @@ window.__ModuleLoader__.load({
     }
 
     function ResetButton(props) {
+      const t = useT()
       // 字段被覆盖时才渲染按钮，标签行保持紧凑。
       if (!props.overridden) return null
       return h('button', { type: 'button', style: resetStyle, onClick: props.onReset }, t('common.reset'))
@@ -118,6 +123,7 @@ window.__ModuleLoader__.load({
 
     /** 把路径写入剪贴板，并给出复制成功的提示。 */
     function CopyButton(props) {
+      const t = useT()
       const [copied, setCopied] = useState(false)
       return h('button', {
         type: 'button',
@@ -156,6 +162,7 @@ window.__ModuleLoader__.load({
      * 测试审查模型或合并子代理的模型能否正常调用。
      */
     function ModelTest(props) {
+      const t = useT()
       const { prefix, value, writable } = props
       const provider = value[`${prefix}Provider`] ?? ''
       const model = value[`${prefix}Model`] ?? ''
@@ -211,6 +218,7 @@ window.__ModuleLoader__.load({
 
     /** 展示暂存批注和审查请求记录的保存位置。 */
     function StoragePaths(props) {
+      const t = useT()
       const [paths, setPaths] = useState({ status: 'loading' })
       useEffect(() => {
         let alive = true
@@ -273,6 +281,7 @@ window.__ModuleLoader__.load({
 
     /** 模型的两级选择，先选模型提供方，再选模型。prefix 区分审查和合并两组字段。 */
     function ModelPicker(props) {
+      const t = useT()
       const { value, user, writable, groups, catalogFailed, set, unset } = props
       const prefix = props.prefix
       const providerKey = `${prefix}Provider`
@@ -359,6 +368,7 @@ window.__ModuleLoader__.load({
 
     /** 推理等级的选择，选项来自所选模型在目录里公布的等级列表。 */
     function EffortPicker(props) {
+      const t = useT()
       const { value, user, writable, groups, catalogFailed, set, unset } = props
       const prefix = props.prefix
       const effortKey = `${prefix}ReasoningEffort`
@@ -431,7 +441,7 @@ window.__ModuleLoader__.load({
       )
     }
 
-    /** 数字输入控件，配合 min 和 max 限制取值范围。失焦时提交，清空后恢复默认值。 */
+    /** 数字输入控件，配合宿主字段表里的 min、max 和 integer 限制取值范围。失焦时提交，清空后恢复默认值。 */
     function NumberField(props) {
       const [text, setText] = useState(String(props.value ?? ''))
       useEffect(() => setText(String(props.value ?? '')), [props.value])
@@ -446,7 +456,10 @@ window.__ModuleLoader__.load({
           setText(String(props.value ?? ''))
           return
         }
-        const next = Math.max(props.min ?? 0, Math.min(props.max ?? Infinity, Math.round(parsed)))
+        // 整数字段按字段表取整，间隔这类允许小数的字段保留原值。
+        let next = props.integer === true ? Math.round(parsed) : parsed
+        if (props.min !== undefined) next = Math.max(props.min, next)
+        if (props.max !== undefined) next = Math.min(props.max, next)
         setText(String(next))
         if (next === props.value) return
         props.set(next)
@@ -462,7 +475,7 @@ window.__ModuleLoader__.load({
           type: 'number',
           min: props.min,
           max: props.max,
-          step: 1,
+          step: props.integer === true ? 1 : 'any',
           value: text,
           disabled: !props.writable,
           onChange: (event) => setText(event.target.value),
@@ -493,10 +506,13 @@ window.__ModuleLoader__.load({
      * 插件配置页，包含摘要视图和设置表单。
      */
     function HumanizeCard(props) {
-      if (typeof props.t === 'function') t = props.t
+      // 插槽传入的翻译函数。这里存进 context，子组件统一用 useT() 取。
+      const t = typeof props.t === 'function' ? props.t : (key) => key
       const { form, view, modelCatalog } = props
       const [groups, setGroups] = useState(null)
       const [catalogFailed, setCatalogFailed] = useState(false)
+      // 字段元数据由宿主字段表生成，默认值和边界在这里读，不在浏览器端另抄一份。
+      const [fieldInfo, setFieldInfo] = useState({ status: 'loading', fields: {} })
       useEffect(() => {
         // 目录服务不可用时降级为手动填写。
         if (typeof modelCatalog !== 'function') {
@@ -509,6 +525,26 @@ window.__ModuleLoader__.load({
           if (res.ok) setGroups(res.value.groups)
           else setCatalogFailed(true)
         }, () => { if (alive) setCatalogFailed(true) })
+        return () => { alive = false }
+      }, [])
+      useEffect(() => {
+        // 元数据只取一次。取不到时不设默认值和边界，等表单快照兜底。
+        let alive = true
+        fetch('api/humanize.fields', {
+          cache: 'no-store',
+          headers: { accept: 'application/json' },
+        }).then(async (response) => {
+          if (!response.ok) throw new Error(`HTTP ${response.status}`)
+          const result = await response.json()
+          if (!alive) return
+          if (typeof result?.fields === 'object' && result.fields !== null) {
+            setFieldInfo({ status: 'ready', fields: result.fields })
+            return
+          }
+          setFieldInfo({ status: 'error', fields: {} })
+        }).catch(() => {
+          if (alive) setFieldInfo({ status: 'error', fields: {} })
+        })
         return () => { alive = false }
       }, [])
 
@@ -528,76 +564,51 @@ window.__ModuleLoader__.load({
         void form.mutate([{ op: 'unset', path: [SETTINGS_KEY, field] }], snapshot.revision)
       }
 
-      return h('div', null,
-        h(ModelPicker, { prefix: 'review', value, user, writable, groups, catalogFailed, set, unset }),
-        h(EffortPicker, { prefix: 'review', value, user, writable, groups, catalogFailed, set, unset }),
-        h(ModelTest, { prefix: 'review', value, writable }),
-        h(ModelPicker, { prefix: 'merge', value, user, writable, groups, catalogFailed, set, unset }),
-        h(EffortPicker, { prefix: 'merge', value, user, writable, groups, catalogFailed, set, unset }),
-        h(ModelTest, { prefix: 'merge', value, writable }),
-        h(NumberField, {
-          label: t('settings.reviewConcurrency'),
-          value: value.reviewConcurrency ?? FIELD_DEFAULTS.reviewConcurrency,
-          overridden: Object.prototype.hasOwnProperty.call(user, 'reviewConcurrency'),
-          writable,
-          min: FIELD_LIMITS.reviewConcurrency.min,
-          set: (next) => set('reviewConcurrency', next),
-          unset: () => unset('reviewConcurrency'),
-          hint: t('settings.reviewConcurrencyHint'),
-        }),
-        h(NumberField, {
-          label: t('settings.reviewRetries'),
-          value: value.reviewRetries ?? FIELD_DEFAULTS.reviewRetries,
-          overridden: Object.prototype.hasOwnProperty.call(user, 'reviewRetries'),
-          writable,
-          min: FIELD_LIMITS.reviewRetries.min,
-          max: FIELD_LIMITS.reviewRetries.max,
-          set: (next) => set('reviewRetries', next),
-          unset: () => unset('reviewRetries'),
-          hint: t('settings.reviewRetriesHint'),
-        }),
-        h(NumberField, {
-          label: t('settings.reviewIntervalSeconds'),
-          value: value.reviewIntervalSeconds ?? FIELD_DEFAULTS.reviewIntervalSeconds,
-          overridden: Object.prototype.hasOwnProperty.call(user, 'reviewIntervalSeconds'),
-          writable,
-          min: FIELD_LIMITS.reviewIntervalSeconds.min,
-          max: FIELD_LIMITS.reviewIntervalSeconds.max,
-          set: (next) => set('reviewIntervalSeconds', next),
-          unset: () => unset('reviewIntervalSeconds'),
-          hint: t('settings.reviewIntervalSecondsHint'),
-        }),
-        h(NumberField, {
-          label: t('settings.loopMaxRounds'),
-          value: value.loopMaxRounds ?? FIELD_DEFAULTS.loopMaxRounds,
-          overridden: Object.prototype.hasOwnProperty.call(user, 'loopMaxRounds'),
-          writable,
-          min: FIELD_LIMITS.loopMaxRounds.min,
-          max: FIELD_LIMITS.loopMaxRounds.max,
-          set: (next) => set('loopMaxRounds', next),
-          unset: () => unset('loopMaxRounds'),
-          hint: t('settings.loopMaxRoundsHint'),
-        }),
-        h(BoolField, {
-          label: t('settings.mergeOnCompaction'),
-          value: value.mergeOnCompaction,
-          overridden: Object.prototype.hasOwnProperty.call(user, 'mergeOnCompaction'),
-          writable,
-          set: (next) => set('mergeOnCompaction', next),
-          unset: () => unset('mergeOnCompaction'),
-          hint: t('settings.mergeOnCompactionHint'),
-        }),
-        h(TextField, {
-          label: t('settings.storageDir'),
-          value: value.storageDir,
-          overridden: Object.prototype.hasOwnProperty.call(user, 'storageDir'),
-          writable,
-          set: (next) => set('storageDir', next),
-          unset: () => unset('storageDir'),
-          placeholder: t('settings.storagePlaceholder'),
-          hint: t('settings.storageHint'),
-        }),
-        h(StoragePaths, { storageDir: value.storageDir }),
+      return h(T.Provider, { value: t },
+        h('div', null,
+          h(ModelPicker, { prefix: 'review', value, user, writable, groups, catalogFailed, set, unset }),
+          h(EffortPicker, { prefix: 'review', value, user, writable, groups, catalogFailed, set, unset }),
+          h(ModelTest, { prefix: 'review', value, writable }),
+          h(ModelPicker, { prefix: 'merge', value, user, writable, groups, catalogFailed, set, unset }),
+          h(EffortPicker, { prefix: 'merge', value, user, writable, groups, catalogFailed, set, unset }),
+          h(ModelTest, { prefix: 'merge', value, writable }),
+          NUMBER_FIELDS.map((field) => {
+            const info = fieldInfo.fields[field.key] ?? {}
+            return h(NumberField, {
+              key: field.key,
+              label: t(field.labelKey),
+              value: value[field.key] ?? info.default ?? '',
+              overridden: Object.prototype.hasOwnProperty.call(user, field.key),
+              writable,
+              min: info.min,
+              max: info.max,
+              integer: info.integer,
+              set: (next) => set(field.key, next),
+              unset: () => unset(field.key),
+              hint: t(field.hintKey),
+            })
+          }),
+          h(BoolField, {
+            label: t('settings.mergeOnCompaction'),
+            value: value.mergeOnCompaction,
+            overridden: Object.prototype.hasOwnProperty.call(user, 'mergeOnCompaction'),
+            writable,
+            set: (next) => set('mergeOnCompaction', next),
+            unset: () => unset('mergeOnCompaction'),
+            hint: t('settings.mergeOnCompactionHint'),
+          }),
+          h(TextField, {
+            label: t('settings.storageDir'),
+            value: value.storageDir,
+            overridden: Object.prototype.hasOwnProperty.call(user, 'storageDir'),
+            writable,
+            set: (next) => set('storageDir', next),
+            unset: () => unset('storageDir'),
+            placeholder: t('settings.storagePlaceholder'),
+            hint: t('settings.storageHint'),
+          }),
+          h(StoragePaths, { storageDir: value.storageDir }),
+        ),
       )
     }
 
@@ -617,7 +628,7 @@ window.__ModuleLoader__.load({
 
       render() {
         if (this.state.error !== null) {
-          const tr = typeof this.props.t === 'function' ? this.props.t : t
+          const tr = typeof this.props.t === 'function' ? this.props.t : (key) => key
           return h('p', { style: hintStyle }, tr('settings.renderError') + String(this.state.error?.message ?? this.state.error))
         }
         return this.props.children

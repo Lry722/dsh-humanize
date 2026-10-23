@@ -225,3 +225,56 @@ test('仓库没有提交时最近提交模式报错', async () => {
     await rm(dir, { recursive: true, force: true })
   }
 })
+
+test('文件名里的方括号不会被当成通配符', async () => {
+  const dir = await makeRepo()
+  try {
+    await writeFile(join(dir, 'PROSE.md'), '# Rules\n1. 平铺直叙。\n')
+    await writeFile(join(dir, 'a1.md'), '正文\n')
+    await commitAll(dir)
+    await writeFile(join(dir, 'a[1].md'), '新文件\n')
+
+    // 通配符解释下，a[1].md 会命中已跟踪的 a1.md，把未跟踪的新文件放进来。
+    assert.deepEqual(await collectTargets(join(dir, 'a[1].md'), dir), [])
+
+    await execFileAsync('git', ['add', 'a[1].md'], { cwd: dir })
+    await commitAll(dir, 'track bracket file')
+    assert.deepEqual(paths(await collectTargets(join(dir, 'a[1].md'), dir)), [join(dir, 'a[1].md')])
+
+    await writeFile(join(dir, 'a1.md'), '改过的正文\n')
+    await writeFile(join(dir, 'a[1].md'), '改过的新文件\n')
+    const changed = await collectTargets(join(dir, 'a[1].md'), dir, { changed: true })
+    assert.deepEqual(paths(changed), [join(dir, 'a[1].md')])
+    assert.equal(changed[0].before, '新文件\n')
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('目录名里的方括号不会被当成通配符', async () => {
+  const dir = await makeRepo()
+  try {
+    await mkdir(join(dir, 'd[1]'))
+    await writeFile(join(dir, 'PROSE.md'), '# Rules\n1. 平铺直叙。\n')
+    await writeFile(join(dir, 'd[1]', 'f.md'), 'old\n')
+    await writeFile(join(dir, 'd1'), 'old sibling\n')
+    await commitAll(dir, 'one')
+
+    await writeFile(join(dir, 'd[1]', 'f.md'), 'v2\n')
+    await writeFile(join(dir, 'd1'), 'v2 sibling\n')
+    await commitAll(dir, 'two')
+
+    await writeFile(join(dir, 'd[1]', 'f.md'), 'v3\n')
+    await writeFile(join(dir, 'd1'), 'v3 sibling\n')
+
+    // 通配符解释下，d[1] 会同时命中根目录里的 d1。
+    const changed = await collectTargets(join(dir, 'd[1]'), dir, { changed: true })
+    assert.deepEqual(paths(changed), [join(dir, 'd[1]', 'f.md')])
+
+    const recent = await collectRecentTargets(join(dir, 'd[1]'), dir, 1)
+    assert.deepEqual(paths(recent.targets), [join(dir, 'd[1]', 'f.md')])
+    assert.deepEqual(recent.skipped, [])
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})

@@ -7,6 +7,7 @@ import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { includeDeclared } from '../lib/git-files.js'
 import { registerReviewCommand, splitReviewArgs } from '../lib/review-run.js'
+import { waitFor } from './helpers.js'
 
 const execFileAsync = promisify(execFile)
 
@@ -84,7 +85,8 @@ test('命令把 --changed 的 HEAD 内容传给审查管线', async () => {
       mergeRun: null,
     }
     const calls = []
-    registerReviewCommand(ctx, { info() {}, warn() {} }, {}, state, async (...args) => {
+    const infos = []
+    registerReviewCommand(ctx, { info: (...args) => infos.push(args), warn() {} }, {}, state, async (...args) => {
       calls.push(args)
       return { kind: 'ok', annotations: 0 }
     }, async () => {})
@@ -93,13 +95,15 @@ test('命令把 --changed 的 HEAD 内容传给审查管线', async () => {
     const result = commands.get('humanize-review').handler({ agent, rawInput: '--changed' })
     assert.equal(result.kind, 'success')
     assert.equal(result.text, '已派发增量审查。')
-    for (let attempt = 0; attempt < 200 && state.reviewing.size > 0; attempt += 1) {
-      await new Promise((resolve) => setTimeout(resolve, 5))
-    }
+    await waitFor(() => state.reviewing.size === 0)
     assert.equal(calls.length, 1)
     assert.equal(calls[0][1], join(dir, 'doc.md'))
     assert.equal(calls[0][2], '旧内容\n')
     assert.equal(calls[0][3], '新内容\n')
+    // jobs 服务缺失时没有任务行，批次结束仍写一条汇总日志。
+    const summary = infos.find((args) => String(args[0]).includes('review run finished'))
+    assert.notEqual(summary, undefined)
+    assert.equal(summary[2], 1)
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
@@ -147,9 +151,7 @@ test('命令把最近提交涉及的文件交给全文审查', async () => {
     const result = commands.get('humanize-review').handler({ agent, rawInput: '--recent 1' })
     assert.equal(result.kind, 'success')
     assert.equal(result.text, '已派发最近提交审查。')
-    for (let attempt = 0; attempt < 200 && state.reviewing.size > 0; attempt += 1) {
-      await new Promise((resolve) => setTimeout(resolve, 5))
-    }
+    await waitFor(() => state.reviewing.size === 0)
     assert.equal(calls.length, 1)
     assert.equal(calls[0][1], join(dir, 'doc.md'))
     assert.equal(calls[0][2], undefined)

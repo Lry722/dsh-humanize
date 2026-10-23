@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -50,6 +50,21 @@ test('暂存文件不可读时 collectStaged 抛出错误，不把它当成空�
   } finally {
     // 恢复权限，否则清理目录会失败。
     await chmod(stagingPathFor(file), 0o600).catch(() => undefined)
+    await rm(storage, { recursive: true, force: true })
+  }
+})
+
+test('新建的暂存目录权限为 0o700', {
+  // Windows 不按 POSIX 权限位处理目录；umask 拿掉属主位时目录也得不到 0o700。
+  skip: process.platform === 'win32' || (process.umask() & 0o700) !== 0,
+}, async () => {
+  const storage = await mkdtemp(join(tmpdir(), 'humanize-staging-mode-'))
+  setStorageRootResolver(() => storage)
+  try {
+    await writeStaging(join(storage, 'project', 'doc.md'), `1. "x"\n`)
+    assert.equal((await stat(join(storage, 'annotations'))).mode & 0o777, 0o700)
+  } finally {
+    setStorageRootResolver(() => '')
     await rm(storage, { recursive: true, force: true })
   }
 })

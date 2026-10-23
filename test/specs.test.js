@@ -1,7 +1,10 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { createSpecMatcher, declaresInclude } from '../lib/spec-match.js'
-import { buildSpecRules, renderSpecChain } from '../lib/specs.js'
+import { buildSpecRules, loadSpecChain, renderSpecChain } from '../lib/specs.js'
 
 test('规范链渲染把编号重排成全局连续，缩进与 CRLF 都保留', () => {
   const chain = [
@@ -163,4 +166,23 @@ test('Rules 章节没有编号行时保留补充说明，规则列表为空', ()
   const { text, rules } = buildSpecRules(chain)
   assert.deepEqual(rules, [])
   assert.ok(text.includes('滥用：指过度使用。'))
+})
+
+test('YAML 文件头无法解析时 loadSpecChain 抛出规范错误', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'humanize-spec-yaml-'))
+  try {
+    const target = join(root, 'a.md')
+    const specPath = join(root, 'PROSE.md')
+    await writeFile(target, 'x\n', 'utf8')
+    // 方括号没有闭合，js-yaml 解析文件头时直接报错。
+    await writeFile(specPath, '---\ninclude: [\n---\n# Rules\n1. one\n', 'utf8')
+    await assert.rejects(
+      loadSpecChain(target, root),
+      (error) => error.humanizeSpecError === true
+        && /YAML 文件头无法解析/.test(error.message)
+        && error.message.includes(specPath),
+    )
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
 })

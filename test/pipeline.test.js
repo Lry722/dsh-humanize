@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createReviewPipeline } from '../lib/pipeline.js'
 import { setStorageRootResolver, stagingPathFor, writeStaging } from '../lib/staging.js'
+import { sleep, tick, waitFor } from './helpers.js'
 
 /**
  * 造一个假 ctx。审查管线只用到 ctx.get。
@@ -57,21 +58,6 @@ function gatedStream(gate) {
         },
       }
     },
-  }
-}
-
-/** 等一个微任务排空，让排队的审查走到流上。 */
-const tick = () => new Promise((resolve) => { setImmediate(resolve) })
-
-/** 等一段时间，用来观察倒计时内没有发起审查。 */
-const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms) })
-
-/** 等一个条件成立，超时后抛错。 */
-async function waitFor(check, timeoutMs = 3000) {
-  const start = Date.now()
-  while (!check()) {
-    if (Date.now() - start > timeoutMs) throw new Error('timed out waiting for condition')
-    await new Promise((resolve) => setTimeout(resolve, 5))
   }
 }
 
@@ -658,4 +644,22 @@ test('合并或卸载会丢弃倒计时中的写入审查', async () => {
   assert.deepEqual(await skipped, { kind: 'discarded' })
   assert.equal(pipeline.state.reviewQueues.size, 0)
   await rm(storage, { recursive: true, force: true })
+})
+
+test('runSlot 在内部 try 之前抛错时按失败结算等待方', async () => {
+  const config = fakeConfig()
+  // 读取重试次数发生在 runSlot 的 try 之前，这里模拟设置读取抛错。
+  Object.defineProperty(config, 'reviewRetries', {
+    get() {
+      throw new Error('配置读取失败')
+    },
+  })
+  const pipeline = createReviewPipeline(fakeContext(), config, { info() {}, warn() {} })
+  const target = '/tmp/humanize-pump-reject-doc.md'
+
+  const outcome = await pipeline.scheduleReview(fakeAgent(), target, undefined, '写给人看的文档。\n')
+  assert.deepEqual(outcome, { kind: 'failed', message: '配置读取失败' })
+  // 失败结算后排队位置被摘掉，没有残留。
+  await waitFor(() => !pipeline.state.reviewQueues.has(target))
+  await pipeline.shutdown()
 })
