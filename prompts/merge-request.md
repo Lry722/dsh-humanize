@@ -1,4 +1,4 @@
-The merge request is in {{requestPath}}. It contains staged prose annotations and the PROSE.md rules, together with any supplementary sections.
+The merge request is in {{requestPath}}. It contains staged prose annotations and the relevant PROSE.md content.
 
 **Accuracy outranks form. Never trade a fact for a shorter sentence.** Preserve every fact and technical distinction. Code comments must strictly match the code they describe.
 

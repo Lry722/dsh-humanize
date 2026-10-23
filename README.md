@@ -96,7 +96,7 @@ include:
 
 `include` belongs to the whole spec chain. If any level of the chain declares it, only files that match enter review. Write review and batch review both follow this scope. If no level declares `include`, the spec applies to every file.
 
-`PROSE.md` can use level-1 headings to separate sections. Numbered lines under `# Rules` are review rules. Every other level-1 section is passed to review and merge unchanged as supplementary context, such as definitions or a glossary. For example:
+`PROSE.md` must contain a level-1 `# Rules` heading. Numbered lines under it are review rules. Every other level-1 section is passed to review and merge unchanged as supplementary context, such as definitions or a glossary. For example:
 
 ```markdown
 # Rules
@@ -109,7 +109,7 @@ include:
 Abuse: xxx
 ```
 
-Only numbered lines under `# Rules` take part in global rule numbering. Numbers in other sections stay as written. A file without a `# Rules` heading is still parsed as one rule list, so existing specs keep working.
+Only numbered lines under `# Rules` take part in global rule numbering. Numbers in other sections stay as written. A spec without a `# Rules` heading produces no rules.
 
 Binary files such as images, archives, fonts and build output skip review. Detection samples the start of the file; write review and batch review both use it. A batch review reports how many files it skipped.
 

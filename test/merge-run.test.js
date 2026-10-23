@@ -133,7 +133,7 @@ async function removeStorage(storage) {
 async function makeProject(storage) {
   const project = join(storage, 'project')
   await mkdir(join(project, '.git'), { recursive: true })
-  await writeFile(join(project, 'PROSE.md'), '1. 平铺直叙。\n', 'utf8')
+  await writeFile(join(project, 'PROSE.md'), '# Rules\n1. 平铺直叙。\n', 'utf8')
   const target = join(project, 'doc.md')
   await writeFile(target, '第一版。\n', 'utf8')
   await writeStaging(target, `# ${target}\n\n1. "第一版。"\n`)

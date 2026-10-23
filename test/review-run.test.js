@@ -19,7 +19,7 @@ async function makeProject(specContent) {
 }
 
 test('规范链没有 include 声明时所有文件都视为命中', async () => {
-  const withSpec = await makeProject('1. 平铺直叙。\n')
+  const withSpec = await makeProject('# Rules\n1. 平铺直叙。\n')
   const withoutSpec = await makeProject(undefined)
   try {
     assert.equal(await includeDeclared(join(withSpec, 'a.md')), true)
@@ -32,7 +32,7 @@ test('规范链没有 include 声明时所有文件都视为命中', async () =>
 })
 
 test('规范链有 include 声明时按模式过滤', async () => {
-  const dir = await makeProject('---\ninclude:\n  - \'*.md\'\n---\n\n1. 平铺直叙。\n')
+  const dir = await makeProject('---\ninclude:\n  - \'*.md\'\n---\n\n# Rules\n\n1. 平铺直叙。\n')
   try {
     assert.equal(await includeDeclared(join(dir, 'a.md')), true)
     assert.equal(await includeDeclared(join(dir, 'a.js')), false)
@@ -61,7 +61,7 @@ test('命令把 --changed 的 HEAD 内容传给审查管线', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'humanize-review-command-'))
   try {
     await execFileAsync('git', ['init', '-q'], { cwd: dir })
-    await writeFile(join(dir, 'PROSE.md'), '1. 平铺直叙。\n')
+    await writeFile(join(dir, 'PROSE.md'), '# Rules\n1. 平铺直叙。\n')
     await writeFile(join(dir, 'doc.md'), '旧内容\n')
     await execFileAsync('git', ['add', '.'], { cwd: dir })
     await execFileAsync('git', [
@@ -109,7 +109,7 @@ test('命令把最近提交涉及的文件交给全文审查', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'humanize-review-recent-'))
   try {
     await execFileAsync('git', ['init', '-q'], { cwd: dir })
-    await writeFile(join(dir, 'PROSE.md'), '1. 平铺直叙。\n')
+    await writeFile(join(dir, 'PROSE.md'), '# Rules\n1. 平铺直叙。\n')
     await writeFile(join(dir, 'doc.md'), '旧内容\n')
     await execFileAsync('git', ['add', '.'], { cwd: dir })
     await execFileAsync('git', [

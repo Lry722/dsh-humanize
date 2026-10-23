@@ -101,7 +101,7 @@ test('shutdown 关门：新审查直接跳过，在途审查照常跑完', async
   setStorageRootResolver(() => storage)
   const project = join(storage, 'project')
   await mkdir(join(project, '.git'), { recursive: true })
-  await writeFile(join(project, 'PROSE.md'), '1. 平铺直叙。\n', 'utf8')
+  await writeFile(join(project, 'PROSE.md'), '# Rules\n1. 平铺直叙。\n', 'utf8')
   const target = join(project, 'doc.md')
   await writeFile(target, '写给人看的文档。\n', 'utf8')
 
@@ -134,7 +134,7 @@ test('shutdown 前进入待办槽的审查按丢弃结算', async () => {
   setStorageRootResolver(() => storage)
   const project = join(storage, 'project')
   await mkdir(join(project, '.git'), { recursive: true })
-  await writeFile(join(project, 'PROSE.md'), '1. 平铺直叙。\n', 'utf8')
+  await writeFile(join(project, 'PROSE.md'), '# Rules\n1. 平铺直叙。\n', 'utf8')
   const target = join(project, 'doc.md')
   await writeFile(target, '第一版。\n', 'utf8')
 
@@ -181,7 +181,7 @@ test('同一文件的待办按 agent 分开，后写入的 agent 不覆盖前一
   setStorageRootResolver(() => storage)
   const project = join(storage, 'project')
   await mkdir(join(project, '.git'), { recursive: true })
-  await writeFile(join(project, 'PROSE.md'), '1. 平铺直叙。\n', 'utf8')
+  await writeFile(join(project, 'PROSE.md'), '# Rules\n1. 平铺直叙。\n', 'utf8')
   const target = join(project, 'doc.md')
   await writeFile(target, '第一版。\n', 'utf8')
 
@@ -217,7 +217,7 @@ test('合并目标上的其他 agent 审查会被丢弃或中止', async () => {
   setStorageRootResolver(() => storage)
   const project = join(storage, 'project')
   await mkdir(join(project, '.git'), { recursive: true })
-  await writeFile(join(project, 'PROSE.md'), '1. 平铺直叙。\n', 'utf8')
+  await writeFile(join(project, 'PROSE.md'), '# Rules\n1. 平铺直叙。\n', 'utf8')
   const target = join(project, 'doc.md')
   await writeFile(target, '第一版。\n', 'utf8')
 
@@ -271,7 +271,7 @@ test('批注全部对不上规则编号时按失败处理，暂存批注保留',
   setStorageRootResolver(() => storage)
   const project = join(storage, 'project')
   await mkdir(join(project, '.git'), { recursive: true })
-  await writeFile(join(project, 'PROSE.md'), '1. 平铺直叙。\n', 'utf8')
+  await writeFile(join(project, 'PROSE.md'), '# Rules\n1. 平铺直叙。\n', 'utf8')
   const target = join(project, 'doc.md')
   await writeFile(target, '写给人看的文档。\n', 'utf8')
   await writeStaging(target, `# ${target}\n\n1. "写给人看的文档。"\n`)
@@ -303,7 +303,7 @@ test('部分批注对不上编号时保留有效批注，并记一条丢弃日�
   setStorageRootResolver(() => storage)
   const project = join(storage, 'project')
   await mkdir(join(project, '.git'), { recursive: true })
-  await writeFile(join(project, 'PROSE.md'), '1. 平铺直叙。\n', 'utf8')
+  await writeFile(join(project, 'PROSE.md'), '# Rules\n1. 平铺直叙。\n', 'utf8')
   const target = join(project, 'doc.md')
   await writeFile(target, '写给人看的文档。\n', 'utf8')
 
@@ -336,7 +336,7 @@ test('二进制文件跳过审查', async () => {
   setStorageRootResolver(() => storage)
   const project = join(storage, 'project')
   await mkdir(join(project, '.git'), { recursive: true })
-  await writeFile(join(project, 'PROSE.md'), '1. 平铺直叙。\n', 'utf8')
+  await writeFile(join(project, 'PROSE.md'), '# Rules\n1. 平铺直叙。\n', 'utf8')
   const target = join(project, 'image.png')
   await writeFile(target, Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00]))
 
@@ -363,7 +363,7 @@ test('写入审查共用 reviewConcurrency 上限', async () => {
   setStorageRootResolver(() => storage)
   const project = join(storage, 'project')
   await mkdir(join(project, '.git'), { recursive: true })
-  await writeFile(join(project, 'PROSE.md'), '1. 平铺直叙。\n', 'utf8')
+  await writeFile(join(project, 'PROSE.md'), '# Rules\n1. 平铺直叙。\n', 'utf8')
   const targets = []
   for (let index = 0; index < 3; index += 1) {
     const path = join(project, `doc${index}.md`)
@@ -410,7 +410,7 @@ test('等待并发闸门的审查可以中止', async () => {
   setStorageRootResolver(() => storage)
   const project = join(storage, 'project')
   await mkdir(join(project, '.git'), { recursive: true })
-  await writeFile(join(project, 'PROSE.md'), '1. 平铺直叙。\n', 'utf8')
+  await writeFile(join(project, 'PROSE.md'), '# Rules\n1. 平铺直叙。\n', 'utf8')
   const firstTarget = join(project, 'first.md')
   const secondTarget = join(project, 'second.md')
   await writeFile(firstTarget, '第一篇。\n', 'utf8')

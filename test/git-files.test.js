@@ -33,7 +33,7 @@ const paths = (targets) => targets.map((target) => target.filePath)
 test('增量模式收集修改和未跟踪文件，跳过未改动和忽略文件，并带上旧内容', async () => {
   const dir = await makeRepo()
   try {
-    await writeFile(join(dir, 'PROSE.md'), '1. 平铺直叙。\n')
+    await writeFile(join(dir, 'PROSE.md'), '# Rules\n1. 平铺直叙。\n')
     await writeFile(join(dir, '.gitignore'), 'ignored.md\n')
     await writeFile(join(dir, 'changed.md'), 'old\n')
     await writeFile(join(dir, 'staged.md'), 'old staged\n')
@@ -75,7 +75,7 @@ test('增量模式遵守 include 范围和命令路径', async () => {
   const dir = await makeRepo()
   try {
     await mkdir(join(dir, 'docs'))
-    await writeFile(join(dir, 'PROSE.md'), '---\ninclude:\n  - \'*.md\'\n---\n\n1. 平铺直叙。\n')
+    await writeFile(join(dir, 'PROSE.md'), '---\ninclude:\n  - \'*.md\'\n---\n\n# Rules\n\n1. 平铺直叙。\n')
     await writeFile(join(dir, 'docs', 'a.md'), 'old a\n')
     await writeFile(join(dir, 'docs', 'b.js'), 'old b\n')
     await writeFile(join(dir, 'other.md'), 'old other\n')
@@ -99,7 +99,7 @@ test('增量模式遵守 include 范围和命令路径', async () => {
 test('仓库还没有提交时，受管文件和未跟踪文件都按改动处理', async () => {
   const dir = await makeRepo()
   try {
-    await writeFile(join(dir, 'PROSE.md'), '1. 平铺直叙。\n')
+    await writeFile(join(dir, 'PROSE.md'), '# Rules\n1. 平铺直叙。\n')
     await writeFile(join(dir, 'staged.md'), 'staged\n')
     await execFileAsync('git', ['add', 'PROSE.md', 'staged.md'], { cwd: dir })
     await writeFile(join(dir, 'untracked.md'), 'untracked\n')
@@ -119,7 +119,7 @@ test('仓库还没有提交时，受管文件和未跟踪文件都按改动处�
 test('没有改动时增量模式返回空列表', async () => {
   const dir = await makeRepo()
   try {
-    await writeFile(join(dir, 'PROSE.md'), '1. 平铺直叙。\n')
+    await writeFile(join(dir, 'PROSE.md'), '# Rules\n1. 平铺直叙。\n')
     await writeFile(join(dir, 'a.md'), '正文\n')
     await commitAll(dir)
     assert.deepEqual(await collectTargets(dir, dir, { changed: true }), [])
@@ -131,7 +131,7 @@ test('没有改动时增量模式返回空列表', async () => {
 test('最近提交模式收集最近 N 个提交涉及的文件，并按全文审查', async () => {
   const dir = await makeRepo()
   try {
-    await writeFile(join(dir, 'PROSE.md'), '1. 平铺直叙。\n')
+    await writeFile(join(dir, 'PROSE.md'), '# Rules\n1. 平铺直叙。\n')
     await writeFile(join(dir, 'doc.md'), 'v1\n')
     await writeFile(join(dir, 'old.md'), 'old\n')
     await writeFile(join(dir, 'gone.md'), 'gone\n')
@@ -176,7 +176,7 @@ test('最近提交模式遵守 include 范围和命令路径', async () => {
   const dir = await makeRepo()
   try {
     await mkdir(join(dir, 'docs'))
-    await writeFile(join(dir, 'PROSE.md'), '---\ninclude:\n  - \'*.md\'\n---\n\n1. 平铺直叙。\n')
+    await writeFile(join(dir, 'PROSE.md'), '---\ninclude:\n  - \'*.md\'\n---\n\n# Rules\n\n1. 平铺直叙。\n')
     await writeFile(join(dir, 'docs', 'a.md'), 'old a\n')
     await writeFile(join(dir, 'docs', 'b.js'), 'old b\n')
     await writeFile(join(dir, 'other.md'), 'old other\n')
@@ -199,7 +199,7 @@ test('最近提交模式遵守 include 范围和命令路径', async () => {
 test('最近提交模式跳过工作区已经删除的文件', async () => {
   const dir = await makeRepo()
   try {
-    await writeFile(join(dir, 'PROSE.md'), '1. 平铺直叙。\n')
+    await writeFile(join(dir, 'PROSE.md'), '# Rules\n1. 平铺直叙。\n')
     await writeFile(join(dir, 'doc.md'), 'old\n')
     await commitAll(dir, 'one')
     await writeFile(join(dir, 'doc.md'), 'new\n')
@@ -218,7 +218,7 @@ test('最近提交模式跳过工作区已经删除的文件', async () => {
 test('仓库没有提交时最近提交模式报错', async () => {
   const dir = await makeRepo()
   try {
-    await writeFile(join(dir, 'PROSE.md'), '1. 平铺直叙。\n')
+    await writeFile(join(dir, 'PROSE.md'), '# Rules\n1. 平铺直叙。\n')
     await assert.rejects(collectRecentTargets(dir, dir, 1), /仓库还没有提交/)
     await assert.rejects(collectRecentTargets(dir, dir, 0), /正整数/)
   } finally {

@@ -8,7 +8,7 @@ import { loadSpecChain } from '../lib/specs.js'
 test('给了工作目录边界后在边界处停止向上查找', async () => {
   const root = await mkdtemp(join(tmpdir(), 'humanize-spec-boundary-'))
   try {
-    await writeFile(join(root, 'PROSE.md'), '1. parent\n', 'utf8')
+    await writeFile(join(root, 'PROSE.md'), '# Rules\n1. parent\n', 'utf8')
     await mkdir(join(root, 'sub'))
     const target = join(root, 'sub', 'a.md')
     await writeFile(target, 'x\n', 'utf8')
