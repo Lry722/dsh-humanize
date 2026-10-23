@@ -88,9 +88,9 @@ The front matter of `PROSE.md` can declare which files the spec covers with `inc
 ```markdown
 ---
 include:
-  - '*.md'
-  - 'docs/**/*.txt'
-  - '!drafts/'
+  - "*.md"
+  - "docs/**/*.txt"
+  - "!drafts/"
 ---
 ```
 
@@ -104,9 +104,9 @@ include:
 1. Write plainly.
 2. Avoid brackets in a sentence.
 
-# Terms
+# Explanation
 
-Abuse: unnecessary repetition of the same word or punctuation mark.
+Abuse: xxx
 ```
 
 Only numbered lines under `# Rules` take part in global rule numbering. Numbers in other sections stay as written. A file without a `# Rules` heading is still parsed as one rule list, so existing specs keep working.
