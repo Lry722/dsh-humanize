@@ -27,7 +27,7 @@ function makeHost(options = {}) {
     ctx: {
       tools: {
         register(definition) {
-          // 卸载期间只允许一次重挂，超过就说明重挂循环没被挡住。
+          // 卸载期间只允许一次重新注册，超过就说明重新注册循环没被挡住。
           if (cleaning && registrations.length >= 2) throw new Error('tools were rewrapped during teardown')
           registrations.push(definition)
           emit('tools/change')

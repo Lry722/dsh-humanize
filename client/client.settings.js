@@ -152,7 +152,7 @@ window.__ModuleLoader__.load({
     })
 
     /**
-     * 测试审查模型或合并子代理的模型能否正常调用，结果就近显示在按钮右侧。
+     * 测试审查模型或合并子代理的模型能否正常调用。
      */
     function ModelTest(props) {
       const { prefix, value, writable } = props
@@ -202,6 +202,7 @@ window.__ModuleLoader__.load({
           title: t('model.testHint'),
           onClick: run,
         }, testing ? t('model.testing') : t('model.test')),
+        // 测试结果就近显示在按钮右侧。
         statusText !== ''
           ? h('span', { style: testStatusStyle(state.status), 'aria-live': 'polite' }, statusText)
           : null,
@@ -239,7 +240,7 @@ window.__ModuleLoader__.load({
             paths.status === 'error' ? t('paths.unavailable') : t('paths.loading')),
         )
       }
-      // 每条路径旁边都配一个复制按钮。
+      // 复制按钮方便用户把路径粘贴到文件管理器里。
       const rows = [
         { label: t('paths.staging'), path: paths.staging },
         { label: t('paths.requests'), path: paths.requests },

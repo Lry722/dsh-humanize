@@ -4,7 +4,7 @@ import { createSemaphore } from '../lib/semaphore.js'
 
 const tick = () => new Promise((resolve) => { setImmediate(resolve) })
 
-test('并发闸门限制同时进入的调用数', async () => {
+test('信号量限制同时进行的获取操作数', async () => {
   const semaphore = createSemaphore(2)
   const releaseFirst = await semaphore.acquire()
   const releaseSecond = await semaphore.acquire()
@@ -23,7 +23,7 @@ test('并发闸门限制同时进入的调用数', async () => {
   await third
 })
 
-test('等待中的获取可以中止', async () => {
+test('等待中的获取操作可以中止', async () => {
   const semaphore = createSemaphore(1)
   const release = await semaphore.acquire()
   const controller = new AbortController()
@@ -34,7 +34,7 @@ test('等待中的获取可以中止', async () => {
   release()
 })
 
-test('上限调大后，新的获取能立即用到空位', async () => {
+test('上限调大后，新的获取操作能立即占用空出的名额', async () => {
   let limit = 1
   const semaphore = createSemaphore(() => limit)
   const releaseFirst = await semaphore.acquire()

@@ -41,7 +41,7 @@ test('规范链有 include 声明时按模式过滤', async () => {
   }
 })
 
-test('--changed 可以从路径前后摘出，路径里的空格保留', () => {
+test('--changed 可以从路径的前后位置挑出来，路径里的空格保留', () => {
   assert.deepEqual(splitReviewArgs('--changed docs/a b.md'), { changed: true, recent: undefined, pathInput: 'docs/a b.md' })
   assert.deepEqual(splitReviewArgs('docs/a b.md --changed'), { changed: true, recent: undefined, pathInput: 'docs/a b.md' })
   assert.deepEqual(splitReviewArgs('docs/a --changed b.md'), { changed: true, recent: undefined, pathInput: 'docs/a b.md' })
@@ -49,7 +49,7 @@ test('--changed 可以从路径前后摘出，路径里的空格保留', () => {
   assert.deepEqual(splitReviewArgs('docs/a b.md'), { changed: false, recent: undefined, pathInput: 'docs/a b.md' })
 })
 
-test('--recent 可以带在路径前后，非法数字报错', () => {
+test('--recent 可以从路径的前后位置挑出来，非法数字报错', () => {
   assert.deepEqual(splitReviewArgs('--recent 3 docs/a b.md'), { changed: false, recent: 3, pathInput: 'docs/a b.md' })
   assert.deepEqual(splitReviewArgs('docs/a b.md --recent=2'), { changed: false, recent: 2, pathInput: 'docs/a b.md' })
   assert.match(splitReviewArgs('--recent').error, /正整数/)

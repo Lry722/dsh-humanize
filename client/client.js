@@ -3,10 +3,9 @@
  *
  * 设置卡片提供审查模型、合并子代理的模型，以及两者各自的推理等级。
  * 进度条展示审查批次、单次合并和循环合并三种后台任务。
- *
- * 各 chunk 的 URL 版本号由本文件的元数据算出。改完 chunk 后跑
- * `npm run stamp:client` 更新下面的 `// chunks:` 标记。
  */
+// 各 chunk 的 URL 版本号由本文件的元数据算出。改完 chunk 后跑
+// `npm run stamp:client` 更新下面这一行。
 // chunks: b15a4534
 window.__ModuleLoader__.load({
   id: 'dsh-humanize',
@@ -37,7 +36,7 @@ window.__ModuleLoader__.load({
             .map(([locale, dict]) => ctx.locale.register(NS, locale, dict))
           return () => { for (const dispose of disposers) dispose() }
         }, 'dsh-humanize: locale')
-        // 进度条依赖 jobs 服务提供的任务清单流，挂在这个 inject 里。
+        // 进度条依赖 jobs 服务提供的任务清单流。
         ctx.inject(['jobs'], (jobCtx) => {
           const jobs = jobCtx.jobs
           jobCtx.slots.inject('conversation.input.dock', () => jobCtx.slots.register({

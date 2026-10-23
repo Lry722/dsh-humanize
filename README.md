@@ -65,9 +65,9 @@ Relative paths resolve against the process working directory. Changing the stora
 
 Review concurrency is shared across write review, batch review and re-review. A batch is also capped by the number of files it has to review. High concurrency can hit the model provider's rate limit.
 
-A call that hits a rate limit is recorded as failed and retried. A review that times out is aborted; that review ends as aborted and is not retried. Other failures wait longer before each retry; after the retry budget is spent, the review is marked failed. Write review and batch review share this retry behavior.
+A call that hits a rate limit is recorded as failed and retried. A review that times out ends as aborted and is not retried. Other failures wait longer before each retry. After the retry budget is spent, the review is marked failed. Write review and batch review share this retry behavior.
 
-When a batch review ends, it lists the files that still failed and why, up to three entries; the rest are counted only. If write reviews keep failing, a failed record appears in the task list and points at the review model configuration.
+When a batch review ends, it lists the files that still failed and why, up to three entries. The rest are counted only. If write reviews keep failing, a failed record appears in the task list and points at the review model configuration.
 
 You can also pass the same settings to the `dsh-humanize` entry in the profile's `cordis.patch.yml`:
 
@@ -100,9 +100,9 @@ Binary files such as images, archives, fonts and build output skip review. Detec
 
 When the model writes a file it must declare `human_facing`. Pass true for content meant for people, false for pure code or data. Writes marked true enter review; the rest are skipped. A programmatic call that omits the field is treated as false and logs a warning. Review looks only at the regions changed in this write.
 
-Reviews of the same file run serially. Writes from different sessions or subagents queue separately, and pending entries are kept per agent without overwriting each other. While a merge runs, the reviews of the agent that started it step aside. Reviews from other agents on the same target files also step aside.
+Reviews of the same file run serially. Writes from different sessions or subagents queue separately, and pending entries are kept per agent without overwriting each other. While a merge runs, the reviews of the agent that started it are aborted or discarded. Reviews from other agents on the same target files are treated the same way.
 
-Annotations are staged under `~/.dsh/humanize/annotations/`. The path mirrors the reviewed file. Annotations can be edited directly. Staging groups them by rule, and each rule heading carries its rule number as a hint; the next review matches rules by text. The storage location can be changed on the settings page.
+Annotations are staged under `~/.dsh/humanize/annotations/`. The path mirrors the reviewed file. Annotations can be edited directly. Staging groups them by rule, and each rule heading carries its rule number as a hint. The next review matches rules by text. The storage location can be changed on the settings page.
 
 Run `/humanize <path>` to merge annotations for a file or directory. With no path, it uses the current working directory.
 
@@ -126,19 +126,23 @@ If the plugin reloads during a loop, that run ends. Completed merges still clear
 
 `/humanize`, `/humanize-loop` and compaction-triggered merges all register background tasks. The loop progress bar shows the current round and the number of annotations in that round.
 
-`/humanize` and `/humanize-loop` tasks can be cancelled from the task list. Cancelling a loop takes effect before the next round; completed merges still clear their staged annotations. Compaction-triggered merges only report results and cannot be cancelled.
+`/humanize` and `/humanize-loop` tasks can be cancelled from the task list. Cancelling a loop takes effect before the next round. Completed merges still clear their staged annotations. Compaction-triggered merges only report results and cannot be cancelled.
 
-If the profile watches this plugin's directory with HMR, changing the plugin's own source triggers a plugin reload. Reload ends a running merge; run the command again to continue.
+If the profile watches this plugin's directory with HMR, changing the plugin's own source triggers a plugin reload. Reload ends a running merge. Run the command again to continue.
 
 Run `/humanize-review <path>` to dispatch a batch review. By default, it reviews every git-tracked file under the target.
 
-Run `/humanize-review --changed <path>` to review only files changed since HEAD. The flag can come before or after the path; omit the path to use the current working directory. Changed files include working-tree modifications, staged changes, and untracked files that git does not ignore. Deleted files are skipped. The full file is still sent, but annotations are limited to the changed regions; new files get a full review. When nothing changed, the task ends as completed and says so.
+Run `/humanize-review --changed <path>` to review only files changed since HEAD. The flag can come before or after the path. Omit the path to use the current working directory.
 
-Run `/humanize-review --recent N <path>` to re-review files touched by the last N commits. The commits only select the file set; review uses the current working-tree content and covers the whole file, not just the commit diff. If the repository has fewer than N commits, it falls back to all files at HEAD. Files missing from the working tree are skipped. `--recent` and `--changed` cannot be combined.
+Changed files include working-tree modifications, staged changes, and untracked files that git does not ignore. Deleted files are skipped.
 
-Review runs in the background as a task. The progress bar updates above the input box. The task list in the session header shows the same task. Review runs in a separate context; what it reads stays separate from the session.
+The full file is still sent, but annotations are limited to the changed regions. New files get a full review. When nothing changed, the task ends as completed and says so.
 
-The target must be inside a git repository whose status can be read. If either condition is missing, the task ends as failed with a reason. If there is nothing to review, the task ends as completed and says so. The default mode checks git-tracked files and the include patterns; the incremental mode checks changed files and the include patterns; the recent mode checks the files touched by the last N commits, their presence in the working tree, and the include patterns.
+Run `/humanize-review --recent N <path>` to re-review files touched by the last N commits. The commits only select the file set. Review uses the current working-tree content and covers the whole file, not just the commit diff. If the repository has fewer than N commits, it falls back to all files at HEAD. Files missing from the working tree are skipped. `--recent` and `--changed` cannot be combined.
+
+Review runs in the background as a task. The progress bar updates above the input box. The task list in the session header shows the same task. Review runs in a separate context. What it reads stays separate from the session.
+
+The target must be inside a git repository whose status can be read. If either condition is missing, the task ends as failed with a reason. If there is nothing to review, the task ends as completed and says so. The default mode checks git-tracked files and the include patterns. The incremental mode checks changed files and the include patterns. The recent mode checks the files touched by the last N commits, their presence in the working tree, and the include patterns.
 
 ## Prompts
 

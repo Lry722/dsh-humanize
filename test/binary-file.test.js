@@ -64,7 +64,7 @@ test('空文件识别为文本', async () => {
   }
 })
 
-test('读不到的文件按文本处理', async () => {
+test('读取失败的文件识别为文本', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'humanize-binary-missing-'))
   try {
     assert.equal(await isBinaryFile(join(dir, 'missing.md')), false)

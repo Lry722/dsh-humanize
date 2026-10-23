@@ -56,7 +56,7 @@ test('增量模式收集修改和未跟踪文件，跳过未改动和忽略文�
     assert.equal(targets.find((target) => target.filePath.endsWith('staged.md')).before, 'old staged\n')
     assert.equal(targets.find((target) => target.filePath.endsWith('new.md')).before, undefined)
 
-    // 全量模式仍然返回所有受管文件，并且不带旧内容。
+    // 全量模式返回所有受管文件。
     const all = await collectTargets(dir, dir)
     assert.deepEqual(paths(all).sort(), [
       join(dir, '.gitignore'),

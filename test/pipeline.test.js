@@ -11,10 +11,10 @@ import { createReviewPipeline } from '../lib/pipeline.js'
 import { setStorageRootResolver, stagingPathFor, writeStaging } from '../lib/staging.js'
 
 /**
- * 造一个假 ctx。审查管线只用到 ctx.get。
+ * 构造一个假的 ctx。审查管线只用到 ctx.get。
  */
 function fakeContext() {
-  // jobs 服务拿不到，告警走降级路径。
+  // jobs 服务缺失时，告警走降级路径。
   return { get: () => undefined, logger: () => ({ info() {}, warn() {} }) }
 }
 
@@ -352,7 +352,7 @@ test('二进制文件跳过审查', async () => {
     await pipeline.scheduleReview(fakeAgent(), target, undefined, ''),
     { kind: 'binary' },
   )
-  // 二进制文件直接按 binary 返回，审查请求数为 0。
+  // 二进制文件没有可审查的文本，跳过模型调用。
   assert.equal(calls, 0)
   await pipeline.shutdown()
   await rm(storage, { recursive: true, force: true })

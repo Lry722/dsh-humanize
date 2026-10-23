@@ -1,6 +1,6 @@
 /**
  * mergeAgentOptions 的取值顺序如下。插件配置优先，留空时跟随主会话最近
- * 一次请求使用的模型，推理等级单独覆盖。
+ * 一次请求使用的模型。推理等级单独覆盖。
  */
 import test from 'node:test'
 import assert from 'node:assert/strict'

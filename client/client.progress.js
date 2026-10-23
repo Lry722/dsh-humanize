@@ -23,8 +23,8 @@ window.__ModuleLoader__.load({
       )
       // 这三类任务分别是 /humanize-review 批次、/humanize 单次合并和 /humanize-loop 循环合并。
       const rows = (snapshot.rows[sessionId] ?? EMPTY_ROWS).filter((row) => row.kind === 'humanize' || row.kind === 'humanize-review' || row.kind === 'humanize-loop')
-      // 同一时刻只会有一条任务行在进行中。终态的任务行停留期间可能和新任务并存，
-      // 优先取进行中的那条，只剩终态的任务行时取列表里最新的一条。
+      // 同一时刻只会有一条任务行在进行中。终态的任务行停留期间可能和新任务并存。
+      // 取行时优先选进行中的那条。只剩终态的任务行时，取列表里最新的一条。
       return rows.find((row) => row.status === 'running' || row.status === 'stopping')
         ?? rows[rows.length - 1]
         ?? null
