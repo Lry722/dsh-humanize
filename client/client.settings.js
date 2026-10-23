@@ -20,10 +20,11 @@ window.__ModuleLoader__.load({
     // 插槽传入的翻译函数。插槽没提供时，直接用 key 当作文案显示。
     let t = (key) => key
     // 数值字段的默认值，需要和 lib/settings.js 的字段表手动对齐。
-    const FIELD_DEFAULTS = { reviewConcurrency: 3, reviewRetries: 1, loopMaxRounds: 3 }
+    const FIELD_DEFAULTS = { reviewConcurrency: 3, reviewRetries: 1, reviewDelaySeconds: 60, loopMaxRounds: 3 }
     const FIELD_LIMITS = {
       reviewConcurrency: { min: 1 },
       reviewRetries: { min: 0, max: 3 },
+      reviewDelaySeconds: { min: 0, max: 3600 },
       loopMaxRounds: { min: 1, max: 10 },
     }
 
@@ -554,6 +555,17 @@ window.__ModuleLoader__.load({
           set: (next) => set('reviewRetries', next),
           unset: () => unset('reviewRetries'),
           hint: t('settings.reviewRetriesHint'),
+        }),
+        h(NumberField, {
+          label: t('settings.reviewDelaySeconds'),
+          value: value.reviewDelaySeconds ?? FIELD_DEFAULTS.reviewDelaySeconds,
+          overridden: Object.prototype.hasOwnProperty.call(user, 'reviewDelaySeconds'),
+          writable,
+          min: FIELD_LIMITS.reviewDelaySeconds.min,
+          max: FIELD_LIMITS.reviewDelaySeconds.max,
+          set: (next) => set('reviewDelaySeconds', next),
+          unset: () => unset('reviewDelaySeconds'),
+          hint: t('settings.reviewDelaySecondsHint'),
         }),
         h(NumberField, {
           label: t('settings.loopMaxRounds'),

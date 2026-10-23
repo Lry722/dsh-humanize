@@ -477,3 +477,96 @@ test('等待并发闸门的审查可以中止', async () => {
     await rm(storage, { recursive: true, force: true })
   }
 })
+
+test('写入审查默认带等待间隔', async () => {
+  const config = { reviewProvider: 'p', reviewModel: 'm', reviewRetries: 0 }
+  const pipeline = createReviewPipeline(fakeContext(), config, { info() {}, warn() {} })
+  const target = '/tmp/humanize-delayed-default.md'
+  const review = pipeline.scheduleWriteReview(fakeAgent(), target, undefined, 'x\n')
+  assert.notEqual(pipeline.state.reviewQueues.get(target)?.delayTimer, null)
+  await pipeline.shutdown()
+  assert.deepEqual(await review, { kind: 'discarded' })
+  assert.equal(pipeline.state.reviewQueues.size, 0)
+})
+
+test('写入间隔可配置，连续写入会重新计时', async () => {
+  const storage = await mkdtemp(join(tmpdir(), 'humanize-pipeline-delay-config-'))
+  setStorageRootResolver(() => storage)
+  const project = join(storage, 'project')
+  await mkdir(join(project, '.git'), { recursive: true })
+  await writeFile(join(project, 'PROSE.md'), '# Rules\n1. 平铺直叙。\n', 'utf8')
+  const target = join(project, 'doc.md')
+  await writeFile(target, '第一版。\n', 'utf8')
+
+  let calls = 0
+  const ctx = {
+    ...fakeContext(),
+    llm: { stream: () => { calls += 1; return submitStream({ annotations: [] }) } },
+  }
+  const config = { reviewProvider: 'p', reviewModel: 'm', reviewRetries: 0, reviewDelaySeconds: 0.3 }
+  const pipeline = createReviewPipeline(ctx, config, { info() {}, warn() {} })
+  const agent = fakeAgent()
+  const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms) })
+
+  const first = pipeline.scheduleWriteReview(agent, target, undefined, '第一版。\n')
+  await sleep(180)
+  assert.equal(calls, 0)
+  await writeFile(target, '第二版。\n', 'utf8')
+  const second = pipeline.scheduleWriteReview(agent, target, '第一版。\n', '第二版。\n')
+  // 第二次写入把计时器推后，第一次写入的计时点已经失效。
+  await sleep(180)
+  assert.equal(calls, 0)
+  await waitFor(() => calls === 1)
+  // 两次写入合并成一次审查，两个等待方拿到同一个结果。
+  assert.equal((await first).kind, 'ok')
+  assert.equal((await second).kind, 'ok')
+  await pipeline.shutdown()
+  await rm(storage, { recursive: true, force: true })
+})
+
+test('合并或卸载会丢弃等待间隔中的写入审查', async () => {
+  const config = { reviewProvider: 'p', reviewModel: 'm', reviewRetries: 0, reviewDelaySeconds: 5 }
+  const blocked = createReviewPipeline(fakeContext(), config, { info() {}, warn() {} })
+  const blockedTarget = '/tmp/humanize-delayed-discard.md'
+  const discarded = blocked.scheduleWriteReview(fakeAgent(), blockedTarget, undefined, 'x\n')
+  blocked.discardReviews('agent-2', [blockedTarget])
+  assert.deepEqual(await discarded, { kind: 'discarded' })
+  assert.equal(blocked.state.reviewQueues.size, 0)
+  await blocked.shutdown()
+
+  const closing = createReviewPipeline(fakeContext(), config, { info() {}, warn() {} })
+  const closingTarget = '/tmp/humanize-delayed-shutdown.md'
+  const skipped = closing.scheduleWriteReview(fakeAgent(), closingTarget, undefined, 'x\n')
+  await closing.shutdown()
+  assert.deepEqual(await skipped, { kind: 'discarded' })
+  assert.equal(closing.state.reviewQueues.size, 0)
+})
+
+test('批次审查不等待写入间隔，间隔为 0 时写入审查立即执行', async () => {
+  const storage = await mkdtemp(join(tmpdir(), 'humanize-pipeline-delay-zero-'))
+  setStorageRootResolver(() => storage)
+  const project = join(storage, 'project')
+  await mkdir(join(project, '.git'), { recursive: true })
+  await writeFile(join(project, 'PROSE.md'), '# Rules\n1. 平铺直叙。\n', 'utf8')
+  const target = join(project, 'doc.md')
+  await writeFile(target, '写给人看的文档。\n', 'utf8')
+
+  let calls = 0
+  const ctx = {
+    ...fakeContext(),
+    llm: { stream: () => { calls += 1; return submitStream({ annotations: [] }) } },
+  }
+  const agent = fakeAgent()
+  // 批次审查不受写入间隔影响。
+  const batch = createReviewPipeline(ctx, { reviewProvider: 'p', reviewModel: 'm', reviewRetries: 0, reviewDelaySeconds: 60 }, { info() {}, warn() {} })
+  assert.equal((await batch.scheduleReview(agent, target, undefined, '写给人看的文档。\n')).kind, 'ok')
+  await batch.shutdown()
+  // 间隔设为 0 时写入审查立即执行。
+  const immediate = createReviewPipeline(ctx, { reviewProvider: 'p', reviewModel: 'm', reviewRetries: 0, reviewDelaySeconds: 0 }, { info() {}, warn() {} })
+  assert.equal((await immediate.scheduleWriteReview(agent, target, undefined, '写给人看的文档。\n')).kind, 'ok')
+  await tick()
+  assert.equal(immediate.state.reviewQueues.size, 0)
+  await immediate.shutdown()
+  assert.equal(calls, 2)
+  await rm(storage, { recursive: true, force: true })
+})
