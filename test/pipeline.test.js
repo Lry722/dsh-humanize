@@ -23,6 +23,17 @@ function fakeAgent(id = 'agent-1', sessionId = 'session-1') {
   return { id, session: { id: sessionId, header: {} } }
 }
 
+/** 管线配置。测试默认不等待审查间隔，需要时再覆盖。 */
+function fakeConfig(overrides = {}) {
+  return {
+    reviewProvider: 'p',
+    reviewModel: 'm',
+    reviewRetries: 0,
+    reviewIntervalSeconds: 0,
+    ...overrides,
+  }
+}
+
 /** 空的提交批注负载，审查通过后清掉暂存。 */
 const EMPTY_SUBMIT = JSON.stringify({ annotations: [] })
 
@@ -51,6 +62,9 @@ function gatedStream(gate) {
 
 /** 等一个微任务排空，让排队的审查走到流上。 */
 const tick = () => new Promise((resolve) => { setImmediate(resolve) })
+
+/** 等一段时间，用来观察倒计时内没有发起审查。 */
+const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms) })
 
 /** 等一个条件成立，超时后抛错。 */
 async function waitFor(check, timeoutMs = 3000) {
@@ -108,7 +122,7 @@ test('shutdown 关门：新审查直接跳过，在途审查照常跑完', async
   let release
   const gate = new Promise((resolve) => { release = resolve })
   const ctx = { ...fakeContext(), llm: { stream: () => gatedStream(gate) } }
-  const config = { reviewProvider: 'p', reviewModel: 'm', reviewRetries: 0 }
+  const config = fakeConfig()
   const pipeline = createReviewPipeline(ctx, config, { info() {}, warn() {} })
   const agent = fakeAgent()
 
@@ -145,7 +159,7 @@ test('shutdown 前进入待办槽的审查按丢弃结算', async () => {
     ...fakeContext(),
     llm: { stream: () => { calls += 1; return gatedStream(gate) } },
   }
-  const config = { reviewProvider: 'p', reviewModel: 'm', reviewRetries: 0 }
+  const config = fakeConfig()
   const pipeline = createReviewPipeline(ctx, config, { info() {}, warn() {} })
   const agent = fakeAgent()
 
@@ -166,7 +180,7 @@ test('shutdown 前进入待办槽的审查按丢弃结算', async () => {
 })
 
 test('合并锁覆盖的文件直接跳过审查', async () => {
-  const pipeline = createReviewPipeline(fakeContext(), { reviewProvider: 'p', reviewModel: 'm' }, { info() {}, warn() {} })
+  const pipeline = createReviewPipeline(fakeContext(), fakeConfig(), { info() {}, warn() {} })
   const target = '/tmp/humanize-locked-doc.md'
   pipeline.state.mergeRun = { agentId: 'agent-c', target: null, files: new Set([target]) }
   assert.deepEqual(
@@ -188,7 +202,7 @@ test('同一文件的待办按 agent 分开，后写入的 agent 不覆盖前一
   let release
   const gate = new Promise((resolve) => { release = resolve })
   const ctx = { ...fakeContext(), llm: { stream: () => gatedStream(gate) } }
-  const config = { reviewProvider: 'p', reviewModel: 'm', reviewRetries: 0 }
+  const config = fakeConfig()
   const pipeline = createReviewPipeline(ctx, config, { info() {}, warn() {} })
   const firstAgent = fakeAgent('agent-a', 'session-a')
   const secondAgent = fakeAgent('agent-b', 'session-b')
@@ -224,7 +238,7 @@ test('合并目标上的其他 agent 审查会被丢弃或中止', async () => {
   let release
   const gate = new Promise((resolve) => { release = resolve })
   const ctx = { ...fakeContext(), llm: { stream: () => gatedStream(gate) } }
-  const config = { reviewProvider: 'p', reviewModel: 'm', reviewRetries: 0 }
+  const config = fakeConfig()
   const pipeline = createReviewPipeline(ctx, config, { info() {}, warn() {} })
   const firstAgent = fakeAgent('agent-a', 'session-a')
   const secondAgent = fakeAgent('agent-b', 'session-b')
@@ -286,7 +300,7 @@ test('批注全部对不上规则编号时按失败处理，暂存批注保留',
       },
     },
   }
-  const config = { reviewProvider: 'p', reviewModel: 'm', reviewRetries: 0 }
+  const config = fakeConfig()
   const pipeline = createReviewPipeline(ctx, config, { info() {}, warn() {} })
 
   const outcome = await pipeline.scheduleReview(fakeAgent(), target, undefined, '写给人看的文档。\n')
@@ -321,7 +335,7 @@ test('部分批注对不上编号时保留有效批注，并记一条丢弃日�
       },
     },
   }
-  const config = { reviewProvider: 'p', reviewModel: 'm', reviewRetries: 0 }
+  const config = fakeConfig()
   const pipeline = createReviewPipeline(ctx, config, { info() {}, warn: (...args) => warnings.push(args) })
 
   const outcome = await pipeline.scheduleReview(fakeAgent(), target, undefined, '写给人看的文档。\n')
@@ -345,7 +359,7 @@ test('二进制文件跳过审查', async () => {
     ...fakeContext(),
     llm: { stream: () => { calls += 1; return submitStream({ annotations: [] }) } },
   }
-  const config = { reviewProvider: 'p', reviewModel: 'm', reviewRetries: 0 }
+  const config = fakeConfig()
   const pipeline = createReviewPipeline(ctx, config, { info() {}, warn() {} })
 
   assert.deepEqual(
@@ -374,7 +388,7 @@ test('写入审查共用 reviewConcurrency 上限', async () => {
 
   const held = heldStreams()
   const ctx = { ...fakeContext(), llm: { stream: held.stream } }
-  const config = { reviewProvider: 'p', reviewModel: 'm', reviewRetries: 0, reviewConcurrency: 2 }
+  const config = fakeConfig({ reviewConcurrency: 2 })
   const pipeline = createReviewPipeline(ctx, config, { info() {}, warn() {} })
   const agent = fakeAgent()
   const reviews = targets.map((target) => pipeline.scheduleReview(agent, target.path, undefined, target.content))
@@ -424,7 +438,7 @@ test('规范缺少 Rules 一级标题时直接失败，不重试也不调用模�
       },
     },
   }
-  const config = { reviewProvider: 'p', reviewModel: 'm', reviewRetries: 2 }
+  const config = fakeConfig({ reviewRetries: 2 })
   const pipeline = createReviewPipeline(ctx, config, { info() {}, warn() {} })
   try {
     const outcome = await pipeline.scheduleReview(fakeAgent(), target, undefined, '写给人看的文档。\n')
@@ -450,7 +464,7 @@ test('等待并发闸门的审查可以中止', async () => {
 
   const held = heldStreams()
   const ctx = { ...fakeContext(), llm: { stream: held.stream } }
-  const config = { reviewProvider: 'p', reviewModel: 'm', reviewRetries: 0, reviewConcurrency: 1 }
+  const config = fakeConfig({ reviewConcurrency: 1 })
   const pipeline = createReviewPipeline(ctx, config, { info() {}, warn() {} })
   const agent = fakeAgent()
   const controller = new AbortController()
@@ -478,19 +492,8 @@ test('等待并发闸门的审查可以中止', async () => {
   }
 })
 
-test('写入审查默认带等待间隔', async () => {
-  const config = { reviewProvider: 'p', reviewModel: 'm', reviewRetries: 0 }
-  const pipeline = createReviewPipeline(fakeContext(), config, { info() {}, warn() {} })
-  const target = '/tmp/humanize-delayed-default.md'
-  const review = pipeline.scheduleWriteReview(fakeAgent(), target, undefined, 'x\n')
-  assert.notEqual(pipeline.state.reviewQueues.get(target)?.delayTimer, null)
-  await pipeline.shutdown()
-  assert.deepEqual(await review, { kind: 'discarded' })
-  assert.equal(pipeline.state.reviewQueues.size, 0)
-})
-
-test('写入间隔可配置，连续写入会重新计时', async () => {
-  const storage = await mkdtemp(join(tmpdir(), 'humanize-pipeline-delay-config-'))
+test('首次写入立即审查，审查结束后才开始倒计时', async () => {
+  const storage = await mkdtemp(join(tmpdir(), 'humanize-pipeline-interval-first-'))
   setStorageRootResolver(() => storage)
   const project = join(storage, 'project')
   await mkdir(join(project, '.git'), { recursive: true })
@@ -503,70 +506,156 @@ test('写入间隔可配置，连续写入会重新计时', async () => {
     ...fakeContext(),
     llm: { stream: () => { calls += 1; return submitStream({ annotations: [] }) } },
   }
-  const config = { reviewProvider: 'p', reviewModel: 'm', reviewRetries: 0, reviewDelaySeconds: 0.3 }
+  // 配置里没有 reviewIntervalSeconds 时取缺省值 60 秒，但首次审查不等待。
+  const config = { reviewProvider: 'p', reviewModel: 'm', reviewRetries: 0 }
   const pipeline = createReviewPipeline(ctx, config, { info() {}, warn() {} })
-  const agent = fakeAgent()
-  const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms) })
-
-  const first = pipeline.scheduleWriteReview(agent, target, undefined, '第一版。\n')
-  await sleep(180)
-  assert.equal(calls, 0)
-  await writeFile(target, '第二版。\n', 'utf8')
-  const second = pipeline.scheduleWriteReview(agent, target, '第一版。\n', '第二版。\n')
-  // 第二次写入把计时器推后，第一次写入的计时点已经失效。
-  await sleep(180)
-  assert.equal(calls, 0)
-  await waitFor(() => calls === 1)
-  // 两次写入合并成一次审查，两个等待方拿到同一个结果。
-  assert.equal((await first).kind, 'ok')
-  assert.equal((await second).kind, 'ok')
+  const first = pipeline.scheduleWriteReview(fakeAgent(), target, undefined, '第一版。\n')
+  const outcome = await Promise.race([first, sleep(1000).then(() => ({ kind: 'timeout' }))])
+  assert.equal(outcome.kind, 'ok')
+  assert.equal(calls, 1)
+  // 审查结束后才开始倒计时。
+  await waitFor(() => Boolean(pipeline.state.reviewQueues.get(target)?.cooldownTimer))
   await pipeline.shutdown()
+  assert.equal(pipeline.state.reviewQueues.size, 0)
   await rm(storage, { recursive: true, force: true })
 })
 
-test('合并或卸载会丢弃等待间隔中的写入审查', async () => {
-  const config = { reviewProvider: 'p', reviewModel: 'm', reviewRetries: 0, reviewDelaySeconds: 5 }
-  const blocked = createReviewPipeline(fakeContext(), config, { info() {}, warn() {} })
-  const blockedTarget = '/tmp/humanize-delayed-discard.md'
-  const discarded = blocked.scheduleWriteReview(fakeAgent(), blockedTarget, undefined, 'x\n')
-  blocked.discardReviews('agent-2', [blockedTarget])
-  assert.deepEqual(await discarded, { kind: 'discarded' })
-  assert.equal(blocked.state.reviewQueues.size, 0)
-  await blocked.shutdown()
-
-  const closing = createReviewPipeline(fakeContext(), config, { info() {}, warn() {} })
-  const closingTarget = '/tmp/humanize-delayed-shutdown.md'
-  const skipped = closing.scheduleWriteReview(fakeAgent(), closingTarget, undefined, 'x\n')
-  await closing.shutdown()
-  assert.deepEqual(await skipped, { kind: 'discarded' })
-  assert.equal(closing.state.reviewQueues.size, 0)
-})
-
-test('批次审查不等待写入间隔，间隔为 0 时写入审查立即执行', async () => {
-  const storage = await mkdtemp(join(tmpdir(), 'humanize-pipeline-delay-zero-'))
+test('审查结束后开始倒计时，间隔内的写入合并到下一次审查', async () => {
+  const storage = await mkdtemp(join(tmpdir(), 'humanize-pipeline-interval-'))
   setStorageRootResolver(() => storage)
   const project = join(storage, 'project')
   await mkdir(join(project, '.git'), { recursive: true })
   await writeFile(join(project, 'PROSE.md'), '# Rules\n1. 平铺直叙。\n', 'utf8')
   const target = join(project, 'doc.md')
-  await writeFile(target, '写给人看的文档。\n', 'utf8')
+  await writeFile(target, '第一版。\n', 'utf8')
 
   let calls = 0
   const ctx = {
     ...fakeContext(),
     llm: { stream: () => { calls += 1; return submitStream({ annotations: [] }) } },
   }
+  const pipeline = createReviewPipeline(ctx, fakeConfig({ reviewIntervalSeconds: 0.3 }), { info() {}, warn() {} })
   const agent = fakeAgent()
-  // 批次审查不受写入间隔影响。
-  const batch = createReviewPipeline(ctx, { reviewProvider: 'p', reviewModel: 'm', reviewRetries: 0, reviewDelaySeconds: 60 }, { info() {}, warn() {} })
-  assert.equal((await batch.scheduleReview(agent, target, undefined, '写给人看的文档。\n')).kind, 'ok')
-  await batch.shutdown()
-  // 间隔设为 0 时写入审查立即执行。
-  const immediate = createReviewPipeline(ctx, { reviewProvider: 'p', reviewModel: 'm', reviewRetries: 0, reviewDelaySeconds: 0 }, { info() {}, warn() {} })
-  assert.equal((await immediate.scheduleWriteReview(agent, target, undefined, '写给人看的文档。\n')).kind, 'ok')
-  await tick()
-  assert.equal(immediate.state.reviewQueues.size, 0)
-  await immediate.shutdown()
+
+  const first = pipeline.scheduleWriteReview(agent, target, undefined, '第一版。\n')
+  assert.equal((await first).kind, 'ok')
+  assert.equal(calls, 1)
+  await waitFor(() => Boolean(pipeline.state.reviewQueues.get(target)?.cooldownTimer))
+
+  await writeFile(target, '第二版。\n', 'utf8')
+  const second = pipeline.scheduleWriteReview(agent, target, '第一版。\n', '第二版。\n')
+  await writeFile(target, '第三版。\n', 'utf8')
+  const third = pipeline.scheduleWriteReview(agent, target, '第二版。\n', '第三版。\n')
+  await sleep(120)
+  // 倒计时内只积累待办，不发起新的审查。
+  assert.equal(calls, 1)
+  await waitFor(() => calls === 2)
+  // 两次写入合并成一次审查，两个等待方拿到同一个结果。
+  assert.equal((await second).kind, 'ok')
+  assert.equal((await third).kind, 'ok')
+  // 第二次审查结束后重新开始倒计时。
+  await waitFor(() => Boolean(pipeline.state.reviewQueues.get(target)?.cooldownTimer))
+  await pipeline.shutdown()
+  await rm(storage, { recursive: true, force: true })
+})
+
+test('批次审查不受间隔限制，结束后重新倒计时', async () => {
+  const storage = await mkdtemp(join(tmpdir(), 'humanize-pipeline-interval-batch-'))
+  setStorageRootResolver(() => storage)
+  const project = join(storage, 'project')
+  await mkdir(join(project, '.git'), { recursive: true })
+  await writeFile(join(project, 'PROSE.md'), '# Rules\n1. 平铺直叙。\n', 'utf8')
+  const target = join(project, 'doc.md')
+  await writeFile(target, '第一版。\n', 'utf8')
+
+  let calls = 0
+  const ctx = {
+    ...fakeContext(),
+    llm: { stream: () => { calls += 1; return submitStream({ annotations: [] }) } },
+  }
+  const pipeline = createReviewPipeline(ctx, fakeConfig({ reviewIntervalSeconds: 5 }), { info() {}, warn() {} })
+  const agent = fakeAgent()
+
+  const first = pipeline.scheduleWriteReview(agent, target, undefined, '第一版。\n')
+  assert.equal((await first).kind, 'ok')
+  await waitFor(() => Boolean(pipeline.state.reviewQueues.get(target)?.cooldownTimer))
+  await writeFile(target, '第二版。\n', 'utf8')
+  // 批次审查或合并复审直接执行，不等倒计时。
+  const manual = pipeline.scheduleReview(agent, target, '第一版。\n', '第二版。\n')
+  const outcome = await Promise.race([manual, sleep(1000).then(() => ({ kind: 'timeout' }))])
+  assert.equal(outcome.kind, 'ok')
   assert.equal(calls, 2)
+  // 立即审查结束后同样重新开始倒计时。
+  await waitFor(() => Boolean(pipeline.state.reviewQueues.get(target)?.cooldownTimer))
+  await pipeline.shutdown()
+  await rm(storage, { recursive: true, force: true })
+})
+
+test('间隔为 0 时写入审查不等待', async () => {
+  const storage = await mkdtemp(join(tmpdir(), 'humanize-pipeline-interval-zero-'))
+  setStorageRootResolver(() => storage)
+  const project = join(storage, 'project')
+  await mkdir(join(project, '.git'), { recursive: true })
+  await writeFile(join(project, 'PROSE.md'), '# Rules\n1. 平铺直叙。\n', 'utf8')
+  const target = join(project, 'doc.md')
+  await writeFile(target, '第一版。\n', 'utf8')
+
+  let calls = 0
+  const ctx = {
+    ...fakeContext(),
+    llm: { stream: () => { calls += 1; return submitStream({ annotations: [] }) } },
+  }
+  const pipeline = createReviewPipeline(ctx, fakeConfig(), { info() {}, warn() {} })
+  const agent = fakeAgent()
+
+  assert.equal((await pipeline.scheduleWriteReview(agent, target, undefined, '第一版。\n')).kind, 'ok')
+  await writeFile(target, '第二版。\n', 'utf8')
+  assert.equal((await pipeline.scheduleWriteReview(agent, target, '第一版。\n', '第二版。\n')).kind, 'ok')
+  assert.equal(calls, 2)
+  await tick()
+  assert.equal(pipeline.state.reviewQueues.size, 0)
+  await pipeline.shutdown()
+  await rm(storage, { recursive: true, force: true })
+})
+
+test('合并或卸载会丢弃倒计时中的写入审查', async () => {
+  const storage = await mkdtemp(join(tmpdir(), 'humanize-pipeline-interval-discard-'))
+  setStorageRootResolver(() => storage)
+  const project = join(storage, 'project')
+  await mkdir(join(project, '.git'), { recursive: true })
+  await writeFile(join(project, 'PROSE.md'), '# Rules\n1. 平铺直叙。\n', 'utf8')
+  const firstTarget = join(project, 'first.md')
+  const secondTarget = join(project, 'second.md')
+  await writeFile(firstTarget, '第一篇。\n', 'utf8')
+  await writeFile(secondTarget, '第二篇。\n', 'utf8')
+
+  let calls = 0
+  const ctx = {
+    ...fakeContext(),
+    llm: { stream: () => { calls += 1; return submitStream({ annotations: [] }) } },
+  }
+  const pipeline = createReviewPipeline(ctx, fakeConfig({ reviewIntervalSeconds: 5 }), { info() {}, warn() {} })
+  const agent = fakeAgent()
+
+  const first = pipeline.scheduleWriteReview(agent, firstTarget, undefined, '第一篇。\n')
+  const second = pipeline.scheduleWriteReview(agent, secondTarget, undefined, '第二篇。\n')
+  assert.deepEqual((await Promise.all([first, second])).map((item) => item.kind), ['ok', 'ok'])
+  assert.equal(calls, 2)
+  await waitFor(() => Boolean(pipeline.state.reviewQueues.get(firstTarget)?.cooldownTimer)
+    && Boolean(pipeline.state.reviewQueues.get(secondTarget)?.cooldownTimer))
+
+  await writeFile(firstTarget, '第一篇改。\n', 'utf8')
+  const discarded = pipeline.scheduleWriteReview(agent, firstTarget, '第一篇。\n', '第一篇改。\n')
+  await writeFile(secondTarget, '第二篇改。\n', 'utf8')
+  const skipped = pipeline.scheduleWriteReview(agent, secondTarget, '第二篇。\n', '第二篇改。\n')
+
+  // 合并开始时丢弃倒计时里的待办，并取消计时器。
+  pipeline.discardReviews('agent-2', [firstTarget])
+  assert.deepEqual(await discarded, { kind: 'discarded' })
+  assert.equal(pipeline.state.reviewQueues.has(firstTarget), false)
+  // 卸载时丢弃另一条倒计时里的待办。
+  await pipeline.shutdown()
+  assert.deepEqual(await skipped, { kind: 'discarded' })
+  assert.equal(pipeline.state.reviewQueues.size, 0)
   await rm(storage, { recursive: true, force: true })
 })

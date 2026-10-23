@@ -53,7 +53,7 @@ Open the dsh-humanize row in the Plugins list and edit its configuration. The bo
 - `mergeReasoningEffort`: reasoning effort for the merge subagent, picked from the efforts that model publishes. Defaults to the reasoning effort the main session is using.
 - `reviewConcurrency`: maximum number of concurrent review calls, shared across write review, batch review and re-review. Minimum 1, default 3.
 - `reviewRetries`: number of retries after a failure. Minimum 0, maximum 3, default 1.
-- `reviewDelaySeconds`: how long a write review waits after the last write before starting. Each new write restarts the wait. Minimum 0, maximum 3600, default 60. Set 0 to review immediately.
+- `reviewIntervalSeconds`: minimum time between reviews, counted from the end of the previous review. Writes during the interval are reviewed together when it ends. Minimum 0, maximum 3600, default 60. Set 0 to review without waiting.
 - `loopMaxRounds`: maximum rounds for loop merge. Minimum 1, maximum 10, default 3.
 - `mergeOnCompaction`: whether to merge all staged annotations in the project when context compaction ends. Default true. When off, merges only run on `/humanize` or `/humanize-loop`.
 - `storageDir`: where staged annotations are stored. Leave empty for the default `~/.dsh/humanize`.
@@ -114,9 +114,9 @@ Only numbered lines under `# Rules` take part in global rule numbering. Numbers 
 
 Binary files such as images, archives, fonts and build output skip review. Detection samples the start of the file; write review and batch review both use it. A batch review reports how many files it skipped.
 
-When the model writes a file it must declare `human_facing`. Pass true for content meant for people, false for pure code or data. Writes marked true enter review; the rest are skipped. A programmatic call that omits the field is treated as false and logs a warning. A write review waits one minute by default before starting, and each new write restarts the wait so writes during the interval join the same review. Review looks only at the regions changed in this write.
+When the model writes a file it must declare `human_facing`. Pass true for content meant for people, false for pure code or data. Writes marked true enter review; the rest are skipped. A programmatic call that omits the field is treated as false and logs a warning. After each review, the next write review waits one minute by default; writes during the interval join the next review. Review looks only at the regions changed in this write.
 
-Reviews of the same file run serially. Writes from different sessions or subagents queue separately, and pending entries are kept per agent without overwriting each other. While a merge runs, the reviews of the agent that started it are aborted or discarded. Reviews from other agents on the same target files are treated the same way. Batch reviews and merge re-reviews run immediately without waiting for the write delay.
+Reviews of the same file run serially. Writes from different sessions or subagents queue separately, and pending entries are kept per agent without overwriting each other. While a merge runs, the reviews of the agent that started it are aborted or discarded. Reviews from other agents on the same target files are treated the same way. Batch reviews and merge re-reviews are not subject to the interval and run immediately.
 
 Annotations are staged under `~/.dsh/humanize/annotations/`. The path mirrors the reviewed file. Annotations can be edited directly. Staging groups them by rule, and each rule heading carries its rule number as a hint. Staging content does not include the file name. The next review matches rules by text. The storage location can be changed on the settings page.
 
