@@ -437,7 +437,7 @@ test('规范缺少 Rules 一级标题时直接失败，不重试也不调用模�
   }
 })
 
-test('审查请求不带文件名和规范来源路径', async () => {
+test('审查请求不带被审查文件名，保留规范来源路径', async () => {
   const storage = await mkdtemp(join(tmpdir(), 'humanize-pipeline-names-'))
   setStorageRootResolver(() => storage)
   const project = join(storage, 'project')
@@ -464,7 +464,7 @@ test('审查请求不带文件名和规范来源路径', async () => {
     const outcome = await pipeline.scheduleReview(fakeAgent(), target, undefined, content)
     assert.equal(outcome.kind, 'ok')
     const prompt = seen.messages[0].content[0].text
-    assert.doesNotMatch(prompt, /PROSE\.md/)
+    assert.ok(prompt.includes(`Spec source: ${join(project, 'PROSE.md')}`))
     assert.doesNotMatch(prompt, /doc\.md/)
     assert.match(prompt, /## Existing annotations[\s\S]*1\. "写给人看的文档。"/)
   } finally {

@@ -84,16 +84,11 @@ test('declaresInclude 识别链里的声明，未声明时匹配器对所有文�
   assert.equal(match('/proj/a.md'), false)
 })
 
-test('审查渲染不带规范来源路径，合并渲染保留来源路径', () => {
+test('渲染文本标出规范来源路径', () => {
   const chain = [{ path: '/proj/PROSE.md', content: '# Rules\n1. one' }]
-  const withSources = buildSpecRules(chain)
-  assert.ok(withSources.text.includes('Spec source: /proj/PROSE.md'))
-  assert.ok(renderSpecChain(chain).includes('Spec source: /proj/PROSE.md'))
-
-  const withoutSources = buildSpecRules(chain, { includeSources: false })
-  assert.doesNotMatch(withoutSources.text, /Spec source:/)
-  assert.doesNotMatch(withoutSources.text, /\/proj\/PROSE\.md/)
-  assert.deepEqual(withoutSources.rules, withSources.rules)
+  const { text } = buildSpecRules(chain)
+  assert.ok(text.includes('Spec source: /proj/PROSE.md'))
+  assert.equal(renderSpecChain(chain), text)
 })
 
 test('规范内容里的分段标记被外层围栏包住', () => {
