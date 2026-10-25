@@ -4,7 +4,7 @@ import { countAnnotations, normalizeAnnotations, parseAnnotations, renderStaging
 
 const rules = new Map([[1, 'rule one'], [2, 'rule two']])
 
-test('同一份规范快照把编号还原成条文，多行字段压成一行', () => {
+test('编号只用于查找条文，多行字段压成一行', () => {
   const { annotations, dropped } = normalizeAnnotations({
     annotations: [
       { rule: 1, quote: 'a\nb', problem: 'p\nq', suggestion: 's\n t' },
@@ -12,8 +12,8 @@ test('同一份规范快照把编号还原成条文，多行字段压成一行',
     ],
   }, rules)
   assert.deepEqual(annotations, [
-    { rule: 1, ruleText: 'rule one', quote: 'a b', problem: 'p q', suggestion: 's t' },
-    { rule: 2, ruleText: 'rule two', quote: 'q2', problem: 'p2', suggestion: 's2' },
+    { ruleText: 'rule one', quote: 'a b', problem: 'p q', suggestion: 's t' },
+    { ruleText: 'rule two', quote: 'q2', problem: 'p2', suggestion: 's2' },
   ])
   assert.equal(dropped, 0)
 })
@@ -48,26 +48,27 @@ test('解析整段文本时只取中间的 JSON', () => {
   assert.equal(dropped, 0)
 })
 
-test('渲染的编号行能被统计，批注里的换行不会破坏格式', () => {
+test('暂存标题只写规则条文，批注里的换行不会破坏格式', () => {
   const rendered = renderStaging([
-    { rule: 1, ruleText: 'rule one', quote: 'a\n2. injected', problem: 'p\n3. also', suggestion: 's' },
-    { rule: 2, ruleText: 'rule two', quote: 'q2', problem: '', suggestion: '' },
+    { ruleText: 'rule one', quote: 'a\n2. injected', problem: 'p\n3. also', suggestion: 's' },
+    { ruleText: 'rule two', quote: 'q2', problem: '', suggestion: '' },
   ])
   assert.equal(countAnnotations(rendered), 2)
-  assert.match(rendered, /## Rule 1: rule one/)
-  assert.match(rendered, /## Rule 2: rule two/)
+  assert.match(rendered, /^## rule one$/m)
+  assert.match(rendered, /^## rule two$/m)
+  assert.doesNotMatch(rendered, /## Rule \d/)
   assert.match(rendered, /1\. "a 2\. injected"/)
   assert.match(rendered, /Problem: p 3\. also/)
   assert.doesNotMatch(rendered, /\n2\. injected/)
   assert.equal(countAnnotations('# 没有批注\n'), 0)
 })
 
-test('规则条文相同的批注按编号分开分组', () => {
+test('规则条文相同的批注合并成一组', () => {
   const rendered = renderStaging([
-    { rule: 1, ruleText: '同一个条文', quote: 'a', problem: '', suggestion: '' },
-    { rule: 2, ruleText: '同一个条文', quote: 'b', problem: '', suggestion: '' },
+    { ruleText: '同一个条文', quote: 'a', problem: '', suggestion: '' },
+    { ruleText: '同一个条文', quote: 'b', problem: '', suggestion: '' },
   ])
-  assert.match(rendered, /## Rule 1: 同一个条文/)
-  assert.match(rendered, /## Rule 2: 同一个条文/)
+  assert.equal(rendered.match(/^## 同一个条文$/gm)?.length, 1)
+  assert.match(rendered, /1\. "a"[\s\S]*2\. "b"/)
   assert.equal(countAnnotations(rendered), 2)
 })
