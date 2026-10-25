@@ -21,6 +21,7 @@ review:
 6. 相似的概念和动作应当用相同的术语表述，提高一致性，降低理解负担。
 7. 适当口语化，严禁为了追求简洁而使用过于简短的词汇。
 8. 英文俚语应当翻译地道，避免翻译腔，例如强行直译。如果很难翻译，就保留英文原文。
+9. 对于过程性描述，应当将其自然融入整体。不要和废弃的内容做对比，只保留现状。
 
 # 术语
 
@@ -33,18 +34,11 @@ review:
 | batch review | 批次审查 | 一次覆盖多个文件的审查 |
 | review batch | 审查批次 | 批次审查对应的后台任务 |
 | re-review | 复审 | 合并后对刚改过的文件再跑的一次审查 |
-| merge | 合并 | 把暂存批注应用到文件 |
-| loop merge | 循环合并 | `/humanize-loop` 的合并与复审循环 |
+| merge | 合并 | 把暂存批注应用到文件并触发复审 |
+| loop merge | 循环合并 | 进行多轮合并 |
 | annotation | 批注 | 一条审查意见 |
 | staged annotation | 暂存批注 | 尚未合并的批注 |
 | staging file | 暂存文件 | 按文件保存批注的 markdown 文件 |
 | spec | 规范 | 规范文件提供的行文规则 |
 | spec chain | 规范链 | 当前文件最终适用的有序规范集合 |
-| human-facing | 面向人类 | 面向人类阅读的内容 |
-| subagent | 子代理 | 插件派发的独立 agent |
 | changed region | 改动区段 | 本次改动覆盖的文件区段 |
-| incremental mode | 增量模式 | 只审查改动文件 |
-| recent commits mode | 最近提交模式 | 审查最近 N 个提交涉及的文件 |
-| compaction | 压缩 | 上下文压缩 |
-
-命令、字段名和文件名保留英文，例如 `/humanize`、`include`、`review`、`priority`、`inherit`、`human_facing`、`PROSE.md`。
