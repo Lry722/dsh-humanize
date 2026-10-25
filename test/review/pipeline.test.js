@@ -8,7 +8,7 @@ import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createReviewPipeline } from '../../lib/review/pipeline.js'
-import { historyRoot, setStorageRootResolver, stagingPathFor, writeStaging } from '../../lib/shared/staging.js'
+import { historyRoot, requestRoot, setRequestRootResolver, setStorageRootResolver, stagingPathFor, writeStaging } from '../../lib/shared/staging.js'
 import { sleep, tick, waitFor } from '../helpers.js'
 
 /**
@@ -334,6 +334,8 @@ test('部分批注对不上编号时保留有效批注，并记一条丢弃日�
 test('空批注清除当前暂存时保留审查前的版本', async () => {
   const storage = await mkdtemp(join(tmpdir(), 'humanize-pipeline-history-'))
   setStorageRootResolver(() => storage)
+  const previousRequestRoot = requestRoot()
+  setRequestRootResolver(() => join(storage, 'requests'))
   const project = join(storage, 'project')
   await mkdir(join(project, '.git'), { recursive: true })
   await writeFile(join(project, 'PROSE.md'), '# Rules\n1. 平铺直叙。\n', 'utf8')
@@ -359,6 +361,7 @@ test('空批注清除当前暂存时保留审查前的版本', async () => {
   } finally {
     await pipeline.shutdown()
     setStorageRootResolver(() => '')
+    setRequestRootResolver(() => previousRequestRoot)
     await rm(storage, { recursive: true, force: true })
   }
 })

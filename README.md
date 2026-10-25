@@ -56,7 +56,7 @@ Open the dsh-humanize row in the Plugins list and edit its configuration. The bo
 - `reviewIntervalSeconds`: minimum time between reviews, counted from the end of the previous review. Writes during the interval are reviewed together when it ends. Minimum 0, maximum 3600, default 60. Set 0 to review without waiting.
 - `loopMaxRounds`: maximum rounds for loop merge. Minimum 1, maximum 10, default 3.
 - `mergeOnCompaction`: whether to merge all staged annotations in the project when context compaction ends. Default true. When off, merges only run on `/humanize` or `/humanize-loop`.
-- `storageDir`: where staged annotations and their history are stored. Leave empty for the default `~/.dsh/humanize`.
+- `storageDir`: where staged annotations are stored. Leave empty for the default `~/.dsh/humanize`.
 
 Each of the review and merge model sections has a test button. It sends a minimal request to confirm the provider, model and reasoning effort respond. An empty model selection follows the session model for review. The test button requires both fields to be set.
 
@@ -151,7 +151,7 @@ Reviews of the same file run serially. Writes from different sessions or subagen
 
 Annotations are staged under `~/.dsh/humanize/annotations/`. The path mirrors the reviewed file. Annotations can be edited directly. Staging groups them by rule, and each rule heading carries its rule number as a hint. Staging content omits the file name. The next review matches rules by text. The storage location can be changed on the settings page.
 
-Before overwriting or removing a staging file, the plugin archives its previous contents under `~/.dsh/humanize/history/`. History paths also mirror the reviewed file, and each filename records the archive time and operation. Review clears, merge clears, and orphan cleanup use distinct labels. History is diagnostic only, is not collected for merging, and currently has no automatic cleanup.
+Before overwriting or removing a staging file, the plugin appends its current contents to `history/`, beside the review request records in the system temp directory. The exact path appears on the settings page. History paths mirror the reviewed file. Every operation adds a file instead of replacing older snapshots, and each filename records the archive time and operation. Review clears, merge clears, and orphan cleanup use distinct labels. History is diagnostic only and is not collected for merging. The plugin does not delete history itself; the system may clean the temp directory according to its own policy.
 
 Run `/humanize <path>` to merge annotations for a file or directory. With no path, it uses the current working directory.
 

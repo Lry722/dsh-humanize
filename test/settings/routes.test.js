@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { humanizeFields, humanizePaths } from '../../lib/settings/routes.js'
-import { setRequestRootResolver, setStorageRootResolver } from '../../lib/shared/staging.js'
+import { requestRoot, setRequestRootResolver, setStorageRootResolver } from '../../lib/shared/staging.js'
 
 test('字段元数据来自设置字段表', () => {
   const fields = humanizeFields()
@@ -21,15 +21,17 @@ test('字段元数据可以直接序列化成 JSON', () => {
 })
 
 test('保存位置按当前设置返回真实路径', () => {
+  const previousRequestRoot = requestRoot()
   setStorageRootResolver(() => '~/humanize-paths-test')
-  setRequestRootResolver(() => join(tmpdir(), 'humanize-paths-requests'))
+  setRequestRootResolver(() => join(tmpdir(), 'humanize-paths-root', 'requests'))
   try {
     assert.deepEqual(humanizePaths(), {
       staging: join(homedir(), 'humanize-paths-test', 'annotations'),
-      history: join(homedir(), 'humanize-paths-test', 'history'),
-      requests: join(tmpdir(), 'humanize-paths-requests'),
+      history: join(tmpdir(), 'humanize-paths-root', 'history'),
+      requests: join(tmpdir(), 'humanize-paths-root', 'requests'),
     })
   } finally {
     setStorageRootResolver(() => '')
+    setRequestRootResolver(() => previousRequestRoot)
   }
 })
