@@ -5,7 +5,7 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
-import { includeDeclared } from '../../lib/review/git-files.js'
+import { reviewAllowed } from '../../lib/review/git-files.js'
 import { registerReviewCommand, splitReviewArgs } from '../../lib/review/command.js'
 import { waitFor } from '../helpers.js'
 
@@ -13,30 +13,30 @@ const execFileAsync = promisify(execFile)
 
 async function makeProject(specContent) {
   const dir = await mkdtemp(join(tmpdir(), 'humanize-review-run-'))
-  // 规范链查找停在 .git 这一层，只读到本项目的 PROSE.md。
+  // 目录规范查找停在 .git 这一层，只读到本项目的 PROSE.md。
   await mkdir(join(dir, '.git'))
   if (specContent !== undefined) await writeFile(join(dir, 'PROSE.md'), specContent, 'utf8')
   return dir
 }
 
-test('规范链没有 include 声明时所有文件都视为命中', async () => {
+test('没有 review 声明时所有文件都允许进入审查', async () => {
   const withSpec = await makeProject('# Rules\n1. 平铺直叙。\n')
   const withoutSpec = await makeProject(undefined)
   try {
-    assert.equal(await includeDeclared(join(withSpec, 'a.md')), true)
-    assert.equal(await includeDeclared(join(withSpec, 'docs', 'b.js')), true)
-    assert.equal(await includeDeclared(join(withoutSpec, 'a.md')), true)
+    assert.equal(await reviewAllowed(join(withSpec, 'a.md')), true)
+    assert.equal(await reviewAllowed(join(withSpec, 'docs', 'b.js')), true)
+    assert.equal(await reviewAllowed(join(withoutSpec, 'a.md')), true)
   } finally {
     await rm(withSpec, { recursive: true, force: true })
     await rm(withoutSpec, { recursive: true, force: true })
   }
 })
 
-test('规范链有 include 声明时按模式过滤', async () => {
-  const dir = await makeProject('---\ninclude:\n  - \'*.md\'\n---\n\n# Rules\n\n1. 平铺直叙。\n')
+test('review 声明独立过滤审查范围', async () => {
+  const dir = await makeProject('---\nreview:\n  include: [\'*.md\']\n---\n\n# Rules\n\n1. 平铺直叙。\n')
   try {
-    assert.equal(await includeDeclared(join(dir, 'a.md')), true)
-    assert.equal(await includeDeclared(join(dir, 'a.js')), false)
+    assert.equal(await reviewAllowed(join(dir, 'a.md')), true)
+    assert.equal(await reviewAllowed(join(dir, 'a.js')), false)
   } finally {
     await rm(dir, { recursive: true, force: true })
   }

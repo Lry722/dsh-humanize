@@ -1,7 +1,7 @@
 {
   "name": "dsh-humanize",
   "version": "0.1.0",
-  "description": "让推理模型专注干活，让交付内容好好说人话。写入标记、PROSE.md 分层规范、旁路审查、延迟合并。",
+  "description": "让推理模型专注干活，让交付内容好好说人话。写入标记、PROSE 规则集、旁路审查、延迟合并。",
   "type": "module",
   "main": "lib/index.js",
   "types": "types.d.ts",
@@ -40,7 +40,7 @@
     "icon.svg",
     "locale/*.json",
     "cordis.patch.yml",
-    "PROSE.md",
+    ".agents/prose/base.md",
     "README.md",
     "README.zh.md",
     "DESIGN.md"

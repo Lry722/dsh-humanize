@@ -431,6 +431,10 @@ test('合并请求写到临时文件，子代理收到路径，完成后清理',
   setStorageRootResolver(() => storage)
   try {
     const { project, target } = await makeProject(storage)
+    const specs = join(project, '.agents', 'prose')
+    await mkdir(specs, { recursive: true })
+    await writeFile(join(specs, 'single.md'), '---\ninclude: ["/doc.md"]\n---\n# Rules\n1. 单文件规则。\n')
+    await writeFile(join(specs, 'unrelated.md'), '---\ninclude: ["/other.md"]\n---\n# Rules\n1. 无关规则。\n')
     const agent = makeAgent('agent-1', 'session-1', project)
     const activation = deferredActivation('child-1')
     let activationSpec
@@ -449,6 +453,8 @@ test('合并请求写到临时文件，子代理收到路径，完成后清理',
     assert.doesNotMatch(text, /\{\{requestPath\}\}/)
     const request = await readFile(requestPath, 'utf8')
     assert.match(request, /## Rules/)
+    assert.match(request, /单文件规则/)
+    assert.doesNotMatch(request, /无关规则/)
     // 合并请求按文件列出批注。
     assert.ok(request.includes(`# ${target}`))
 
@@ -496,7 +502,7 @@ test('PROSE.md 文件头写坏时合并按失败结束，暂存批注保留', as
   setStorageRootResolver(() => storage)
   try {
     const { project, target } = await makeProject(storage)
-    // include 声明没有闭合，loadSpecChain 在组装合并请求时抛出规范错误。
+    // include 声明没有闭合，规范解析在组装合并请求时抛出错误。
     await writeFile(join(project, 'PROSE.md'), '---\ninclude: [\n---\n# Rules\n1. 平铺直叙。\n', 'utf8')
     const agent = makeAgent('agent-1', 'session-1', project)
     const ctx = makeCtx([agent], async () => { throw new Error('不应派发') })

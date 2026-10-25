@@ -82,22 +82,49 @@ You can also pass the same settings to the `dsh-humanize` entry in the profile's
 
 ## Usage
 
-Put a `PROSE.md` in the directory of the file under review or in a parent directory. The user-wide spec goes at `~/.dsh/PROSE.md`. Specs stack by directory. The narrower the scope, the higher the priority.
+Specs come from three sources:
 
-The front matter of `PROSE.md` can declare which files the spec covers with `include`, using .gitignore syntax:
+- The user-wide spec at `~/.dsh/PROSE.md`.
+- Project specs: the direct `.md` children of `.agents/prose/` at the project root. Nested directories are not scanned.
+- Directory specs: `PROSE.md` in the target file's directory and its ancestor directories.
+
+The project root is the target file's git repository root, so project specs remain visible when the session starts in a subdirectory. A legacy `PROSE.md` at the project root still works as a directory spec.
+
+`base.md` is an ordinary project spec. Its filename gives it no special scope or priority. Use `include: ["**/*"]` when it should provide project-wide rules.
+
+Each spec has an implicit scope: everywhere for the user spec, the project for a project spec, and the directory subtree for a directory spec. Omitting `include` applies the spec throughout that scope. An explicit `include` can narrow it, using .gitignore syntax, and is evaluated independently for that spec. One spec's patterns never include or exclude another spec.
+
+For example, a project spec can cover several directories and the root changelog:
 
 ```markdown
 ---
 include:
-  - "*.md"
-  - "docs/**/*.txt"
-  - "!drafts/"
+  - "docs/"
+  - "examples/"
+  - "/CHANGELOG.md"
 ---
 ```
 
-`include` belongs to the whole spec chain. If any level of the chain declares it, only files that match enter review. Write review and batch review both follow this scope. If no level declares `include`, the spec applies to every file.
+Anchored patterns in project specs resolve from the project root; in directory specs, they resolve from the directory containing `PROSE.md`. Thus `/CHANGELOG.md` in a project spec names only the root changelog. Within one `include` list, the last matching pattern wins, and a `!` prefix excludes a match.
 
-`PROSE.md` must contain a level-1 `# Rules` heading. Numbered lines under it are review rules. Every other level-1 section is passed to review and merge unchanged as supplementary context, such as definitions or a glossary. For example:
+Specs merge in ascending numeric `priority` order, defaulting to 0. Ties put the user spec first, then project specs sorted by path, then directory specs from shallower to deeper. Later rules take precedence when they conflict. If a matching spec declares `inherit: false`, it clears all previously accepted specs before adding itself. Matching specs later in the order are still added.
+
+Review eligibility is independent of rule selection. Any candidate source can declare `review.include` and `review.exclude`:
+
+```markdown
+---
+review:
+  include:
+    - "docs/"
+    - "/CHANGELOG.md"
+  exclude:
+    - "docs/drafts/"
+---
+```
+
+Review declarations come from all candidate specs, independently of `include` matches and `inherit: false`. If any candidate declares `review.include`, review uses one allowlist across all candidates and starts denied. Include and exclude matches then enable or disable review in the same priority and source order; the last match wins. Without any `review.include`, review starts allowed, so `review.exclude` alone can opt files out. These declarations control whether review runs, not which rules are used for merge.
+
+Every applicable spec must contain a level-1 `# Rules` heading. Numbered lines under it are review rules. Every other level-1 section is passed to review and merge unchanged as supplementary context, such as definitions or a glossary. For example:
 
 ```markdown
 # Rules
@@ -110,7 +137,7 @@ include:
 Abuse: xxx
 ```
 
-Only numbered lines under `# Rules` take part in global rule numbering. Numbers in other sections stay as written. A spec without a `# Rules` heading fails review with an error.
+Only numbered lines under `# Rules` take part in global rule numbering. Numbers in other sections stay as written. An applicable spec without a `# Rules` heading fails review with an error.
 
 Binary files such as images, archives, fonts and build output skip review. Detection samples the start of the file. Write review and batch review both use it. A batch review reports how many files it skipped.
 
@@ -166,7 +193,7 @@ Review runs in the background as a task. The progress bar updates above the inpu
 
 The target must be inside a git repository whose status can be read. If either condition is missing, the task ends as failed with a reason. If there is nothing to review, the task ends as completed and says so.
 
-All three modes also require the file to match the include patterns. They differ in which files they check:
+All three modes apply the independent `review.include` and `review.exclude` decision described above. A file must be allowed for review and have at least one applicable numbered rule. The modes differ in which files they check:
 
 - The default mode checks git-tracked files.
 - The incremental mode checks changed files.

@@ -71,11 +71,11 @@ test('增量模式收集修改和未跟踪文件，跳过未改动和忽略文�
   }
 })
 
-test('增量模式遵守 include 范围和命令路径', async () => {
+test('增量模式遵守 review 范围和命令路径', async () => {
   const dir = await makeRepo()
   try {
     await mkdir(join(dir, 'docs'))
-    await writeFile(join(dir, 'PROSE.md'), '---\ninclude:\n  - \'*.md\'\n---\n\n# Rules\n\n1. 平铺直叙。\n')
+    await writeFile(join(dir, 'PROSE.md'), '---\nreview:\n  include: [\'*.md\']\n---\n\n# Rules\n\n1. 平铺直叙。\n')
     await writeFile(join(dir, 'docs', 'a.md'), 'old a\n')
     await writeFile(join(dir, 'docs', 'b.js'), 'old b\n')
     await writeFile(join(dir, 'other.md'), 'old other\n')
@@ -91,6 +91,25 @@ test('增量模式遵守 include 范围和命令路径', async () => {
     const one = await collectTargets(join(dir, 'other.md'), dir, { changed: true })
     assert.deepEqual(paths(one), [join(dir, 'other.md')])
     assert.equal(one[0].before, 'old other\n')
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('规则 include 不作为整个批次的审查开关', async () => {
+  const dir = await makeRepo()
+  try {
+    await mkdir(join(dir, 'docs'))
+    await writeFile(join(dir, 'PROSE.md'), '---\ninclude: ["*.md"]\n---\n# Rules\n1. 平铺直叙。\n')
+    await writeFile(join(dir, 'docs', 'a.md'), 'a\n')
+    await writeFile(join(dir, 'docs', 'b.js'), 'b\n')
+    await commitAll(dir)
+
+    // b.js 会在管线里记为没有适用规则，收集阶段仍保留这个正常结果。
+    assert.deepEqual(paths(await collectTargets(join(dir, 'docs'), dir)), [
+      join(dir, 'docs', 'a.md'),
+      join(dir, 'docs', 'b.js'),
+    ])
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
@@ -172,11 +191,11 @@ test('最近提交模式收集最近 N 个提交涉及的文件，并按全文�
   }
 })
 
-test('最近提交模式遵守 include 范围和命令路径', async () => {
+test('最近提交模式遵守 review 范围和命令路径', async () => {
   const dir = await makeRepo()
   try {
     await mkdir(join(dir, 'docs'))
-    await writeFile(join(dir, 'PROSE.md'), '---\ninclude:\n  - \'*.md\'\n---\n\n# Rules\n\n1. 平铺直叙。\n')
+    await writeFile(join(dir, 'PROSE.md'), '---\nreview:\n  include: [\'*.md\']\n---\n\n# Rules\n\n1. 平铺直叙。\n')
     await writeFile(join(dir, 'docs', 'a.md'), 'old a\n')
     await writeFile(join(dir, 'docs', 'b.js'), 'old b\n')
     await writeFile(join(dir, 'other.md'), 'old other\n')

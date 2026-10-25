@@ -405,6 +405,32 @@ test('写入审查共用 reviewConcurrency 上限', async () => {
   }
 })
 
+test('review.exclude 命中的文件跳过审查，不调用模型', async () => {
+  const storage = await mkdtemp(join(tmpdir(), 'humanize-pipeline-review-scope-'))
+  setStorageRootResolver(() => storage)
+  const project = join(storage, 'project')
+  await mkdir(join(project, '.git'), { recursive: true })
+  await writeFile(join(project, 'PROSE.md'), '---\nreview:\n  exclude: ["generated/"]\n---\n# Rules\n1. 平铺直叙。\n')
+  const target = join(project, 'generated', 'doc.md')
+  await mkdir(join(project, 'generated'), { recursive: true })
+  await writeFile(target, '生成内容。\n')
+
+  let calls = 0
+  const ctx = {
+    ...fakeContext(),
+    llm: { stream() { calls += 1; throw new Error('review should not run') } },
+  }
+  const pipeline = createReviewPipeline(ctx, fakeConfig(), { info() {}, warn() {} })
+  try {
+    const outcome = await pipeline.scheduleReview(fakeAgent(), target, undefined, '生成内容。\n')
+    assert.deepEqual(outcome, { kind: 'no-spec' })
+    assert.equal(calls, 0)
+  } finally {
+    await pipeline.shutdown()
+    await rm(storage, { recursive: true, force: true })
+  }
+})
+
 test('规范缺少 Rules 一级标题时直接失败，不重试也不调用模型', async () => {
   const storage = await mkdtemp(join(tmpdir(), 'humanize-pipeline-spec-'))
   setStorageRootResolver(() => storage)

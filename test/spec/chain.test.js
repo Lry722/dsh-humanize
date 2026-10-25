@@ -3,8 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createSpecMatcher, declaresInclude } from '../../lib/spec/match.js'
-import { buildSpecRules, loadSpecChain, renderSpecChain } from '../../lib/spec/chain.js'
+import { buildSpecRules, loadSpecCandidates, renderSpecChain, resolveSpecChain } from '../../lib/spec/chain.js'
 
 test('规范链渲染把编号重排成全局连续，缩进与 CRLF 都保留', () => {
   const chain = [
@@ -39,52 +38,83 @@ test('代码围栏里的编号保持原样，规则列表只收正文编号', ()
   assert.deepEqual(four.rules.map((rule) => rule.text), ['real'])
 })
 
-test('没有斜杠的文件名模式命中任意层级，含斜杠的模式相对声明目录解析', () => {
-  const fileName = createSpecMatcher([{ path: '/proj/PROSE.md', include: ['*.md'] }])
-  assert.equal(fileName('/proj/a.md'), true)
-  assert.equal(fileName('/proj/docs/deep/a.md'), true)
-  assert.equal(fileName('/proj/a.js'), false)
-
-  const relative = createSpecMatcher([{ path: '/proj/PROSE.md', include: ['docs/**/*.txt'] }])
-  assert.equal(relative('/proj/docs/x/y.txt'), true)
-  assert.equal(relative('/proj/docs/y.txt'), true)
-  assert.equal(relative('/proj/other/y.txt'), false)
+test('每份规则的 include 独立筛选，未命中的来源不会过滤其他规则', () => {
+  const candidates = [
+    { path: '/proj/.agents/prose/base.md', kind: 'project', base: '/proj', include: ['docs/', '/README.md'] },
+    { path: '/proj/docs/PROSE.md', kind: 'directory', base: '/proj/docs', include: undefined },
+  ]
+  const docs = resolveSpecChain(candidates, '/proj/docs/a.md')
+  assert.deepEqual(docs.chain.map((entry) => entry.path), candidates.map((entry) => entry.path))
+  assert.deepEqual(resolveSpecChain(candidates, '/proj/src/a.md').chain, [])
+  assert.deepEqual(resolveSpecChain(candidates, '/proj/README.md').chain, [candidates[0]])
 })
 
-test('结尾斜杠的目录模式命中该目录下所有文件', () => {
-  const match = createSpecMatcher([{ path: '/proj/PROSE.md', include: ['docs/'] }])
-  assert.equal(match('/proj/docs/a.md'), true)
-  assert.equal(match('/proj/docs/deep/a.md'), true)
-  assert.equal(match('/proj/other/a.md'), false)
+test('base.md 没有特殊顺序，同层规则按 priority 和路径排列', () => {
+  const base = { path: '/proj/.agents/prose/base.md', kind: 'project', base: '/proj' }
+  const alpha = { path: '/proj/.agents/prose/alpha.md', kind: 'project', base: '/proj' }
+  const result = resolveSpecChain([base, alpha], '/proj/a.md')
+  assert.deepEqual(result.chain.map((entry) => entry.path), [alpha.path, base.path])
+
+  const prioritized = resolveSpecChain([{ ...base, priority: -1 }, alpha], '/proj/a.md')
+  assert.deepEqual(prioritized.chain.map((entry) => entry.path), [base.path, alpha.path])
 })
 
-test('! 前缀的模式表示排除，最后一次命中的结果生效', () => {
-  const excluded = createSpecMatcher([{ path: '/proj/PROSE.md', include: ['*.md', '!drafts/'] }])
-  assert.equal(excluded('/proj/drafts/a.md'), false)
-  assert.equal(excluded('/proj/keep/a.md'), true)
-
-  const lastWins = createSpecMatcher([{ path: '/proj/PROSE.md', include: ['!*.md', 'keep.md'] }])
-  assert.equal(lastWins('/proj/a.md'), false)
-  assert.equal(lastWins('/proj/keep.md'), true)
-})
-
-test('后声明的 include 覆盖前面的声明', () => {
-  const match = createSpecMatcher([
-    { path: '/proj/PROSE.md', include: ['*.md'] },
-    { path: '/proj/sub/PROSE.md', include: ['!*.md'] },
+test('缺省 priority 保持用户、项目、目录从浅到深的合并顺序', () => {
+  const candidates = [
+    { path: '/proj/docs/PROSE.md', kind: 'directory', depth: 1 },
+    { path: '/proj/.agents/prose/base.md', kind: 'project', base: '/proj' },
+    { path: '/proj/PROSE.md', kind: 'directory', depth: 0 },
+    { path: '/global/PROSE.md', kind: 'user', scope: null },
+  ]
+  const result = resolveSpecChain(candidates, '/proj/docs/a.md')
+  assert.deepEqual(result.chain.map((entry) => entry.path), [
+    '/global/PROSE.md',
+    '/proj/.agents/prose/base.md',
+    '/proj/PROSE.md',
+    '/proj/docs/PROSE.md',
   ])
-  assert.equal(match('/proj/sub/a.md'), false)
-  assert.equal(match('/proj/sub/deep/a.md'), false)
 })
 
-test('declaresInclude 识别链里的声明，未声明时匹配器对所有文件返回 false', () => {
-  assert.equal(declaresInclude([{ path: '/proj/PROSE.md', include: undefined }]), false)
-  assert.equal(declaresInclude([
-    { path: '/proj/PROSE.md', include: undefined },
-    { path: '/proj/sub/PROSE.md', include: ['*.md'] },
-  ]), true)
-  const match = createSpecMatcher([{ path: '/proj/PROSE.md', include: undefined }])
-  assert.equal(match('/proj/a.md'), false)
+test('inherit: false 丢弃此前命中的规则，后续规则继续合并', () => {
+  const candidates = [
+    { path: '/global/PROSE.md', kind: 'user', scope: null },
+    { path: '/proj/.agents/prose/base.md', kind: 'project', base: '/proj' },
+    { path: '/proj/.agents/prose/special.md', kind: 'project', base: '/proj', include: ['/docs/a.md'], priority: 10, inherit: false },
+    { path: '/proj/docs/PROSE.md', kind: 'directory', base: '/proj/docs', priority: 20 },
+  ]
+  const result = resolveSpecChain(candidates, '/proj/docs/a.md')
+  assert.deepEqual(result.chain.map((entry) => entry.path), [
+    '/proj/.agents/prose/special.md',
+    '/proj/docs/PROSE.md',
+  ])
+  const unrelated = resolveSpecChain(candidates, '/proj/other.md')
+  assert.deepEqual(unrelated.chain.map((entry) => entry.path), [
+    '/global/PROSE.md',
+    '/proj/.agents/prose/base.md',
+  ])
+})
+
+test('review 独立于规则 include，可以排除审查或保留无规则目标', () => {
+  const candidates = [{
+    path: '/proj/.agents/prose/base.md',
+    kind: 'project',
+    base: '/proj',
+    include: ['docs/'],
+    review: { include: ['*.md'], exclude: ['drafts/'] },
+  }]
+  assert.deepEqual(resolveSpecChain(candidates, '/proj/src/a.md'), { chain: [], review: true })
+  assert.equal(resolveSpecChain(candidates, '/proj/docs/a.js').review, false)
+  assert.equal(resolveSpecChain(candidates, '/proj/drafts/a.md').review, false)
+})
+
+test('未命中的规则不参与 Rules 结构校验和编号', () => {
+  const candidates = [
+    { path: '/proj/.agents/prose/invalid.md', base: '/proj', include: ['/other.md'], content: '# Glossary\n1. broken' },
+    { path: '/proj/.agents/prose/valid.md', base: '/proj', include: ['/a.md'], content: '# Rules\n1. valid' },
+  ]
+  const { chain } = resolveSpecChain(candidates, '/proj/a.md')
+  const result = buildSpecRules(chain)
+  assert.deepEqual(result.rules.map((rule) => rule.text), ['valid'])
 })
 
 test('渲染文本标出规范来源路径', () => {
@@ -168,7 +198,7 @@ test('Rules 章节没有编号行时保留补充说明，规则列表为空', ()
   assert.ok(text.includes('滥用：指过度使用。'))
 })
 
-test('YAML 文件头无法解析时 loadSpecChain 抛出规范错误', async () => {
+test('YAML 文件头无法解析时 loadSpecCandidates 抛出规范错误', async () => {
   const root = await mkdtemp(join(tmpdir(), 'humanize-spec-yaml-'))
   try {
     const target = join(root, 'a.md')
@@ -177,7 +207,7 @@ test('YAML 文件头无法解析时 loadSpecChain 抛出规范错误', async () 
     // 方括号没有闭合，js-yaml 解析文件头时直接报错。
     await writeFile(specPath, '---\ninclude: [\n---\n# Rules\n1. one\n', 'utf8')
     await assert.rejects(
-      loadSpecChain(target, root),
+      loadSpecCandidates(target, root),
       (error) => error.humanizeSpecError === true
         && /YAML 文件头无法解析/.test(error.message)
         && error.message.includes(specPath),
