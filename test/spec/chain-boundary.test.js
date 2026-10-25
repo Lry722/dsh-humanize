@@ -64,6 +64,27 @@ test('目标位于会话目录之外时使用目标自己的仓库规则', async
   }
 })
 
+test('目标位于项目规则目录时同一路径只加载一次', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'humanize-spec-duplicate-'))
+  try {
+    const specs = join(root, '.agents', 'prose')
+    await mkdir(join(root, '.git'), { recursive: true })
+    await mkdir(specs, { recursive: true })
+    const specPath = join(specs, 'PROSE.md')
+    await writeFile(specPath, '---\ninclude: ["**/*"]\n---\n# Rules\n1. project\n')
+    const target = join(specs, 'a.txt')
+    await writeFile(target, 'x\n')
+
+    const result = await resolveSpec(target, root)
+    assert.equal(result.chain.length, 1)
+    assert.equal(result.chain[0].path, specPath)
+    assert.equal(result.chain[0].kind, 'project')
+    assert.equal(result.chain[0].base, root)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 test('项目规则文件新增和删除后重新发现，base.md 没有隐式匹配', async () => {
   const root = await mkdtemp(join(tmpdir(), 'humanize-spec-reload-'))
   try {

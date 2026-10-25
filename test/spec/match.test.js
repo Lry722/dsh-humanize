@@ -75,6 +75,37 @@ test('空 include 只关闭当前规则', () => {
   assert.equal(match(join(base, 'a.md')), false)
 })
 
+test('有边界的目录模式不匹配 base 自身或祖先目录', () => {
+  const nestedBase = join(tmpdir(), 'generated', 'project')
+  const entry = {
+    path: join(nestedBase, '.agents', 'prose', 'base.md'),
+    base: nestedBase,
+    scope: nestedBase,
+  }
+  const target = join(nestedBase, 'src', 'a.md')
+  const generated = join(nestedBase, 'generated', 'a.md')
+
+  const include = createIncludeMatcher({ ...entry, include: ['**/*', '!generated/'] })
+  assert.equal(include(target), true)
+  assert.equal(include(generated), false)
+  const positive = createIncludeMatcher({ ...entry, include: ['generated/'] })
+  assert.equal(positive(target), false)
+  assert.equal(positive(generated), true)
+
+  const review = createReviewMatcher([{ ...entry, review: { exclude: ['generated/'] } }])
+  assert.equal(review(target), true)
+  assert.equal(review(generated), false)
+})
+
+test('用户全局目录模式仍可匹配目标路径里的任意目录段', () => {
+  const match = createReviewMatcher([{
+    path: specPath,
+    scope: null,
+    review: { exclude: ['generated/'] },
+  }])
+  assert.equal(match(join(tmpdir(), 'generated', 'project', 'src', 'a.md')), false)
+})
+
 test('以 .. 开头的文件名仍在基准目录里，不按外部路径排除', () => {
   const match = createIncludeMatcher({ path: specPath, include: ['/..foo.md'] })
   assert.equal(match(join(base, '..foo.md')), true)
