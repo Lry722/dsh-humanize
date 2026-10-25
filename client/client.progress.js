@@ -14,6 +14,13 @@ window.__ModuleLoader__.load({
     /** 共用的空数组，让 getSnapshot 在无任务时返回同一个引用。 */
     const EMPTY_ROWS = []
 
+    /**
+     * 本插件的任务类型，与 lib/shared/job-track.js 的 JOB_KINDS 一致。
+     * 宿主端和浏览器端分别打包，这里再写一份字面量，靠测试盯住两边。
+     */
+    const KIND = { merge: 'humanize', review: 'humanize-review', loop: 'humanize-loop' }
+    const HUMANIZE_KINDS = new Set(Object.values(KIND))
+
     /** 当前会话的 humanize 任务行。 */
     function useHumanizeJob(jobs, sessionId) {
       useEffect(() => jobs.watchRows(sessionId), [jobs, sessionId])
@@ -22,7 +29,7 @@ window.__ModuleLoader__.load({
         () => jobs.state.getSnapshot(),
       )
       // 这三类任务分别是 /humanize-review 审查批次、/humanize 合并和 /humanize-loop 循环合并。
-      const rows = (snapshot.rows[sessionId] ?? EMPTY_ROWS).filter((row) => row.kind === 'humanize' || row.kind === 'humanize-review' || row.kind === 'humanize-loop')
+      const rows = (snapshot.rows[sessionId] ?? EMPTY_ROWS).filter((row) => HUMANIZE_KINDS.has(row.kind))
       // 同一时刻只会有一条任务行在进行中。终态的任务行停留期间可能和新任务并存。
       // 取行时优先选进行中的那条。只剩终态的任务行时，取列表里最新的一条。
       return rows.find((row) => row.status === 'running' || row.status === 'stopping')
@@ -100,7 +107,7 @@ window.__ModuleLoader__.load({
       if (row === null || row === undefined) return null
       const view = jobView(row)
       const rows = [h('div', { key: 'head', style: dockRowStyle },
-        h('span', { style: dockTitleStyle }, row.kind === 'humanize-loop' ? t('progress.loop') : row.kind === 'humanize' ? t('progress.merge') : t('progress.review')),
+        h('span', { style: dockTitleStyle }, row.kind === KIND.loop ? t('progress.loop') : row.kind === KIND.merge ? t('progress.merge') : t('progress.review')),
         h('span', { style: dockMetaStyle }, view.meta),
       )]
       if (view.pct !== null) {

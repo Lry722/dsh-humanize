@@ -65,12 +65,16 @@ test('开新任务前只摘除本插件名下已结算的任务行', () => {
   const ctx = { get: () => jobs, on: () => () => {} }
   const live = jobs.start({ kind: 'humanize-review', label: '行文审查', owner: 's1', run() {} })
   const other = jobs.start({ kind: 'bash', label: '命令', owner: 's1', run() {} })
+  // 别的插件用了以 humanize 开头的 kind，不能当成本插件的任务行摘掉。
+  const foreign = jobs.start({ kind: 'humanizer-review', label: '别的插件', owner: 's1', run() {} })
   const settled = jobs.start({ kind: 'humanize-review', label: '行文审查', owner: 's1', run() {} })
   jobs.settleView(other)
+  jobs.settleView(foreign)
   jobs.settleView(settled)
   dropSettled(jobs, 's1')
   assert.equal(jobs.store.has(live), true)
   assert.equal(jobs.store.has(other), true)
+  assert.equal(jobs.store.has(foreign), true)
   assert.equal(jobs.store.has(settled), false)
 
   const next = openJob(ctx, log, { jobs, kind: 'humanize-review', label: '行文审查', owner: 's1', cancel() {} })
