@@ -9,6 +9,7 @@ review:
     - "*.ts"
   exclude:
     - "prompts/"
+    - ".agents/prose/"
 ---
 
 # Rules
