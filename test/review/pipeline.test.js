@@ -4,11 +4,11 @@
  */
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createReviewPipeline } from '../../lib/review/pipeline.js'
-import { setStorageRootResolver, stagingPathFor, writeStaging } from '../../lib/shared/staging.js'
+import { historyRoot, setStorageRootResolver, stagingPathFor, writeStaging } from '../../lib/shared/staging.js'
 import { sleep, tick, waitFor } from '../helpers.js'
 
 /**
@@ -329,6 +329,38 @@ test('部分批注对不上编号时保留有效批注，并记一条丢弃日�
   assert.equal(outcome.annotations, 1)
   assert.equal(warnings.some((args) => String(args[0]).includes('unknown rule numbers')), true)
   await rm(storage, { recursive: true, force: true })
+})
+
+test('空批注清除当前暂存时保留审查前的版本', async () => {
+  const storage = await mkdtemp(join(tmpdir(), 'humanize-pipeline-history-'))
+  setStorageRootResolver(() => storage)
+  const project = join(storage, 'project')
+  await mkdir(join(project, '.git'), { recursive: true })
+  await writeFile(join(project, 'PROSE.md'), '# Rules\n1. 平铺直叙。\n', 'utf8')
+  const target = join(project, 'doc.md')
+  await writeFile(target, '写给人看的文档。\n', 'utf8')
+  const previous = '1. "审查前的批注"\n'
+  await writeStaging(target, previous)
+
+  const ctx = {
+    ...fakeContext(),
+    llm: { stream: () => submitStream({ annotations: [] }) },
+  }
+  const pipeline = createReviewPipeline(ctx, fakeConfig(), { info() {}, warn() {} })
+  try {
+    const outcome = await pipeline.scheduleReview(fakeAgent(), target, undefined, '写给人看的文档。\n')
+    assert.deepEqual(outcome, { kind: 'ok', annotations: 0 })
+    await assert.rejects(readFile(stagingPathFor(target), 'utf8'), (error) => error?.code === 'ENOENT')
+    const files = (await readdir(historyRoot(), { recursive: true }))
+      .filter((path) => path.endsWith('.md'))
+    assert.equal(files.length, 1)
+    assert.match(files[0], /-before-review-clear-[0-9a-f-]+\.md$/)
+    assert.equal(await readFile(join(historyRoot(), files[0]), 'utf8'), previous)
+  } finally {
+    await pipeline.shutdown()
+    setStorageRootResolver(() => '')
+    await rm(storage, { recursive: true, force: true })
+  }
 })
 
 test('二进制文件跳过审查', async () => {

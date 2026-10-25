@@ -1,11 +1,13 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   collectStaged,
+  historyRoot,
   humanizeRoot,
+  removeStaging,
   setRequestRootResolver,
   setStorageRootResolver,
   stagingPathFor,
@@ -63,6 +65,33 @@ test('新建的暂存目录权限为 0o700', {
   try {
     await writeStaging(join(storage, 'project', 'doc.md'), `1. "x"\n`)
     assert.equal((await stat(join(storage, 'annotations'))).mode & 0o777, 0o700)
+  } finally {
+    setStorageRootResolver(() => '')
+    await rm(storage, { recursive: true, force: true })
+  }
+})
+
+test('覆盖和删除暂存前保存上一版原文', async () => {
+  const storage = await mkdtemp(join(tmpdir(), 'humanize-staging-history-'))
+  setStorageRootResolver(() => storage)
+  const target = join(storage, 'project', 'doc.md')
+  try {
+    await writeStaging(target, '第一版\n')
+    await writeStaging(target, '第二版\n')
+    assert.equal(await readFile(stagingPathFor(target), 'utf8'), '第二版\n')
+    await removeStaging(target)
+    await assert.rejects(readFile(stagingPathFor(target), 'utf8'), (error) => error?.code === 'ENOENT')
+
+    const files = (await readdir(historyRoot(), { recursive: true }))
+      .filter((path) => path.endsWith('.md'))
+    assert.equal(files.length, 2)
+    assert.ok(files.some((path) => /-before-write-[0-9a-f-]+\.md$/.test(path)))
+    assert.ok(files.some((path) => /-before-remove-[0-9a-f-]+\.md$/.test(path)))
+    const contents = await Promise.all(files.map((path) => readFile(join(historyRoot(), path), 'utf8')))
+    assert.deepEqual(contents.sort(), ['第一版\n', '第二版\n'])
+    for (const path of files) {
+      assert.match(path, /\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.\d{3}Z-before-/)
+    }
   } finally {
     setStorageRootResolver(() => '')
     await rm(storage, { recursive: true, force: true })

@@ -45,7 +45,7 @@ Restart dsh after installation.
 
 ## Configuration
 
-Open the dsh-humanize row in the Plugins list and edit its configuration. The bottom of the settings page shows where staged annotations and review request records are stored, with a copy button beside each path. These settings take effect immediately:
+Open the dsh-humanize row in the Plugins list and edit its configuration. The bottom of the settings page shows where staged annotations, annotation history, and review request records are stored, with a copy button beside each path. These settings take effect immediately:
 
 - `reviewProvider` and `reviewModel`: the model used for review, picked from the host model catalog. Defaults to the model the session is using.
 - `reviewReasoningEffort`: reasoning effort for the review model, picked from the efforts that model publishes. Defaults to the model's own default.
@@ -56,7 +56,7 @@ Open the dsh-humanize row in the Plugins list and edit its configuration. The bo
 - `reviewIntervalSeconds`: minimum time between reviews, counted from the end of the previous review. Writes during the interval are reviewed together when it ends. Minimum 0, maximum 3600, default 60. Set 0 to review without waiting.
 - `loopMaxRounds`: maximum rounds for loop merge. Minimum 1, maximum 10, default 3.
 - `mergeOnCompaction`: whether to merge all staged annotations in the project when context compaction ends. Default true. When off, merges only run on `/humanize` or `/humanize-loop`.
-- `storageDir`: where staged annotations are stored. Leave empty for the default `~/.dsh/humanize`.
+- `storageDir`: where staged annotations and their history are stored. Leave empty for the default `~/.dsh/humanize`.
 
 Each of the review and merge model sections has a test button. It sends a minimal request to confirm the provider, model and reasoning effort respond. An empty model selection follows the session model for review. The test button requires both fields to be set.
 
@@ -150,6 +150,8 @@ Review looks only at the regions changed in this write.
 Reviews of the same file run serially. Writes from different sessions or subagents queue separately, and queued reviews are kept per agent without overwriting each other. While a merge runs, the reviews of the agent that started it are aborted or discarded. Reviews from other agents on the same target files are treated the same way. Batch reviews and merge re-reviews skip the interval and run immediately.
 
 Annotations are staged under `~/.dsh/humanize/annotations/`. The path mirrors the reviewed file. Annotations can be edited directly. Staging groups them by rule, and each rule heading carries its rule number as a hint. Staging content omits the file name. The next review matches rules by text. The storage location can be changed on the settings page.
+
+Before overwriting or removing a staging file, the plugin archives its previous contents under `~/.dsh/humanize/history/`. History paths also mirror the reviewed file, and each filename records the archive time and operation. Review clears, merge clears, and orphan cleanup use distinct labels. History is diagnostic only, is not collected for merging, and currently has no automatic cleanup.
 
 Run `/humanize <path>` to merge annotations for a file or directory. With no path, it uses the current working directory.
 

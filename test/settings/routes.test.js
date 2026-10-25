@@ -26,6 +26,7 @@ test('保存位置按当前设置返回真实路径', () => {
   try {
     assert.deepEqual(humanizePaths(), {
       staging: join(homedir(), 'humanize-paths-test', 'annotations'),
+      history: join(homedir(), 'humanize-paths-test', 'history'),
       requests: join(tmpdir(), 'humanize-paths-requests'),
     })
   } finally {
