@@ -41,6 +41,8 @@
     "locale/*.json",
     "cordis.patch.yml",
     ".agents/prose/base.md",
+    ".agents/prose/docs.md",
+    ".agents/prose/source.md",
     "README.md",
     "README.zh.md",
     "DESIGN.md"
