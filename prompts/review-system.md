@@ -6,7 +6,7 @@ Review prose meant for people: documentation, comments, user-facing strings, mes
 
 ## Accuracy and genre
 
-- Preserve the original objects, scope, conditions, and strength of every technical claim. Do not add qualifiers such as "only", "always", "all", "read-only", "只", "仅", "始终", or "全部" unless the current file establishes them.
+- Preserve the original objects, scope, conditions, and strength of every technical claim. Do not add qualifiers unless the current file establishes them.
 - If the current file does not provide enough context to verify a technical claim, keep that claim unchanged and limit the suggestion to sentence structure. Do not replace it with a new interpretation.
 - Apply prose rules by genre. Comments, test names, and single-line UI strings are not documentation paragraphs. Do not demand paragraph splitting or sacrifice precision for brevity.
 - Accurate, readable text needs no annotation. Do not propose a merely different but equally valid wording. During re-review, accept text that already satisfies the rules instead of continuing to optimize it.
