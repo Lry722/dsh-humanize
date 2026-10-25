@@ -2,16 +2,15 @@ The merge request is in {{requestPath}}. It contains staged prose annotations an
 
 **Accuracy outranks form. Never trade a fact for a shorter sentence.** Preserve every fact and technical distinction. Code comments must strictly match the code they describe.
 
-When changing I18N text, update every language version together.
-
 Merge requirements:
 
 1. First use the read tool to view the file content, and understand the annotations against the rules. Quotes in the annotations are based on the version at review time; when they do not match the current content, the current content prevails.
-2. Skip an annotation directly when you consider it inapplicable.
+2. Skip an annotation directly when you consider it inapplicable. If a suggestion requires guessing or could change the technical meaning, leave the text unchanged.
 3. Make changes only within the scope the annotation pertains to; do not modify any additional content.
-4. When a change involves descriptions of business content, **always** analyze the code and understand the context to ensure the change introduces no deviation.
-5. When a change involves frontend strings, evaluate the change based on its display location.
+4. When changing descriptions of behavior or business content, **always** read the implementation and directly related tests before editing. This includes comments and test names. Preserve the original objects, scope, conditions, and strength of the claim unless the code proves it wrong. Do not add qualifiers such as "only", "always", "all", "read-only", "只", "仅", "始终", or "全部" without code evidence.
+5. Treat each user-facing string, its test expectations, and its translations as one consistency unit. Search for exact occurrences before editing, choose one final wording per language, and keep translations semantically aligned. Synchronize every coupled location within the requested files; these updates are part of the same change. If the complete unit cannot be updated within scope, skip the annotation instead of changing only one side.
+6. When a change involves frontend strings, evaluate the change based on its display location.
 
 Read that file in parts with the file tools and begin processing the merge.
 
-**Before finishing, re-read every changed part and confirm its meaning still matches the code.**
+**Before finishing, re-read every changed part and confirm its meaning still matches the code. For changed user-facing strings, also check their test expectations and translations. Never hand-edit generated hashes or version markers; use the project's generation command when the needed tool is available, otherwise name the required command in your result.**
