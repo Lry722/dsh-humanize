@@ -66,7 +66,9 @@ Relative paths resolve against the process working directory. Changing the stora
 
 Review concurrency is shared across write review, batch review and re-review. A batch is also capped by the number of files it has to review. High concurrency can hit the model provider's rate limit.
 
-A call that hits a rate limit is recorded as failed and retried. A review that times out ends as aborted and is not retried. Other failures wait longer before each retry. After the retry budget is spent, the review is marked failed. Write review and batch review share this retry behavior.
+A call that hits a rate limit is recorded as failed and retried. A review that times out ends as aborted and is not retried.
+
+Other failures wait longer before each retry. After the retry budget is spent, the review is marked failed. Write review and batch review share this retry behavior.
 
 When a batch review ends, it lists the files that still failed and why, up to three entries. The rest are counted only. If write reviews keep failing, a failed record appears in the task list and points at the review model configuration.
 
@@ -82,13 +84,15 @@ You can also pass the same settings to the `dsh-humanize` entry in the profile's
 
 ## Usage
 
+### Spec sources
+
 Specs come from three sources:
 
 - The user-wide spec at `~/.dsh/PROSE.md`.
 - Project specs: the direct `.md` children of `.agents/prose/` at the project root. Nested directories are not scanned.
 - Directory specs: `PROSE.md` in the target file's directory and its ancestor directories.
 
-The project root is the target file's git repository root, so project specs remain visible when the session starts in a subdirectory. A legacy `PROSE.md` at the project root still works as a directory spec.
+The project root is the target file's git repository root, so project specs remain visible when the session starts in a subdirectory. A `PROSE.md` at the project root also works as a directory spec.
 
 `base.md` is an ordinary project spec. Its filename gives it no special scope or priority. Use `include: ["**/*"]` when it should provide project-wide rules.
 
@@ -105,24 +109,11 @@ include:
 ---
 ```
 
-Anchored patterns in project specs resolve from the project root; in directory specs, they resolve from the directory containing `PROSE.md`. Thus `/CHANGELOG.md` in a project spec names only the root changelog. Within one `include` list, the last matching pattern wins, and a `!` prefix excludes a match.
+Anchored patterns in project specs resolve from the project root. In directory specs they resolve from the directory containing `PROSE.md`. Thus `/CHANGELOG.md` in a project spec names only the root changelog. Within one `include` list, the last matching pattern wins, and a `!` prefix excludes a match.
 
-Specs merge in ascending numeric `priority` order, defaulting to 0. Ties put the user spec first, then project specs sorted by path, then directory specs from shallower to deeper. Later rules take precedence when they conflict. If a matching spec declares `inherit: false`, it clears all previously accepted specs before adding itself. Matching specs later in the order are still added.
+Specs merge in ascending numeric `priority` order, defaulting to 0. Ties put the user spec first, then project specs sorted by path, then directory specs from shallower to deeper. Later rules take precedence when they conflict.
 
-Review eligibility is independent of rule selection. Any candidate source can declare `review.include` and `review.exclude`:
-
-```markdown
----
-review:
-  include:
-    - "docs/"
-    - "/CHANGELOG.md"
-  exclude:
-    - "docs/drafts/"
----
-```
-
-Review declarations come from all candidate specs, independently of `include` matches and `inherit: false`. If any candidate declares `review.include`, review uses one allowlist across all candidates and starts denied. Include and exclude matches then enable or disable review in the same priority and source order; the last match wins. Without any `review.include`, review starts allowed, so `review.exclude` alone can opt files out. These declarations control whether review runs, not which rules are used for merge.
+If a matching spec declares `inherit: false`, it clears all previously accepted specs before adding itself. Matching specs later in the order are still added.
 
 Every applicable spec must contain a level-1 `# Rules` heading. Numbered lines under it are review rules. Every other level-1 section is passed to review and merge unchanged as supplementary context, such as definitions or a glossary. For example:
 
@@ -139,19 +130,50 @@ Abuse: xxx
 
 Only numbered lines under `# Rules` take part in global rule numbering. Numbers in other sections stay as written. An applicable spec without a `# Rules` heading fails review with an error.
 
+### Review scope
+
+Review eligibility is independent of rule selection. Any candidate spec can declare `review.include` and `review.exclude`:
+
+```markdown
+---
+review:
+  include:
+    - "docs/"
+    - "/CHANGELOG.md"
+  exclude:
+    - "docs/drafts/"
+---
+```
+
+Review declarations come from all candidate specs, independently of `include` matches and `inherit: false`. If any candidate declares `review.include`, review uses one allowlist across all candidates and starts denied. Include and exclude matches then enable or disable review in the same priority and source order. The last match wins.
+
+Without any `review.include`, review starts allowed, so `review.exclude` alone can opt files out. These declarations control whether review runs. Merge rule selection stays independent of them.
+
 Binary files such as images, archives, fonts and build output skip review. Detection samples the start of the file. Write review and batch review both use it. A batch review reports how many files it skipped.
 
 When the model writes a file it must declare `human_facing`. Pass true for content meant for people, false for pure code or data. Writes marked true enter review. The rest are skipped. A programmatic call that omits the field is treated as false and logs a warning.
 
+### How reviews run
+
 After each review, the next write review waits one minute by default. Writes during the interval join the next review.
 
-Review looks only at the regions changed in this write.
+A review only looks at the regions changed in this write.
 
 Reviews of the same file run serially. Writes from different sessions or subagents queue separately, and queued reviews are kept per agent without overwriting each other. While a merge runs, the reviews of the agent that started it are aborted or discarded. Reviews from other agents on the same target files are treated the same way. Batch reviews and merge re-reviews skip the interval and run immediately.
 
-Annotations are staged under `~/.dsh/humanize/annotations/`. The path mirrors the reviewed file. Annotations can be edited directly. Staging groups them by complete rule text, and rule headings contain only that text. Global rule numbers validate the current review output and are not stored in staging. Staging content omits the file name. The next review matches rules by text. The storage location can be changed on the settings page.
+### Staged annotations
 
-Before overwriting or removing a staging file, the plugin appends its current contents to `history/`, beside the review request records in the system temp directory. The exact path appears on the settings page. History paths mirror the reviewed file. Every operation adds a file instead of replacing older snapshots, and each filename records the archive time and operation. Review clears, merge clears, and orphan cleanup use distinct labels. History is diagnostic only and is not collected for merging. The plugin does not delete history itself; the system may clean the temp directory according to its own policy.
+Annotations are staged under `~/.dsh/humanize/annotations/`. The path mirrors the reviewed file. Annotations can be edited directly. The storage location can be changed on the settings page.
+
+Staging groups them by complete rule text, and rule headings contain only that text. Global rule numbers validate the current review output and are not stored in staging. Staging content omits the file name. The next review matches rules by text.
+
+Before overwriting or removing a staging file, the plugin appends its current contents to `history/`, beside the review request records in the system temp directory. The exact path appears on the settings page. History paths mirror the reviewed file. Every operation adds a new file and keeps older snapshots, and each filename records the archive time and operation.
+
+Review clears, merge clears, and orphan cleanup use distinct labels.
+
+History serves troubleshooting only, and merging proceeds independently. The plugin leaves history files in place. The system may clean the temp directory according to its own policy.
+
+### Merge and re-review
 
 Run `/humanize <path>` to merge annotations for a file or directory. With no path, it uses the current working directory.
 
@@ -173,11 +195,15 @@ The merge target, round and files awaiting re-review stay in memory. If staged a
 
 If the plugin reloads during a loop, that run ends. Completed merges still clear their staged annotations. Incomplete merges keep them.
 
+### Background tasks
+
 `/humanize`, `/humanize-loop` and compaction-triggered merges all register background tasks. The loop progress bar shows the current round and the number of annotations in that round.
 
 `/humanize` and `/humanize-loop` tasks can be cancelled from the task list. Cancelling a loop takes effect before the next round. Completed merges still clear their staged annotations. Compaction-triggered merges only report results and run to completion.
 
 If the profile watches this plugin's directory with HMR, changing the plugin's own source triggers a plugin reload. Reload ends a running merge. Run the command again to continue.
+
+### Batch review
 
 Run `/humanize-review <path>` to dispatch a batch review. By default, it reviews every git-tracked file under the target.
 

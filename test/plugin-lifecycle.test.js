@@ -3,8 +3,8 @@ import assert from 'node:assert/strict'
 import { apply } from '../lib/index.js'
 
 /**
- * 造一个最小的宿主上下文。工具注册像真实的作用域层一样同步发出
- * tools/change，卸载包装工具时同样发出。
+ * 创建一个最小的宿主上下文。工具注册时会同步发出 tools/change，和真实的
+ * 作用域层一致。卸载包装工具时也会发出 tools/change。
  */
 function makeHost(options = {}) {
   const listeners = new Map()

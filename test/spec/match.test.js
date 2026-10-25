@@ -30,7 +30,7 @@ test('含斜杠的模式相对匹配基准解析，可以覆盖多个目录和�
   assert.equal(match(join(base, 'other', 'a.txt')), false)
 })
 
-test('感叹号排除和最后命中生效只影响当前规则', () => {
+test('感叹号排除和最后匹配优先的判定都只作用于当前规则', () => {
   const match = createIncludeMatcher({ path: specPath, include: ['*.md', '!drafts/', 'drafts/keep.md'] })
   assert.equal(match(join(base, 'drafts', 'a.md')), false)
   assert.equal(match(join(base, 'drafts', 'keep.md')), true)
@@ -60,7 +60,7 @@ test('只有排除声明时其余文件默认允许', () => {
   assert.equal(match(join(base, 'generated', 'a.txt')), false)
 })
 
-test('review 按来源顺序处理，后声明的 include 可以恢复排除文件', () => {
+test('review 按来源顺序处理，后声明的 include 可以把被排除的文件重新纳入', () => {
   const match = createReviewMatcher([
     { path: specPath, review: { include: ['*.md'], exclude: ['drafts/'] } },
     { path: specPath, review: { include: ['drafts/keep.md'] } },

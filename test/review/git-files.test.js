@@ -1,6 +1,5 @@
 /**
- * 审查目标展开的测试。重点验证增量模式只收集改动文件，并且带上 HEAD
- * 里的旧内容。
+ * 审查目标收集的测试，覆盖增量模式、最近提交模式和路径里的通配符处理。
  */
 import test from 'node:test'
 import assert from 'node:assert/strict'
@@ -71,7 +70,7 @@ test('增量模式收集修改和未跟踪文件，跳过未改动和忽略文�
   }
 })
 
-test('增量模式遵守 review 范围和命令路径', async () => {
+test('增量模式遵守审查范围和命令路径', async () => {
   const dir = await makeRepo()
   try {
     await mkdir(join(dir, 'docs'))
@@ -191,7 +190,7 @@ test('最近提交模式收集最近 N 个提交涉及的文件，并按全文�
   }
 })
 
-test('最近提交模式遵守 review 范围和命令路径', async () => {
+test('最近提交模式遵守审查范围和命令路径', async () => {
   const dir = await makeRepo()
   try {
     await mkdir(join(dir, 'docs'))

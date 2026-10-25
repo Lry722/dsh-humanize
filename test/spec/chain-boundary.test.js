@@ -85,7 +85,7 @@ test('目标位于项目规则目录时同一路径只加载一次', async () =>
   }
 })
 
-test('项目规则文件新增和删除后重新发现，base.md 没有隐式匹配', async () => {
+test('项目规则文件新增和删除后重新发现，base.md 遵守显式 include', async () => {
   const root = await mkdtemp(join(tmpdir(), 'humanize-spec-reload-'))
   try {
     const specs = join(root, '.agents', 'prose')
@@ -166,13 +166,13 @@ test('同一路径规则覆盖后按修改时间和大小刷新解析缓存', as
     assert.equal(specFrom(await resolveSpec(targetA, root))?.content.includes('1. old'), true)
     assert.equal(specFrom(await resolveSpec(targetB, root)), undefined)
 
-    // 内容长度不变，只改变修改时间，文件头和正文都必须重新解析。
+    // 修改时间改变而文件大小相同时，文件头和正文都必须重新解析。
     await writeFile(specPath, sameSize)
     await utimes(specPath, secondTime, secondTime)
     assert.equal(specFrom(await resolveSpec(targetA, root)), undefined)
     assert.equal(specFrom(await resolveSpec(targetB, root))?.content.includes('1. new'), true)
 
-    // 修改时间不变，只改变文件大小，正文同样必须刷新。
+    // 文件大小改变而修改时间相同时，正文同样必须重新解析。
     await writeFile(specPath, source('b', 'a longer rule'))
     await utimes(specPath, secondTime, secondTime)
     assert.equal(specFrom(await resolveSpec(targetB, root))?.content.includes('1. a longer rule'), true)

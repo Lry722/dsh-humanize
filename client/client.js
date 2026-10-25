@@ -6,7 +6,7 @@
  */
 // 各 chunk 的 URL 版本号由本文件的元数据算出。改完 chunk 后跑
 // `npm run stamp:client` 更新下面这一行。
-// chunks: 2ebb4fd1
+// chunks: 752287d4
 window.__ModuleLoader__.load({
   id: 'dsh-humanize',
   factory: (require) => {
@@ -30,7 +30,7 @@ window.__ModuleLoader__.load({
       void (async () => {
         // 文案表放在独立 chunk 里，加载完再注册 locale 和插槽。
         const { dictionaries } = await require.async('./client.locales.js')
-        // 逐语言注册，新增语言时只要在 locales chunk 里加一份字典即可。
+        // 逐语言注册，新增语言时只要在 locales chunk 里加一份文案表即可。
         ctx.effect(() => {
           const disposers = Object.entries(dictionaries)
             .map(([locale, dict]) => ctx.locale.register(NS, locale, dict))

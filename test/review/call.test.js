@@ -67,7 +67,7 @@ test('审查请求带上全文、审查范围和已有批注', async () => {
     const request = await readFile(join(root, 'tmp', 'a.md.request.md'), 'utf8')
     assert.match(request, /## system/)
     assert.match(request, /## user/)
-    // 没有已有批注时，用户消息里不出现这个小节。系统提示词里提到它不算。
+    // 用户消息只在存在已有批注时包含这个小节。系统提示词里提到它属于正常情况。
     assert.doesNotMatch(wholePrompt, /## Existing annotations/)
 
     const regionCtx = ctxWith([
@@ -234,7 +234,7 @@ test('留档写入失败时，审查结果和主错误照常返回', async () =>
     ]), warnings)
     const result = await runReview(success, { reviewProvider: 'p', reviewModel: 'm' }, agent, '/tmp/ok.md', '正文', null, spec, undefined)
     assert.equal(result.annotations.length, 1)
-    // warn 收格式串和参数，参数依次是留档类型、文件路径和错误原因。
+    // warn 接收格式串和参数，参数依次是留档类型、文件路径和错误原因。
     assert.match(String(warnings[0][0]), /failed to write review %s dump/)
     assert.equal(warnings[0][1], 'request')
     assert.equal(warnings[0][2], '/tmp/ok.md')

@@ -104,7 +104,7 @@ window.__ModuleLoader__.load({
 
     function ResetButton(props) {
       const t = useT()
-      // 字段被覆盖时才渲染按钮，标签行保持紧凑。
+      // 未覆盖时留空，标签行保持紧凑。
       if (!props.overridden) return null
       return h('button', { type: 'button', style: resetStyle, onClick: props.onReset }, t('common.reset'))
     }
@@ -249,7 +249,6 @@ window.__ModuleLoader__.load({
             paths.status === 'error' ? t('paths.unavailable') : t('paths.loading')),
         )
       }
-      // 复制按钮方便用户把路径粘贴到文件管理器里。
       const rows = [
         { label: t('paths.staging'), path: paths.staging },
         { label: t('paths.history'), path: paths.history },
@@ -259,6 +258,7 @@ window.__ModuleLoader__.load({
         rows.map((row) => h('div', { key: row.label, style: storageRowStyle },
           h('span', { style: storageLabelStyle }, row.label),
           h('span', { style: storagePathStyle, title: row.path }, row.path),
+          // 复制按钮方便用户把路径粘贴到文件管理器里。
           h(CopyButton, { text: row.path }),
         )),
       )

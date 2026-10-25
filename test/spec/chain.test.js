@@ -38,7 +38,7 @@ test('代码围栏里的编号保持原样，规则列表只收正文编号', ()
   assert.deepEqual(four.rules.map((rule) => rule.text), ['real'])
 })
 
-test('每份规则的 include 独立筛选，未命中的来源不会过滤其他规则', () => {
+test('每份规则的 include 独立筛选，其他来源命中的规则照常保留', () => {
   const candidates = [
     { path: '/proj/.agents/prose/base.md', kind: 'project', base: '/proj', include: ['docs/', '/README.md'] },
     { path: '/proj/docs/PROSE.md', kind: 'directory', base: '/proj/docs', include: undefined },
@@ -94,7 +94,7 @@ test('inherit: false 丢弃此前命中的规则，后续规则继续合并', ()
   ])
 })
 
-test('review 独立于规则 include，可以排除审查或保留无规则目标', () => {
+test('审查独立于规则 include，可以单独排除文件', () => {
   const candidates = [{
     path: '/proj/.agents/prose/base.md',
     kind: 'project',
@@ -102,6 +102,7 @@ test('review 独立于规则 include，可以排除审查或保留无规则目�
     include: ['docs/'],
     review: { include: ['*.md'], exclude: ['drafts/'] },
   }]
+  // 规则 include 没命中时没有适用规则，文件仍然可以进入审查。
   assert.deepEqual(resolveSpecChain(candidates, '/proj/src/a.md'), { chain: [], review: true })
   assert.equal(resolveSpecChain(candidates, '/proj/docs/a.js').review, false)
   assert.equal(resolveSpecChain(candidates, '/proj/drafts/a.md').review, false)
@@ -154,7 +155,7 @@ test('一级标题分块后，只有 Rules 章节的编号行算规则', () => {
   assert.ok(text.includes('# Notes\n1. 这不是规则。'))
 })
 
-test('多个 Rules 章节共用一套编号，围栏里的一级标题不切分章节', () => {
+test('多个 Rules 章节共用一套编号，围栏里的一级标题按正文处理', () => {
   const chain = [{
     path: '/proj/PROSE.md',
     content: [

@@ -19,7 +19,7 @@ async function makeProject(specContent) {
   return dir
 }
 
-test('没有 review 声明时所有文件都允许进入审查', async () => {
+test('没有 review 声明时所有文件都在审查范围内', async () => {
   const withSpec = await makeProject('# Rules\n1. 平铺直叙。\n')
   const withoutSpec = await makeProject(undefined)
   try {
@@ -94,7 +94,7 @@ test('命令把 --changed 的 HEAD 内容传给审查管线', async () => {
 
     const result = commands.get('humanize-review').handler({ agent, rawInput: '--changed' })
     assert.equal(result.kind, 'success')
-    assert.equal(result.text, '已派发增量审查。')
+    assert.equal(result.text, '已派发改动文件的审查。')
     await waitFor(() => state.reviewing.size === 0)
     assert.equal(calls.length, 1)
     assert.equal(calls[0][1], join(dir, 'doc.md'))
@@ -150,7 +150,7 @@ test('命令把最近提交涉及的文件交给全文审查', async () => {
 
     const result = commands.get('humanize-review').handler({ agent, rawInput: '--recent 1' })
     assert.equal(result.kind, 'success')
-    assert.equal(result.text, '已派发最近提交审查。')
+    assert.equal(result.text, '已派发最近提交涉及文件的审查。')
     await waitFor(() => state.reviewing.size === 0)
     assert.equal(calls.length, 1)
     assert.equal(calls[0][1], join(dir, 'doc.md'))

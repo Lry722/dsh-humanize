@@ -17,7 +17,7 @@ function makeAgent(config, options) {
   }
 }
 
-test('成对配置优先，半对配置整对退到会话模型', () => {
+test('成对配置优先，只配一半时跟随主会话最近一次请求的模型', () => {
   const agent = makeAgent({ provider: 'p', model: 'm' }, { provider: 'a', model: 'b' })
   assert.deepEqual(
     resolveModelTarget({ reviewProvider: 'q', reviewModel: 'cheap' }, agent, 'review'),
@@ -34,7 +34,7 @@ test('成对配置优先，半对配置整对退到会话模型', () => {
   )
 })
 
-test('配置留空时跟随会话最近一次请求的模型', () => {
+test('配置留空时跟随主会话最近一次请求的模型', () => {
   assert.deepEqual(
     resolveModelTarget({}, makeAgent({ provider: 'p', model: 'm' }), 'review'),
     { provider: 'p', model: 'm' },

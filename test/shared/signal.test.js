@@ -17,13 +17,15 @@ test('上游稍后中止时，自身也随之中止并转发原因', () => {
   assert.equal(controller.signal.reason, 'cancelled')
 })
 
-test('dispose 后停止跟随上游，没有上游时保持未中止', () => {
+test('dispose 后停止跟随上游', () => {
   const source = new AbortController()
   const linked = fuseAbortSignal(source.signal)
   linked.dispose()
   source.abort()
   assert.equal(linked.controller.signal.aborted, false)
+})
 
+test('不传上游时信号照常可用', () => {
   const plain = fuseAbortSignal(undefined)
   plain.dispose()
   assert.equal(plain.controller.signal.aborted, false)

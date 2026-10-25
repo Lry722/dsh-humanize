@@ -387,7 +387,7 @@ test('二进制文件跳过审查', async () => {
     await pipeline.scheduleReview(fakeAgent(), target, undefined, ''),
     { kind: 'binary' },
   )
-  // 二进制文件没有可审查的文本，跳过模型调用。
+  // 被判定为二进制的文件跳过模型调用。
   assert.equal(calls, 0)
   await pipeline.shutdown()
   await rm(storage, { recursive: true, force: true })
@@ -553,7 +553,7 @@ test('首次写入立即审查，审查结束后才开始倒计时', async () =>
     ...fakeContext(),
     llm: { stream: () => { calls += 1; return submitStream({ annotations: [] }) } },
   }
-  // 配置里没有 reviewIntervalSeconds 时取缺省值 60 秒，但首次审查不等待。
+  // 配置缺少 reviewIntervalSeconds 时取默认值 60 秒，首次审查立即执行。
   const config = { reviewProvider: 'p', reviewModel: 'm', reviewRetries: 0 }
   const pipeline = createReviewPipeline(ctx, config, { info() {}, warn() {} })
   const first = pipeline.scheduleWriteReview(fakeAgent(), target, undefined, '第一版。\n')

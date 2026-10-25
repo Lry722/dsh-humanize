@@ -35,7 +35,7 @@ test('缺少批注数组或文本里没有 JSON 时抛出错误', () => {
   assert.throws(() => parseAnnotations('no json here', rules))
 })
 
-test('null 和字符串条目丢掉，有效条目保留', () => {
+test('null 和字符串条目丢弃，有效条目保留', () => {
   const { annotations, dropped } = normalizeAnnotations({ annotations: [null, 'x', { rule: 1, quote: 'q' }] }, rules)
   assert.equal(annotations.length, 1)
   assert.equal(annotations[0].quote, 'q')
@@ -48,7 +48,7 @@ test('解析整段文本时只取中间的 JSON', () => {
   assert.equal(dropped, 0)
 })
 
-test('暂存标题只写规则条文，批注里的换行不会破坏格式', () => {
+test('暂存标题只写规则条文，批注里的换行也压成一行', () => {
   const rendered = renderStaging([
     { ruleText: 'rule one', quote: 'a\n2. injected', problem: 'p\n3. also', suggestion: 's' },
     { ruleText: 'rule two', quote: 'q2', problem: '', suggestion: '' },

@@ -33,7 +33,7 @@ test('改动区段包住改动并保留上下文', () => {
   assert.equal(textOf(insertedAfter, inserted[0]), 'a\nb\nc')
 })
 
-test('分散的多处改动各成一个区段，中间未改的内容不进入范围', () => {
+test('分散的多处改动各成一个区段，中间未改的内容留在区段之外', () => {
   const lines = Array.from({ length: 30 }, (_, index) => `line ${index + 1}`)
   const after = lines
     .map((line, index) => (index === 4 ? 'LINE 5' : index === 19 ? 'LINE 20' : line))

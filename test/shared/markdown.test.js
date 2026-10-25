@@ -44,7 +44,7 @@ test('longestBacktickRun 统计正文里的内联反引号串', () => {
   assert.equal(longestBacktickRun('````'), 4)
 })
 
-test('outerFence 最少 3 个反引号，并比正文里最长的串更长', () => {
+test('outerFence 最少 3 个反引号，并比正文里最长的反引号串更长', () => {
   assert.equal(outerFence('plain'), '```')
   assert.equal(outerFence('a `` b'), '```')
   assert.equal(outerFence('a ``` b'), '````')

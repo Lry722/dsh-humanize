@@ -5,7 +5,7 @@
 /** 等一个事件循环轮次，让排队的异步任务推进。 */
 export const tick = () => new Promise((resolve) => { setImmediate(resolve) })
 
-/** 等一段时间，用来留出一段空闲时间，便于确认期间是否产生动作。 */
+/** 等待一段时间，让异步任务继续推进。 */
 export const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms) })
 
 /** 轮询等待条件成立，超时后抛错。 */

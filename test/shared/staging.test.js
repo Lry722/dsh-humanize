@@ -58,7 +58,7 @@ test('暂存文件不可读时 collectStaged 抛出错误，不把它当成空�
 })
 
 test('新建的暂存目录权限为 0o700', {
-  // Windows 不按 POSIX 权限位处理目录；umask 拿掉属主位时目录也得不到 0o700。
+  // Windows 使用独立的权限模型。umask 去掉属主位时，目录权限会低于 0o700。
   skip: process.platform === 'win32' || (process.umask() & 0o700) !== 0,
 }, async () => {
   const storage = await mkdtemp(join(tmpdir(), 'humanize-staging-mode-'))

@@ -490,7 +490,7 @@ test('循环轮次上限不是整数时按缺省轮次运行', async () => {
     await ctx.commands.get('humanize-loop').handler({ agent, rawInput: '' })
     await waitFor(() => state.running.size === 0)
 
-    // 1.5 不是合法轮次，按缺省值跑满，而不是被截成 1 轮或 2 轮。
+    // 轮次上限只接受整数，1.5 时按缺省轮次跑满。
     assert.equal(starts, LOOP_ROUNDS_DEFAULT)
   } finally {
     await removeStorage(storage)
@@ -511,7 +511,7 @@ test('PROSE.md 文件头写坏时合并按失败结束，暂存批注保留', as
 
     const result = await ctx.commands.get('humanize').handler({ agent, rawInput: '' })
     assert.equal(result.kind, 'error')
-    // 规范错误要变成一次清楚的合并失败，而不是未处理的异常。
+    // 规范错误要变成一次合并失败。
     assert.match(result.text, /YAML 文件头无法解析/)
     await waitFor(() => state.running.size === 0 && state.mergeRun === null)
     // 失败保留暂存批注，修好规范后可以重新执行命令。

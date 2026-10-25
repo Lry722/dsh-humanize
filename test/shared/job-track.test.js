@@ -88,7 +88,7 @@ test('没有 jobs 服务时回合开始直接返回', () => {
   assert.doesNotThrow(() => listener({ id: 's1' }, { type: 'turn/start' }))
 })
 
-test('没有 jobs 服务时返回可结算的空操作对象', () => {
+test('没有 jobs 服务时返回空操作对象，settle 可以正常调用', () => {
   const tracked = openJob({}, log, {
     jobs: undefined,
     kind: 'humanize-review',
