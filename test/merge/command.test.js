@@ -92,10 +92,15 @@ function makeChild(id, parentSessionId) {
 /** 合并子代理，由测试决定何时放行。 */
 function deferredActivation(childId) {
   let resolve
-  const result = new Promise((done) => { resolve = done })
+  let reject
+  const result = new Promise((done, fail) => {
+    resolve = done
+    reject = fail
+  })
   return {
     activation: { childId, result, dispose: async () => {} },
     resolve,
+    reject,
   }
 }
 
@@ -416,7 +421,7 @@ test('合并期间写入的新暂存批注按新内容保留', async () => {
   }
 })
 
-test('压缩结束触发合并，完成后留下结果说明', async () => {
+test('压缩结束触发静默合并，不创建进度或结果通知', async () => {
   const storage = await mkdtemp(join(tmpdir(), 'humanize-compaction-'))
   setStorageRootResolver(() => storage)
   try {
@@ -424,19 +429,22 @@ test('压缩结束触发合并，完成后留下结果说明', async () => {
     const agent = makeAgent('agent-1', 'session-1', project)
     let starts = 0
     const activation = deferredActivation('child-1')
+    const jobs = makeJobs()
     const ctx = makeCtx([agent], async () => {
       starts += 1
       return activation.activation
-    })
+    }, undefined, jobs)
     const state = makeState()
-    registerMerge(ctx, log, { mergeOnCompaction: true, loopMaxRounds: 3 }, state, makeReviews().scheduleReview, async () => {}, () => {})
+    const reviews = makeReviews()
+    registerMerge(ctx, log, { mergeOnCompaction: true, loopMaxRounds: 3 }, state, reviews.scheduleReview, async () => {}, () => {})
 
     ctx.emit('session/event', { id: 'session-1', header: { cwd: project } }, { type: 'compaction/end', data: {} })
     await waitFor(() => starts === 1)
     activation.resolve({ stopReason: 'completed' })
-    await waitFor(() => state.merging.size === 0)
+    await waitFor(() => state.merging.size === 0 && reviews.calls.length === 1)
 
-    assert.match(noticeTexts(agent), /已按暂存批注修订/)
+    assert.equal(jobs.started.length, 0)
+    assert.equal(noticeTexts(agent), '')
   } finally {
     await removeStorage(storage)
   }
@@ -479,6 +487,30 @@ test('自动输出合并使用逻辑规则路径，且不创建进度或完成�
     assert.equal(noticeTexts(agent), '')
     assert.equal(reviews.calls.length, 1)
     assert.equal(reviews.calls[0].rulePath, rulePath)
+  } finally {
+    await removeStorage(storage)
+  }
+})
+
+test('静默合并的子代理调用失败时也不注入通知', async () => {
+  const storage = await mkdtemp(join(tmpdir(), 'humanize-merge-quiet-error-'))
+  setStorageRootResolver(() => storage)
+  try {
+    const { project, target } = await makeProject(storage)
+    const agent = makeAgent('agent-1', 'session-1', project)
+    const activation = deferredActivation('child-quiet-error')
+    const jobs = makeJobs()
+    const ctx = makeCtx([agent], async () => activation.activation, undefined, jobs)
+    const state = makeState()
+    const merge = registerMerge(ctx, log, { loopMaxRounds: 1 }, state, makeReviews().scheduleReview, async () => {}, () => {})
+
+    const run = merge.startMergeOnce(agent, target, [{ filePath: target, content: '1. "第一版。"\n' }], { quiet: true })
+    await run.started
+    activation.reject(new Error('子代理调用失败'))
+    await run.done
+
+    assert.equal(jobs.started.length, 0)
+    assert.equal(noticeTexts(agent), '')
   } finally {
     await removeStorage(storage)
   }

@@ -190,7 +190,7 @@ History serves troubleshooting only, and merging proceeds independently. The plu
 
 Run `/humanize <path>` to merge annotations for a file or directory. With no path, it uses the current working directory.
 
-The merge runs in a separate context. When it finishes, the main session receives a summary.
+The merge runs in a separate context. A manual merge sends a summary to the main session when it finishes; automatic merges do not inject this notice.
 
 The staged annotations for the merged files are cleared.
 
@@ -210,9 +210,9 @@ If the plugin reloads during a loop, that run ends. Completed merges still clear
 
 ### Background tasks
 
-`/humanize`, `/humanize-loop`, compaction-triggered merges and final-turn-output merges all register background tasks. The loop progress bar shows the current round and the number of annotations in that round.
+Only manual `/humanize` and `/humanize-loop` runs register merge tasks. The loop progress bar shows the current round and the number of annotations in that round. Automatic merges triggered by compaction or final turn output run silently without a task row or result notice.
 
-`/humanize` and `/humanize-loop` tasks can be cancelled from the task list. Cancelling a loop takes effect before the next round. Completed merges still clear their staged annotations. Compaction-triggered merges only report results and run to completion.
+`/humanize` and `/humanize-loop` tasks can be cancelled from the task list. Cancelling a loop takes effect before the next round. Completed merges still clear their staged annotations.
 
 If the profile watches this plugin's directory with HMR, changing the plugin's own source triggers a plugin reload. Reload ends a running merge. Run the command again to continue.
 
