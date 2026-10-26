@@ -49,13 +49,14 @@ Open the dsh-humanize row in the Plugins list and edit its configuration. The bo
 
 - `reviewProvider` and `reviewModel`: the model used for review, picked from the host model catalog. Defaults to the model the session is using.
 - `reviewReasoningEffort`: reasoning effort for the review model, picked from the efforts that model publishes. Defaults to the model's own default.
-- `mergeProvider` and `mergeModel`: the model used by the merge subagent, with the same controls as the review model. The merge subagent covers `/humanize`, `/humanize-loop` and compaction-triggered merges. Defaults to the model the main session is using. Set both fields together. If only one is set, both follow the session model.
+- `mergeProvider` and `mergeModel`: the model used by the merge subagent, with the same controls as the review model. The merge subagent covers `/humanize`, `/humanize-loop`, compaction-triggered and final-turn-output merges. Defaults to the model the main session is using. Set both fields together. If only one is set, both follow the session model.
 - `mergeReasoningEffort`: reasoning effort for the merge subagent, picked from the efforts that model publishes. Defaults to the reasoning effort the main session is using.
 - `reviewConcurrency`: maximum number of concurrent review calls, shared across write review, batch review and re-review. Minimum 1, default 3.
 - `reviewRetries`: number of retries after a failure. Minimum 0, maximum 3, default 1.
 - `reviewIntervalSeconds`: minimum time between reviews, counted from the end of the previous review. Writes during the interval are reviewed together when it ends. Minimum 0, maximum 3600, default 60. Set 0 to review without waiting.
 - `loopMaxRounds`: maximum rounds for loop merge. Minimum 1, maximum 10, default 3.
-- `mergeOnCompaction`: whether to merge all staged annotations in the project when context compaction ends. Default true. When off, merges only run on `/humanize` or `/humanize-loop`.
+- `saveTurnOutputs`: whether to save each main session's final assistant response and run one automatic review and merge round when rules match. Default false.
+- `mergeOnCompaction`: whether to merge all staged annotations in the project when context compaction ends. Default true. When off, compaction does not trigger a merge; other triggers are unaffected.
 - `storageDir`: where staged annotations are stored. Leave empty for the default `~/.dsh/humanize`.
 
 Each of the review and merge model sections has a test button. It sends a minimal request to confirm the provider, model and reasoning effort respond. An empty model selection follows the session model for review. The test button requires both fields to be set.
@@ -161,6 +162,14 @@ A review only looks at the regions changed in this write.
 
 Reviews of the same file run serially. Writes from different sessions or subagents queue separately, and queued reviews are kept per agent without overwriting each other. While a merge runs, the reviews of the agent that started it are aborted or discarded. Reviews from other agents on the same target files are treated the same way. Batch reviews and merge re-reviews skip the interval and run immediately.
 
+### Final turn outputs
+
+`saveTurnOutputs` is off by default. When enabled, the end of each main-session turn appends the last assistant message with visible text to `.agents/output/<session-id>.md` under the current working directory. Reasoning, tool calls, empty messages and internal subagent responses are not saved.
+
+Each session has its own file. Turn outputs are appended in order with a blank line between them. The newly appended region is reviewed immediately without waiting for `reviewIntervalSeconds`. If no rules apply, the review scope excludes the file, or review produces no annotations, the output is only saved and no merge is dispatched.
+
+When review produces annotations, one merge and re-review round runs automatically. Further annotations produced by re-review remain staged as they do for a manual single merge; they do not trigger an automatic loop. Appending, review and merge are serial within one session, and automatic merges from different sessions are dispatched one at a time.
+
 ### Staged annotations
 
 Annotations are staged under `~/.dsh/humanize/annotations/`. The path mirrors the reviewed file. Annotations can be edited directly. The storage location can be changed on the settings page.
@@ -197,7 +206,7 @@ If the plugin reloads during a loop, that run ends. Completed merges still clear
 
 ### Background tasks
 
-`/humanize`, `/humanize-loop` and compaction-triggered merges all register background tasks. The loop progress bar shows the current round and the number of annotations in that round.
+`/humanize`, `/humanize-loop`, compaction-triggered merges and final-turn-output merges all register background tasks. The loop progress bar shows the current round and the number of annotations in that round.
 
 `/humanize` and `/humanize-loop` tasks can be cancelled from the task list. Cancelling a loop takes effect before the next round. Completed merges still clear their staged annotations. Compaction-triggered merges only report results and run to completion.
 

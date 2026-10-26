@@ -14,6 +14,7 @@
     "reviewRetries": "Number of retries. A review is marked as failed after all retries are exhausted.",
     "reviewIntervalSeconds": "Minimum interval between reviews, counted from the end of the previous review. Writes arriving during the interval are combined into the next review.",
     "loopMaxRounds": "Maximum number of rounds in a merge loop.",
+    "saveTurnOutputs": "Append each main session's final assistant response to .agents/output/<session-id>.md and run one review and merge round when rules match. Off by default.",
     "mergeOnCompaction": "Automatically merge staged annotations when context compaction finishes.",
     "storageDir": "Where staged annotations are stored. Leave empty to use the default location ~/.dsh/humanize. Relative paths are resolved against the process working directory."
   }

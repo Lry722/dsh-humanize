@@ -16,6 +16,7 @@ test('缺省设置由字段表补齐', () => {
   assert.equal(settings.reviewRetries, 1)
   assert.equal(settings.reviewIntervalSeconds, 60)
   assert.equal(settings.loopMaxRounds, 3)
+  assert.equal(settings.saveTurnOutputs, false)
   assert.equal(settings.mergeOnCompaction, true)
   assert.equal(settings.storageDir, '')
 })

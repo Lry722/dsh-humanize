@@ -592,6 +592,15 @@ window.__ModuleLoader__.load({
             })
           }),
           h(BoolField, {
+            label: t('settings.saveTurnOutputs'),
+            value: value.saveTurnOutputs ?? false,
+            overridden: Object.prototype.hasOwnProperty.call(user, 'saveTurnOutputs'),
+            writable,
+            set: (next) => set('saveTurnOutputs', next),
+            unset: () => unset('saveTurnOutputs'),
+            hint: t('settings.saveTurnOutputsHint'),
+          }),
+          h(BoolField, {
             label: t('settings.mergeOnCompaction'),
             value: value.mergeOnCompaction,
             overridden: Object.prototype.hasOwnProperty.call(user, 'mergeOnCompaction'),
