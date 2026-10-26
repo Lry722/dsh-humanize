@@ -184,7 +184,7 @@ test('开启后使用当前工作目录并按 turn 追加最终回复', async ()
   }
 })
 
-test('不同会话写入不同文件，子代理回复跳过', async () => {
+test('不同会话写入不同文件，子代理的回复会被跳过', async () => {
   const root = await mkdtemp(join(tmpdir(), 'humanize-output-sessions-'))
   try {
     const firstEvents = [turnBoundary('turn/start', 1), assistant(1, 1, [text('主会话')])]
