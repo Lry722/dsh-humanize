@@ -356,7 +356,7 @@ PATH 是文件时合并这一个文件，是目录时合并目录下所有有批
   合并子代理按本包 cordis.patch.yml 里声明为 humanize-merge 的 preset 派发。
   运行轮次和待复审文件留在内存，插件重载会结束这次运行。
 - `lib/spec/`，PROSE 规范。`chain.js` 发现候选来源，筛选并排序适用规范，再渲染规范链。`match.js` 编译和匹配 include 与 review 模式。
-- `lib/settings/`，设置。`schema.js` 定义字段表，Config、运行时读取和边界都由它生成。`routes.js` 为设置页提供字段元数据和保存位置。`model-test.js` 处理审查模型和合并模型的测试请求。
+- `lib/settings/`，设置。`schema.js` 定义字段表，Config、运行时读取和边界都由它生成；Config 字段描述由包级 `locale/*.json` 按相同字段路径提供。`routes.js` 为设置页提供字段元数据和保存位置。`model-test.js` 处理审查模型和合并模型的测试请求。
 - `lib/shared/`，公共叶子层。
   `defaults.js` 存放审查间隔、并发、重试次数和循环轮次的默认值与边界。
   `staging.js` 负责暂存文件读写、历史留档与孤儿清理，保存位置可通过设置页的 storageDir 修改。
