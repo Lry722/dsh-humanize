@@ -14,7 +14,7 @@ import { waitFor } from '../helpers.js'
 
 const log = { info() {}, warn() {} }
 
-function makeCtx(agents, activation, llm) {
+function makeCtx(agents, activation, llm, jobs) {
   const list = [...agents]
   const byId = new Map(list.map((agent) => [agent.id, agent]))
   const bySession = new Map(list.map((agent) => [agent.session.id, agent]))
@@ -22,8 +22,8 @@ function makeCtx(agents, activation, llm) {
   const listeners = new Map()
   return {
     logger: () => log,
-    // jobs 服务缺失，取用外部服务一律返回 undefined。
-    get: () => undefined,
+    // 测试默认没有 jobs；需要验证进度时显式注入。
+    get: (name) => name === 'jobs' ? jobs : undefined,
     agents: {
       get: (id) => byId.get(id) ?? bySession.get(id),
       // 派发前的合并子代理检查要看全部 agent。
@@ -99,13 +99,27 @@ function deferredActivation(childId) {
   }
 }
 
+function makeJobs() {
+  const started = []
+  return {
+    started,
+    list: () => [],
+    start(spec) {
+      started.push(spec)
+      spec.run({ updateProgress() {} })
+      return `job-${started.length}`
+    },
+    wait: async () => {},
+  }
+}
+
 /** 记录复审调用的假调度器，全部返回批注数为零的结果。 */
 function makeReviews() {
   const calls = []
   return {
     calls,
-    async scheduleReview(agent, filePath, before, after) {
-      calls.push({ agent, filePath, before, after })
+    async scheduleReview(agent, filePath, before, after, signal, rulePath) {
+      calls.push({ agent, filePath, before, after, rulePath })
       return { kind: 'ok', annotations: 0 }
     },
   }
@@ -145,7 +159,8 @@ test('一轮合并后复审没有新批注时正常结束', async () => {
     const { project } = await makeProject(storage)
     const agent = makeAgent('agent-1', 'session-1', project)
     const activation = deferredActivation('child-1')
-    const ctx = makeCtx([agent], async () => activation.activation)
+    const jobs = makeJobs()
+    const ctx = makeCtx([agent], async () => activation.activation, undefined, jobs)
     const state = makeState()
     const reviews = makeReviews()
     registerMerge(ctx, log, { loopMaxRounds: 3 }, state, reviews.scheduleReview, async () => {}, () => {})
@@ -156,6 +171,7 @@ test('一轮合并后复审没有新批注时正常结束', async () => {
 
     await waitFor(() => state.running.size === 0)
     assert.equal(reviews.calls.length, 1)
+    assert.equal(jobs.started.length, 1)
     assert.match(noticeTexts(agent), /已按暂存批注修订/)
     // 摘要长度上限只作用于折叠行，正文的完整文件清单照常显示。
     const notice = agent.injected.find((message) => message.source?.form === 'notice')
@@ -421,6 +437,48 @@ test('压缩结束触发合并，完成后留下结果说明', async () => {
     await waitFor(() => state.merging.size === 0)
 
     assert.match(noticeTexts(agent), /已按暂存批注修订/)
+  } finally {
+    await removeStorage(storage)
+  }
+})
+
+test('自动输出合并使用逻辑规则路径，且不创建进度或完成通知', async () => {
+  const storage = await mkdtemp(join(tmpdir(), 'humanize-merge-quiet-'))
+  setStorageRootResolver(() => storage)
+  try {
+    const { project } = await makeProject(storage)
+    const target = join(storage, 'outside.md')
+    await writeFile(target, '最新回复。\n', 'utf8')
+    const rulePath = join(project, '.agents', 'output', 'latest.md')
+    const agent = makeAgent('agent-1', 'session-1', project)
+    const activation = deferredActivation('child-quiet')
+    let activationSpec
+    const jobs = makeJobs()
+    const ctx = makeCtx([agent], async (spec) => {
+      activationSpec = spec
+      return activation.activation
+    }, undefined, jobs)
+    const state = makeState()
+    const reviews = makeReviews()
+    const merge = registerMerge(ctx, log, { loopMaxRounds: 1 }, state, reviews.scheduleReview, async () => {}, () => {})
+
+    const run = merge.startMergeOnce(agent, target, [{
+      filePath: target,
+      content: '1. "最新回复。"\n',
+      rulePath,
+    }], { quiet: true })
+    await run.started
+    const requestPath = /The merge request is in (\S+\.merge\.md)\./.exec(activationSpec.request.prompt[0].text)[1]
+    const request = await readFile(requestPath, 'utf8')
+    assert.match(request, /平铺直叙/)
+    assert.ok(request.includes(`# ${target}`))
+
+    activation.resolve({ stopReason: 'completed' })
+    await run.done
+    assert.equal(jobs.started.length, 0)
+    assert.equal(noticeTexts(agent), '')
+    assert.equal(reviews.calls.length, 1)
+    assert.equal(reviews.calls[0].rulePath, rulePath)
   } finally {
     await removeStorage(storage)
   }

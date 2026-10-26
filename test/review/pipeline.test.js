@@ -266,6 +266,37 @@ function submitStream(payload) {
   }
 }
 
+test('项目外真实文件可按项目内逻辑路径匹配规则', async () => {
+  const storage = await mkdtemp(join(tmpdir(), 'humanize-pipeline-rule-path-'))
+  setStorageRootResolver(() => storage)
+  const project = join(storage, 'project')
+  await mkdir(join(project, '.git'), { recursive: true })
+  await writeFile(join(project, 'PROSE.md'), '# Rules\n1. 平铺直叙。\n', 'utf8')
+  const target = join(storage, 'outside.md')
+  await writeFile(target, '写给人看的文档。\n', 'utf8')
+  const rulePath = join(project, '.agents', 'output', 'latest.md')
+  const agent = fakeAgent()
+  agent.session.header.cwd = project
+  let calls = 0
+  const ctx = {
+    ...fakeContext(),
+    llm: { stream: () => {
+      calls += 1
+      return submitStream({ annotations: [] })
+    } },
+  }
+  const pipeline = createReviewPipeline(ctx, fakeConfig(), { info() {}, warn() {} })
+  try {
+    const outcome = await pipeline.scheduleReview(agent, target, undefined, '写给人看的文档。\n', undefined, rulePath)
+    assert.equal(outcome.kind, 'ok')
+    assert.equal(calls, 1)
+  } finally {
+    await pipeline.shutdown()
+    setStorageRootResolver(() => '')
+    await rm(storage, { recursive: true, force: true })
+  }
+})
+
 test('批注全部对不上规则编号时按失败处理，暂存批注保留', async () => {
   const storage = await mkdtemp(join(tmpdir(), 'humanize-pipeline-dropped-'))
   setStorageRootResolver(() => storage)

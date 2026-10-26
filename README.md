@@ -164,13 +164,15 @@ Reviews of the same file run serially. Writes from different sessions or subagen
 
 ### Final turn outputs
 
-`saveTurnOutputs` is off by default. When enabled, the end of each main-session turn appends the last assistant message with visible text to `.agents/output/<session-title>--<short-id>.md` under the current working directory. Reasoning, tool calls, empty messages and internal subagent responses are not saved.
+`saveTurnOutputs` is off by default. When enabled, the end of each main-session turn writes the last assistant message with visible text to `dsh-humanize-<uid>/output/<session-title>--<short-id>.md` under the system temp directory. Each write replaces the previous version, keeping only the latest response. Reasoning, tool calls, empty messages and internal subagent responses are not saved. No output file is actually created in the project directory.
 
-The filename uses the session title from the first saved turn. Path separators and other filesystem-unsafe characters become underscores, and an empty title falls back to `untitled-session`. The short ID suffix keeps same-title sessions separate. Renaming a session does not split its output history: later turns keep using the original file, which can also be found by its suffix after a plugin reload.
+The filename uses the session title from the first saved turn. Path separators and other filesystem-unsafe characters become underscores, and an empty title falls back to `untitled-session`. The short ID suffix keeps same-title sessions separate. Later turns keep using the original file after a rename, and the suffix finds it after a plugin reload. Saving a new output cleans temporary outputs that have not been updated for 24 hours.
 
-Each session has its own file. Turn outputs are appended in order with a blank line between them. The newly appended region is reviewed immediately without waiting for `reviewIntervalSeconds`. If no rules apply, the review scope excludes the file, or review produces no annotations, the output is only saved and no merge is dispatched.
+PROSE rules are still discovered and matched against the logical path `.agents/output/<session-title>--<short-id>.md` under the current working directory. This path is only a rule-matching label and need not exist. Review, merge and merge re-review share it, while all file I/O uses the real temp path. After the first new-version write, the plugin removes that session's legacy project output and its staged annotations.
 
-When review produces annotations, one merge and re-review round runs automatically. Further annotations produced by re-review remain staged as they do for a manual single merge; they do not trigger an automatic loop. Appending, review and merge are serial within one session, and automatic merges from different sessions are dispatched one at a time.
+Every write immediately runs a full review of the latest response without waiting for `reviewIntervalSeconds`; annotations from the previous turn are not carried over. If no rules apply, the review scope excludes the file, or review produces no annotations, the output is only saved and no merge is dispatched.
+
+When review produces annotations, one merge and re-review round runs silently: no task progress row or main-session completion notice is created. Manual `/humanize` and `/humanize-loop` progress and results are unchanged. Further annotations produced by re-review remain staged as they do for a manual single merge; they do not trigger an automatic loop. Replacement, review and merge are serial within one session, and automatic merges from different sessions are dispatched one at a time.
 
 ### Staged annotations
 
