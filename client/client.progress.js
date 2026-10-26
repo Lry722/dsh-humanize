@@ -104,7 +104,7 @@ window.__ModuleLoader__.load({
       const { jobs, sessionId } = props
       const t = typeof props.t === 'function' ? props.t : (key) => key
       const row = useHumanizeJob(jobs, sessionId)
-      if (row === null || row === undefined) return null
+      if (row === null) return null
       const view = jobView(row)
       const rows = [h('div', { key: 'head', style: dockRowStyle },
         h('span', { style: dockTitleStyle }, row.kind === KIND.loop ? t('progress.loop') : row.kind === KIND.merge ? t('progress.merge') : t('progress.review')),

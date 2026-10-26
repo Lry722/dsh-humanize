@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { createVolatile } from '@deepseek-ai/cosmokit'
 import { Config, readSettings, SETTINGS_FIELDS } from '../../lib/settings/schema.js'
 
 test('缺省设置由字段表补齐', () => {
@@ -17,6 +18,14 @@ test('显式设置覆盖缺省值', () => {
   assert.equal(settings.reviewRetries, 2)
   assert.equal(settings.reviewIntervalSeconds, 5)
   assert.equal(settings.loopMaxRounds, 5)
+})
+
+test('volatile 设置节点会被解引用', () => {
+  const settings = readSettings({
+    settings: createVolatile({ reviewRetries: 2 }),
+  })
+  assert.equal(settings.reviewRetries, 2)
+  assert.equal(settings.reviewIntervalSeconds, 60)
 })
 
 test('数值字段带边界，超出范围的配置在激活时被拒绝', () => {
