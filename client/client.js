@@ -6,7 +6,7 @@
  */
 // 各 chunk 的 URL 版本号由本文件的元数据算出。改完 chunk 后跑
 // `npm run stamp:client` 更新下面这一行。
-// chunks: 2d337c7d
+// chunks: 2f7518e5
 window.__ModuleLoader__.load({
   id: 'dsh-humanize',
   factory: (require) => {
