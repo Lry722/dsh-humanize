@@ -3,9 +3,11 @@
  *
  * 宿主按入口文件的 rev 给所有 chunk 的 URL 带版本参数。只动
  * client.settings.js 或 client.progress.js 时，入口 rev 保持旧值，浏览器
- * 仍会请求旧 URL。这个脚本把 client.locales.js、client.settings.js 和
- * client.progress.js 三个 chunk 的内容算成一个短 hash，写进入口的
- * `// chunks:` 标记。改完 chunk 后跑一次即可。
+ * 仍会请求旧 URL。
+ *
+ * 这个脚本把 client.locales.js、client.settings.js 和 client.progress.js
+ * 三个 chunk 的内容算成一个短 hash，写进入口的 `// chunks:` 标记。改完
+ * chunk 后跑一次即可。
  */
 import { createHash } from 'node:crypto'
 import { readFileSync, writeFileSync } from 'node:fs'

@@ -1,6 +1,6 @@
 /**
- * 任务 kind 的一致性测试。宿主端在 lib/shared/job-track.js 里定义，
- * 浏览器端在 client/client.progress.js 里另写一份字面量，两边靠这里对齐。
+ * 任务 kind 的一致性测试。宿主端在 lib/shared/job-track.js 里定义。
+ * 客户端在 client/client.progress.js 里另写一份字面量。本测试负责对齐两边。
  */
 import test from 'node:test'
 import assert from 'node:assert/strict'

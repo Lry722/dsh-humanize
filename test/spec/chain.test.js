@@ -49,7 +49,7 @@ test('每份规则的 include 独立筛选，其他来源命中的规则照常�
   assert.deepEqual(resolveSpecChain(candidates, '/proj/README.md').chain, [candidates[0]])
 })
 
-test('base.md 没有特殊顺序，同层规则按 priority 和路径排列', () => {
+test('base.md 和其他同层规则一样，按 priority 和路径排列', () => {
   const base = { path: '/proj/.agents/prose/base.md', kind: 'project', base: '/proj' }
   const alpha = { path: '/proj/.agents/prose/alpha.md', kind: 'project', base: '/proj' }
   const result = resolveSpecChain([base, alpha], '/proj/a.md')
@@ -102,13 +102,13 @@ test('审查独立于规则 include，可以单独排除文件', () => {
     include: ['docs/'],
     review: { include: ['*.md'], exclude: ['drafts/'] },
   }]
-  // 规则 include 没命中时没有适用规则，文件仍然可以进入审查。
+  // 文件能否进入审查由 review 单独决定，规则 include 只决定有没有适用规则。
   assert.deepEqual(resolveSpecChain(candidates, '/proj/src/a.md'), { chain: [], review: true })
   assert.equal(resolveSpecChain(candidates, '/proj/docs/a.js').review, false)
   assert.equal(resolveSpecChain(candidates, '/proj/drafts/a.md').review, false)
 })
 
-test('未命中的规则不参与 Rules 结构校验和编号', () => {
+test('只有命中的规则才参与 Rules 结构校验和编号', () => {
   const candidates = [
     { path: '/proj/.agents/prose/invalid.md', base: '/proj', include: ['/other.md'], content: '# Glossary\n1. broken' },
     { path: '/proj/.agents/prose/valid.md', base: '/proj', include: ['/a.md'], content: '# Rules\n1. valid' },

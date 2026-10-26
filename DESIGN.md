@@ -341,11 +341,33 @@ PATH 是文件时合并这一个文件，是目录时合并目录下所有有批
 
 - `lib/index.js`，插件入口，读取设置、包装写入工具、接管钩子和命令。
 - `lib/wrap.js`，包装写入工具，给 write/edit 增加必填的 human_facing。
-- `lib/review/`，审查子系统。`command.js` 执行 /humanize-review 批次，按设定的并发数并行。`pipeline.js` 把规范加载、审查调用和批注解析串成一次审查。`call.js` 发起审查调用并控制审查时长。`annotations.js` 解析批注并渲染成暂存的 markdown 文件。`diff.js` 整理改动区段，多处改动分成多段。`binary-file.js` 用 isbinaryfile 判断二进制文件，读不到文件时按文本处理。`git-files.js` 把审查目标展开成受 git 管理、且命中 review 范围的文件，增量模式带回改动前的内容。
-- `lib/merge/`，合并子系统。`command.js` 注册 /humanize、/humanize-loop 和 compaction/end 三种触发方式并编排轮次。`agent.js` 负责合并子代理的派发和收尾，规范和批注经临时请求文件交给子代理，临时文件在子代理结束后删除。`lock.js` 负责跨会话的合并锁和合并子代理的身份判定。合并子代理按本包 cordis.patch.yml 里声明为 humanize-merge 的 preset 派发，运行轮次和待复审文件留在内存，插件重载会结束这次运行。
+- `lib/review/`，审查子系统。
+  `command.js` 执行 /humanize-review 批次，按设定的并发数并行。
+  `pipeline.js` 把规范加载、审查调用和批注解析串成一次审查。
+  `call.js` 发起审查调用并控制审查时长。
+  `annotations.js` 解析批注并渲染成暂存的 markdown 文件。
+  `diff.js` 整理改动区段，多处改动分成多段。
+  `binary-file.js` 用 isbinaryfile 判断二进制文件，读不到文件时按文本处理。
+  `git-files.js` 把审查目标展开成受 git 管理且命中 review 范围的文件，增量模式带回改动前的内容。
+- `lib/merge/`，合并子系统。
+  `command.js` 注册 /humanize、/humanize-loop 和 compaction/end 三种触发方式并编排轮次。
+  `agent.js` 负责合并子代理的派发和收尾。规范和批注经临时请求文件交给子代理，子代理结束后删除临时文件。
+  `lock.js` 负责跨会话的合并锁和合并子代理的身份判定。
+  合并子代理按本包 cordis.patch.yml 里声明为 humanize-merge 的 preset 派发。
+  运行轮次和待复审文件留在内存，插件重载会结束这次运行。
 - `lib/spec/`，PROSE 规范。`chain.js` 发现候选来源，筛选并排序适用规范，再渲染规范链。`match.js` 编译和匹配 include 与 review 模式。
 - `lib/settings/`，设置。`schema.js` 定义字段表，Config、运行时读取和边界都由它生成。`routes.js` 为设置页提供字段元数据和保存位置。`model-test.js` 处理审查模型和合并模型的测试请求。
-- `lib/shared/`，公共叶子层。`defaults.js` 存放审查间隔、并发、重试次数和循环轮次的默认值与边界。`staging.js` 负责暂存文件读写、历史留档与孤儿清理，保存位置可通过设置页的 storageDir 修改。`job-track.js` 登记后台任务并屏蔽完成通知。`model.js` 读取会话当前模型配置。`prompts.js` 提供提示词资源。`paths.js` 处理命令路径的引号、`~` 展开和路径边界判断。`semaphore.js` 是可中止的并发闸门，所有审查调用共用 reviewConcurrency 这个上限。`signal.js` 转发中止信号。`markdown.js` 处理围栏代码块。`text.js` 提供单行化和截断工具。
+- `lib/shared/`，公共叶子层。
+  `defaults.js` 存放审查间隔、并发、重试次数和循环轮次的默认值与边界。
+  `staging.js` 负责暂存文件读写、历史留档与孤儿清理，保存位置可通过设置页的 storageDir 修改。
+  `job-track.js` 登记后台任务并屏蔽完成通知。
+  `model.js` 读取会话当前模型配置。
+  `prompts.js` 提供提示词资源。
+  `paths.js` 处理命令路径的引号、`~` 展开和路径边界判断。
+  `semaphore.js` 是可中止的并发闸门，所有审查调用共用 reviewConcurrency 这个上限。
+  `signal.js` 转发中止信号。
+  `markdown.js` 处理围栏代码块。
+  `text.js` 提供单行化和截断工具。
 
 目录约定：
 

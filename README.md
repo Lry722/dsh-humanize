@@ -169,7 +169,7 @@ Staging groups them by complete rule text, and rule headings contain only that t
 
 Before overwriting or removing a staging file, the plugin appends its current contents to `history/`, beside the review request records in the system temp directory. The exact path appears on the settings page. History paths mirror the reviewed file. Every operation adds a new file and keeps older snapshots, and each filename records the archive time and operation.
 
-Review clears, merge clears, and orphan cleanup use distinct labels.
+Review clearing, merge clearing, and orphan cleanup each use a distinct label.
 
 History serves troubleshooting only, and merging proceeds independently. The plugin leaves history files in place. The system may clean the temp directory according to its own policy.
 
