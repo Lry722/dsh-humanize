@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createVolatile } from '@deepseek-ai/cosmokit'
-import { Config, readSettings, SETTINGS_FIELDS } from '../../lib/settings/schema.js'
+import { Config, readSettings, SETTINGS_FIELDS, SETTINGS_KEY } from '../../lib/settings/schema.js'
 
 test('缺省设置由字段表补齐', () => {
   const settings = readSettings(undefined)
@@ -26,6 +26,19 @@ test('volatile 设置节点会被解引用', () => {
   })
   assert.equal(settings.reviewRetries, 2)
   assert.equal(settings.reviewIntervalSeconds, 60)
+})
+
+test('配置 schema 的字段描述包含中英文和英文回退', () => {
+  const schemaFields = Config.dict[SETTINGS_KEY].dict
+  for (const [key, field] of Object.entries(SETTINGS_FIELDS)) {
+    assert.ok(field.description.en, `${key} 缺少英文描述`)
+    assert.ok(field.description.zh, `${key} 缺少中文描述`)
+    assert.deepEqual(schemaFields[key].meta.description, {
+      '': field.description.en,
+      en: field.description.en,
+      zh: field.description.zh,
+    })
+  }
 })
 
 test('数值字段带边界，超出范围的配置在激活时被拒绝', () => {
