@@ -216,14 +216,14 @@ window.__ModuleLoader__.load({
       )
     }
 
-    /** 展示暂存批注、批注历史和审查请求记录的保存位置。 */
+    /** 展示暂存批注、批注历史、审查请求记录和最终回复输出的保存位置。 */
     function StoragePaths(props) {
       const t = useT()
       const [paths, setPaths] = useState({ status: 'loading' })
       useEffect(() => {
         let alive = true
         setPaths({ status: 'loading' })
-        // 三条路径都由宿主算出来，浏览器这边读不到这些目录。
+        // 四条路径都由宿主算出来，浏览器这边读不到这些目录。
         fetch('api/humanize.paths', {
           cache: 'no-store',
           headers: { accept: 'application/json' },
@@ -232,8 +232,8 @@ window.__ModuleLoader__.load({
           const result = await response.json()
           if (!alive) return
           if (typeof result?.staging === 'string' && typeof result?.history === 'string'
-            && typeof result?.requests === 'string') {
-            setPaths({ status: 'ready', staging: result.staging, history: result.history, requests: result.requests })
+            && typeof result?.requests === 'string' && typeof result?.output === 'string') {
+            setPaths({ status: 'ready', staging: result.staging, history: result.history, requests: result.requests, output: result.output })
             return
           }
           setPaths({ status: 'error' })
@@ -253,6 +253,7 @@ window.__ModuleLoader__.load({
         { label: t('paths.staging'), path: paths.staging },
         { label: t('paths.history'), path: paths.history },
         { label: t('paths.requests'), path: paths.requests },
+        { label: t('paths.output'), path: paths.output },
       ]
       return h('div', { style: fieldStyle },
         rows.map((row) => h('div', { key: row.label, style: storageRowStyle },

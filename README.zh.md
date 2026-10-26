@@ -45,7 +45,7 @@ dsh plugin --profile web add link:/path/to/dsh-humanize
 
 ## 配置
 
-在设置页的插件列表中找到 dsh-humanize，打开那一行的配置。设置页底部展示暂存批注、批注历史和审查请求记录的实际保存位置，三条路径旁边都有复制按钮。下面这些参数改完之后立即生效：
+在设置页的插件列表中找到 dsh-humanize，打开那一行的配置。设置页底部展示暂存批注、批注历史、审查请求记录和最终回复输出的实际保存位置，四条路径旁边都有复制按钮。下面这些参数改完之后立即生效：
 
 - `reviewProvider` 与 `reviewModel`：审查用的模型，从宿主模型目录里下拉选择。默认跟随会话当前使用的模型。
 - `reviewReasoningEffort`：审查模型的推理等级，从所选模型公布的等级里下拉选择。默认采用模型自身的默认值。
@@ -55,7 +55,7 @@ dsh plugin --profile web add link:/path/to/dsh-humanize
 - `reviewRetries`：失败重试次数，最小值为 0，最大值为 3，默认值为 1。
 - `reviewIntervalSeconds`：两次审查之间的最小间隔，从上一次审查结束开始计时。间隔内到达的写入会在计时结束后合并审查。取值范围为 0 到 3600，默认值为 60。设为 0 表示不等待。
 - `loopMaxRounds`：循环合并的轮次上限，最小值为 1，最大值为 10，默认值为 3。
-- `saveTurnOutputs`：是否保存主会话每轮最后的助手正文，并在有适用规则时自动执行一轮审查和合并。默认值为 false。
+- `saveTurnOutputs`：是否把主会话最新一轮回复保存到系统临时目录，并在有适用规则时静默执行一轮审查和合并。只保留最新版，默认值为 false。
 - `mergeOnCompaction`：上下文压缩结束时是否自动合并整个项目的暂存批注，默认值为 true。关闭后压缩不再触发合并，其他触发方式不受影响。
 - `storageDir`：暂存批注的保存位置，留空使用默认位置 `~/.dsh/humanize`。
 

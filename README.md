@@ -45,7 +45,7 @@ Restart dsh after installation.
 
 ## Configuration
 
-Open the dsh-humanize row in the Plugins list and edit its configuration. The bottom of the settings page shows where staged annotations, annotation history, and review request records are stored, with a copy button beside each path. These settings take effect immediately:
+Open the dsh-humanize row in the Plugins list and edit its configuration. The bottom of the settings page shows where staged annotations, annotation history, review request records, and final turn outputs are stored, with a copy button beside each path. These settings take effect immediately:
 
 - `reviewProvider` and `reviewModel`: the model used for review, picked from the host model catalog. Defaults to the model the session is using.
 - `reviewReasoningEffort`: reasoning effort for the review model, picked from the efforts that model publishes. Defaults to the model's own default.
@@ -55,7 +55,7 @@ Open the dsh-humanize row in the Plugins list and edit its configuration. The bo
 - `reviewRetries`: number of retries after a failure. Minimum 0, maximum 3, default 1.
 - `reviewIntervalSeconds`: minimum time between reviews, counted from the end of the previous review. Writes during the interval are reviewed together when it ends. Minimum 0, maximum 3600, default 60. Set 0 to review without waiting.
 - `loopMaxRounds`: maximum rounds for loop merge. Minimum 1, maximum 10, default 3.
-- `saveTurnOutputs`: whether to save each main session's final assistant response and run one automatic review and merge round when rules match. Default false.
+- `saveTurnOutputs`: whether to keep only the latest main-session response in a system temp file and run one silent review and merge round when rules match. Default false.
 - `mergeOnCompaction`: whether to merge all staged annotations in the project when context compaction ends. Default true. When off, compaction does not trigger a merge; other triggers are unaffected.
 - `storageDir`: where staged annotations are stored. Leave empty for the default `~/.dsh/humanize`.
 
