@@ -236,7 +236,9 @@ DSH 的 GenerateOptions 没有 JSON 模式参数，适配器也不会转发 resp
 
 `saveTurnOutputs` 控制这条可选链路，默认关闭。插件增量监听 turn/start、assistant/message 和 turn/end，不回读整份会话日志。每个主会话只保留当前 turn 最后一条含非空白可见正文的助手消息，turn 结束时删除候选。正文取全部 text block 按顺序拼接的结果，保留原始空白；推理、工具调用和子代理内部回复不进入输出。
 
-输出路径由 workingDirectory.get(session) 算出，为当前工作目录下的 `.agents/output/<会话 id>.md`。没有 workingDirectory 服务的轻量宿主退回会话头里的 cwd。会话 id 经路径编码后作为文件名。同一文件按 turn 顺序追加，两轮之间补一个空行，原子写入避免留下半份内容。
+输出路径由 workingDirectory.get(session) 算出，为当前工作目录下的 `.agents/output/<会话标题>--<短ID>.md`。没有 workingDirectory 服务的轻量宿主退回会话头里的 cwd。标题从 sessionTitle.get(session) 读取，清理文件系统不安全字符并按 UTF-8 字节数截断；空标题使用 `untitled-session`。短 ID 后缀区分同名会话。
+
+文件名在首次输出时确定。后续标题变化时，插件按短 ID 后缀找回原文件，不把同一会话拆成多份，也不让暂存批注的路径失效。这个查找只依赖输出目录，因此插件重载后仍然有效。同一文件按 turn 顺序追加，两轮之间补一个空行，原子写入避免留下半份内容。
 
 写入后调用立即审查入口，before 和 after 分别是追加前后的文件内容，因此模型只审查新增区段。没有适用规则或没有批注时流程到此结束。有批注时复用单次合并运行，完成合并与复审后不继续循环。
 
@@ -405,6 +407,7 @@ chunk 地址随主入口文件变化，浏览器可以长期缓存。改完 chun
 | agent 创建通知 | agent/created 事件         | dsh-agent              |
 | 会话事件       | session/event 事件         | dsh-session            |
 | 当前工作目录   | workingDirectory.get 方法  | dsh-working-directory  |
+| 会话标题       | sessionTitle.get 方法      | dsh-session-title      |
 | 主任务通知     | agent.inject 方法          | dsh-agent              |
 | 审查调用       | ctx.llm.stream 方法        | dsh-llm                |
 | 斜杠命令       | ctx.commands.register 方法 | dsh-commands           |

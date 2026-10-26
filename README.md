@@ -164,7 +164,9 @@ Reviews of the same file run serially. Writes from different sessions or subagen
 
 ### Final turn outputs
 
-`saveTurnOutputs` is off by default. When enabled, the end of each main-session turn appends the last assistant message with visible text to `.agents/output/<session-id>.md` under the current working directory. Reasoning, tool calls, empty messages and internal subagent responses are not saved.
+`saveTurnOutputs` is off by default. When enabled, the end of each main-session turn appends the last assistant message with visible text to `.agents/output/<session-title>--<short-id>.md` under the current working directory. Reasoning, tool calls, empty messages and internal subagent responses are not saved.
+
+The filename uses the session title from the first saved turn. Path separators and other filesystem-unsafe characters become underscores, and an empty title falls back to `untitled-session`. The short ID suffix keeps same-title sessions separate. Renaming a session does not split its output history: later turns keep using the original file, which can also be found by its suffix after a plugin reload.
 
 Each session has its own file. Turn outputs are appended in order with a blank line between them. The newly appended region is reviewed immediately without waiting for `reviewIntervalSeconds`. If no rules apply, the review scope excludes the file, or review produces no annotations, the output is only saved and no merge is dispatched.
 

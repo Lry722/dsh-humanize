@@ -14,7 +14,7 @@
     "reviewRetries": "重试次数。重试用尽后记为失败",
     "reviewIntervalSeconds": "两次审查之间的最小间隔，从上一次审查结束开始计时。间隔内到达的写入合并到下一次审查",
     "loopMaxRounds": "循环合并的轮次上限",
-    "saveTurnOutputs": "把主会话每轮最后的助手正文追加到 .agents/output/<会话 id>.md，有适用规则时自动执行一轮审查和合并，默认关闭",
+    "saveTurnOutputs": "把主会话每轮最后的助手正文追加到 .agents/output/<会话标题>--<短ID>.md，有适用规则时自动执行一轮审查和合并，默认关闭",
     "mergeOnCompaction": "上下文压缩结束时自动合并暂存批注",
     "storageDir": "暂存批注的保存位置。留空时使用默认位置 ~/.dsh/humanize。相对路径按进程工作目录解析"
   }
