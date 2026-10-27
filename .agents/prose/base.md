@@ -1,15 +1,11 @@
 ---
 include:
-  - "**/*"
-review:
-  include:
-    - "*.md"
-    - "*.js"
-    - "*.mjs"
-    - "*.ts"
-  exclude:
-    - "prompts/"
-    - ".agents/prose/"
+  - "**/*.md"
+  - "**/*.js"
+  - "**/*.mjs"
+  - "**/*.ts"
+  - "!prompts/"
+  - "!.agents/prose/"
 ---
 
 # Rules

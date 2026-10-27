@@ -34,11 +34,11 @@ test('会话位于子目录时仍从仓库根发现项目规则', async () => {
     await writeFile(target, 'x\n')
 
     const result = await resolveSpec(target, cwd)
-    assert.deepEqual(result.chain.map((entry) => entry.path), [
+    assert.deepEqual(result.map((entry) => entry.path), [
       join(specs, 'base.md'),
       join(specs, 'single.md'),
     ])
-    assert.equal(result.chain.every((entry) => entry.base === root), true)
+    assert.equal(result.every((entry) => entry.base === root), true)
   } finally {
     await rm(root, { recursive: true, force: true })
   }
@@ -58,7 +58,7 @@ test('目标位于会话目录之外时使用目标自己的仓库规则', async
     await writeFile(target, 'x\n')
 
     const result = await resolveSpec(target, session)
-    assert.deepEqual(result.chain.map((entry) => entry.path), [join(specs, 'base.md')])
+    assert.deepEqual(result.map((entry) => entry.path), [join(specs, 'base.md')])
   } finally {
     await rm(root, { recursive: true, force: true })
   }
@@ -76,10 +76,10 @@ test('目标位于项目规则目录时同一路径只加载一次', async () =>
     await writeFile(target, 'x\n')
 
     const result = await resolveSpec(target, root)
-    assert.equal(result.chain.length, 1)
-    assert.equal(result.chain[0].path, specPath)
-    assert.equal(result.chain[0].kind, 'project')
-    assert.equal(result.chain[0].base, root)
+    assert.equal(result.length, 1)
+    assert.equal(result[0].path, specPath)
+    assert.equal(result[0].kind, 'project')
+    assert.equal(result[0].base, root)
   } finally {
     await rm(root, { recursive: true, force: true })
   }
@@ -95,12 +95,12 @@ test('项目规则文件新增和删除后重新发现，base.md 遵守显式 in
     const target = join(root, 'a.md')
     await writeFile(target, 'x\n')
 
-    assert.deepEqual((await resolveSpec(target, root)).chain, [])
+    assert.deepEqual((await resolveSpec(target, root)), [])
     const added = join(specs, 'single.md')
     await writeFile(added, '---\ninclude: ["/a.md"]\n---\n# Rules\n1. single\n')
-    assert.deepEqual((await resolveSpec(target, root)).chain.map((entry) => entry.path), [added])
+    assert.deepEqual((await resolveSpec(target, root)).map((entry) => entry.path), [added])
     await rm(added)
-    assert.deepEqual((await resolveSpec(target, root)).chain, [])
+    assert.deepEqual((await resolveSpec(target, root)), [])
   } finally {
     await rm(root, { recursive: true, force: true })
   }
@@ -118,7 +118,7 @@ test('项目规则目录忽略以 .md 结尾的目录', async () => {
     await writeFile(target, 'x\n')
 
     const result = await resolveSpec(target, root)
-    assert.deepEqual(result.chain.map((entry) => entry.path), [specPath])
+    assert.deepEqual(result.map((entry) => entry.path), [specPath])
   } finally {
     await rm(root, { recursive: true, force: true })
   }
@@ -138,7 +138,7 @@ test('项目规则目录继续加载文件符号链接', { skip: process.platfor
     await writeFile(target, 'x\n')
 
     const result = await resolveSpec(target, root)
-    assert.deepEqual(result.chain.map((entry) => entry.path), [specPath])
+    assert.deepEqual(result.map((entry) => entry.path), [specPath])
   } finally {
     await rm(root, { recursive: true, force: true })
   }
@@ -154,7 +154,7 @@ test('同一路径规则覆盖后按修改时间和大小刷新解析缓存', as
     await writeFile(targetA, 'a\n')
     await writeFile(targetB, 'b\n')
     const source = (name, rule) => `---\ninclude: ["/${name}.md"]\n---\n# Rules\n1. ${rule}\n`
-    const specFrom = (result) => result.chain.find((entry) => entry.path === specPath)
+    const specFrom = (result) => result.find((entry) => entry.path === specPath)
     const firstTime = new Date('2020-01-01T00:00:00Z')
     const secondTime = new Date('2021-01-01T00:00:00Z')
     const initial = source('a', 'old')

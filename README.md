@@ -133,22 +133,9 @@ Only numbered lines under `# Rules` take part in global rule numbering. Numbers 
 
 ### Review scope
 
-Review eligibility is independent of rule selection. Any candidate spec can declare `review.include` and `review.exclude`:
+A file enters review when at least one spec applies and the merged set contains at least one numbered rule. `include` selects the applicable specs; `priority` and `inherit` only affect merging. There is no separate review declaration.
 
-```markdown
----
-review:
-  include:
-    - "docs/"
-    - "/CHANGELOG.md"
-  exclude:
-    - "docs/drafts/"
----
-```
-
-Review declarations come from all candidate specs, independently of `include` matches and `inherit: false`. If any candidate declares `review.include`, review uses one allowlist across all candidates and starts denied. Include and exclude matches then enable or disable review in the same priority and source order. The last match wins.
-
-Without any `review.include`, review starts allowed, so `review.exclude` alone can opt files out. These declarations control whether review runs. Merge rule selection stays independent of them.
+Batch collection first drops files that no spec matches. Files matched by a spec without numbered rules are reported by the review pipeline. Write review, batch review and post-merge re-review share this decision.
 
 Binary files such as images, archives, fonts and build output skip review. Detection samples the start of the file. Write review and batch review both use it. A batch review reports how many files it skipped.
 
@@ -170,7 +157,7 @@ The filename uses the session title from the first saved turn. Path separators a
 
 PROSE rules are still discovered and matched against the logical path `.agents/output/<session-title>--<short-id>.md` under the current working directory. This path is only a rule-matching label and need not exist. Review and merge share it, while all file I/O uses the real temp path. After the first new-version write, the plugin removes that session's legacy project output and its staged annotations.
 
-Each write saves only the original output and clears annotations from the previous turn. It does not start a review. Clicking the polish icon in the action row of the latest eligible turn immediately runs a full review without waiting for `reviewIntervalSeconds`. If no rules apply, the review scope excludes the file, or review produces no annotations, polishing ends without dispatching a merge.
+Each write saves only the original output and clears annotations from the previous turn. It does not start a review. Clicking the polish icon in the action row of the latest eligible turn immediately runs a full review without waiting for `reviewIntervalSeconds`. If no rules apply or review produces no annotations, polishing ends without dispatching a merge.
 
 When review produces annotations, one merge round runs silently and polishing finishes as soon as that merge completes. There is no re-review. No task progress row or main-session completion notice is created. Manual `/humanize` and `/humanize-loop` progress, results and re-review are unchanged. Replacement, review and merge are serial within one session, and merges of final turn outputs from different sessions are dispatched one at a time.
 
@@ -244,7 +231,7 @@ Review runs in the background as a task. The progress bar updates above the inpu
 
 The target must be inside a git repository whose status can be read. If either condition is missing, the task ends as failed with a reason. If there is nothing to review, the task ends as completed and says so.
 
-All three modes apply the independent `review.include` and `review.exclude` decision described above. A file must be allowed for review and have at least one applicable numbered rule. The modes differ in which files they check:
+All three modes keep only files matched by at least one spec. The pipeline then requires at least one numbered rule. The modes differ in which files they check:
 
 - The default mode checks git-tracked files.
 - The incremental mode checks changed files.

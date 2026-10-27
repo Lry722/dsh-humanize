@@ -471,12 +471,12 @@ test('写入审查共用 reviewConcurrency 上限', async () => {
   }
 })
 
-test('review.exclude 命中的文件跳过审查，不调用模型', async () => {
+test('没有命中规范的写入跳过审查，不调用模型', async () => {
   const storage = await mkdtemp(join(tmpdir(), 'humanize-pipeline-review-scope-'))
   setStorageRootResolver(() => storage)
   const project = join(storage, 'project')
   await mkdir(join(project, '.git'), { recursive: true })
-  await writeFile(join(project, 'PROSE.md'), '---\nreview:\n  exclude: ["generated/"]\n---\n# Rules\n1. 平铺直叙。\n')
+  await writeFile(join(project, 'PROSE.md'), '---\ninclude: ["docs/"]\n---\n# Rules\n1. 平铺直叙。\n')
   const target = join(project, 'generated', 'doc.md')
   await mkdir(join(project, 'generated'), { recursive: true })
   await writeFile(target, '生成内容。\n')

@@ -44,19 +44,19 @@ test('每份规则的 include 独立筛选，其他来源命中的规则照常�
     { path: '/proj/docs/PROSE.md', kind: 'directory', base: '/proj/docs', include: undefined },
   ]
   const docs = resolveSpecChain(candidates, '/proj/docs/a.md')
-  assert.deepEqual(docs.chain.map((entry) => entry.path), candidates.map((entry) => entry.path))
-  assert.deepEqual(resolveSpecChain(candidates, '/proj/src/a.md').chain, [])
-  assert.deepEqual(resolveSpecChain(candidates, '/proj/README.md').chain, [candidates[0]])
+  assert.deepEqual(docs.map((entry) => entry.path), candidates.map((entry) => entry.path))
+  assert.deepEqual(resolveSpecChain(candidates, '/proj/src/a.md'), [])
+  assert.deepEqual(resolveSpecChain(candidates, '/proj/README.md'), [candidates[0]])
 })
 
 test('base.md 和其他同层规则一样，按 priority 和路径排列', () => {
   const base = { path: '/proj/.agents/prose/base.md', kind: 'project', base: '/proj' }
   const alpha = { path: '/proj/.agents/prose/alpha.md', kind: 'project', base: '/proj' }
   const result = resolveSpecChain([base, alpha], '/proj/a.md')
-  assert.deepEqual(result.chain.map((entry) => entry.path), [alpha.path, base.path])
+  assert.deepEqual(result.map((entry) => entry.path), [alpha.path, base.path])
 
   const prioritized = resolveSpecChain([{ ...base, priority: -1 }, alpha], '/proj/a.md')
-  assert.deepEqual(prioritized.chain.map((entry) => entry.path), [base.path, alpha.path])
+  assert.deepEqual(prioritized.map((entry) => entry.path), [base.path, alpha.path])
 })
 
 test('缺省 priority 保持用户、项目、目录从浅到深的合并顺序', () => {
@@ -67,7 +67,7 @@ test('缺省 priority 保持用户、项目、目录从浅到深的合并顺序'
     { path: '/global/PROSE.md', kind: 'user', scope: null },
   ]
   const result = resolveSpecChain(candidates, '/proj/docs/a.md')
-  assert.deepEqual(result.chain.map((entry) => entry.path), [
+  assert.deepEqual(result.map((entry) => entry.path), [
     '/global/PROSE.md',
     '/proj/.agents/prose/base.md',
     '/proj/PROSE.md',
@@ -83,29 +83,15 @@ test('inherit: false 丢弃此前命中的规则，后续规则继续合并', ()
     { path: '/proj/docs/PROSE.md', kind: 'directory', base: '/proj/docs', priority: 20 },
   ]
   const result = resolveSpecChain(candidates, '/proj/docs/a.md')
-  assert.deepEqual(result.chain.map((entry) => entry.path), [
+  assert.deepEqual(result.map((entry) => entry.path), [
     '/proj/.agents/prose/special.md',
     '/proj/docs/PROSE.md',
   ])
   const unrelated = resolveSpecChain(candidates, '/proj/other.md')
-  assert.deepEqual(unrelated.chain.map((entry) => entry.path), [
+  assert.deepEqual(unrelated.map((entry) => entry.path), [
     '/global/PROSE.md',
     '/proj/.agents/prose/base.md',
   ])
-})
-
-test('审查独立于规则 include，可以单独排除文件', () => {
-  const candidates = [{
-    path: '/proj/.agents/prose/base.md',
-    kind: 'project',
-    base: '/proj',
-    include: ['docs/'],
-    review: { include: ['*.md'], exclude: ['drafts/'] },
-  }]
-  // 文件能否进入审查由 review 单独决定，规则 include 只决定有没有适用规则。
-  assert.deepEqual(resolveSpecChain(candidates, '/proj/src/a.md'), { chain: [], review: true })
-  assert.equal(resolveSpecChain(candidates, '/proj/docs/a.js').review, false)
-  assert.equal(resolveSpecChain(candidates, '/proj/drafts/a.md').review, false)
 })
 
 test('只有命中的规则才参与 Rules 结构校验和编号', () => {
@@ -113,7 +99,7 @@ test('只有命中的规则才参与 Rules 结构校验和编号', () => {
     { path: '/proj/.agents/prose/invalid.md', base: '/proj', include: ['/other.md'], content: '# Glossary\n1. broken' },
     { path: '/proj/.agents/prose/valid.md', base: '/proj', include: ['/a.md'], content: '# Rules\n1. valid' },
   ]
-  const { chain } = resolveSpecChain(candidates, '/proj/a.md')
+  const chain = resolveSpecChain(candidates, '/proj/a.md')
   const result = buildSpecRules(chain)
   assert.deepEqual(result.rules.map((rule) => rule.text), ['valid'])
 })

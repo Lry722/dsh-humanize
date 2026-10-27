@@ -1,6 +1,8 @@
 ---
 include:
   - "*.md"
+  - "!prompts/"
+  - "!.agents/prose/"
 ---
 
 # Rules

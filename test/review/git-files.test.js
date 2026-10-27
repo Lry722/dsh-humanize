@@ -74,7 +74,7 @@ test('增量模式遵守审查范围和命令路径', async () => {
   const dir = await makeRepo()
   try {
     await mkdir(join(dir, 'docs'))
-    await writeFile(join(dir, 'PROSE.md'), '---\nreview:\n  include: [\'*.md\']\n---\n\n# Rules\n\n1. 平铺直叙。\n')
+    await writeFile(join(dir, 'PROSE.md'), '---\ninclude: [\'*.md\']\n---\n\n# Rules\n\n1. 平铺直叙。\n')
     await writeFile(join(dir, 'docs', 'a.md'), 'old a\n')
     await writeFile(join(dir, 'docs', 'b.js'), 'old b\n')
     await writeFile(join(dir, 'other.md'), 'old other\n')
@@ -95,7 +95,7 @@ test('增量模式遵守审查范围和命令路径', async () => {
   }
 })
 
-test('规则 include 不作为整个批次的审查开关', async () => {
+test('规则 include 决定整个批次的审查范围', async () => {
   const dir = await makeRepo()
   try {
     await mkdir(join(dir, 'docs'))
@@ -104,10 +104,9 @@ test('规则 include 不作为整个批次的审查开关', async () => {
     await writeFile(join(dir, 'docs', 'b.js'), 'b\n')
     await commitAll(dir)
 
-    // b.js 会在管线里记为没有适用规则，收集阶段仍保留这个正常结果。
+    // b.js 没有命中规范，收集阶段直接跳过。
     assert.deepEqual(paths(await collectTargets(join(dir, 'docs'), dir)), [
       join(dir, 'docs', 'a.md'),
-      join(dir, 'docs', 'b.js'),
     ])
   } finally {
     await rm(dir, { recursive: true, force: true })
@@ -194,7 +193,7 @@ test('最近提交模式遵守审查范围和命令路径', async () => {
   const dir = await makeRepo()
   try {
     await mkdir(join(dir, 'docs'))
-    await writeFile(join(dir, 'PROSE.md'), '---\nreview:\n  include: [\'*.md\']\n---\n\n# Rules\n\n1. 平铺直叙。\n')
+    await writeFile(join(dir, 'PROSE.md'), '---\ninclude: [\'*.md\']\n---\n\n# Rules\n\n1. 平铺直叙。\n')
     await writeFile(join(dir, 'docs', 'a.md'), 'old a\n')
     await writeFile(join(dir, 'docs', 'b.js'), 'old b\n')
     await writeFile(join(dir, 'other.md'), 'old other\n')
