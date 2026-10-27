@@ -6,7 +6,7 @@
  */
 // 各 chunk 的 URL 版本号由本文件的元数据算出。改完 chunk 后跑
 // `npm run stamp:client` 更新下面这一行。
-// chunks: 2f7518e5
+// chunks: 0be3520e
 window.__ModuleLoader__.load({
   id: 'dsh-humanize',
   factory: (require) => {
@@ -25,6 +25,8 @@ window.__ModuleLoader__.load({
     const LazyConfigSection = lazy(async () => ({ default: (await require.async('./client.settings.js')).ConfigSection }))
     /** 进度条 chunk，只在首次出现审查任务时请求。 */
     const LazyProgressDock = lazy(async () => ({ default: (await require.async('./client.progress.js')).ProgressDock }))
+    /** 输出卡片只在最新有效 turn 首次出现时加载。 */
+    const LazyTurnOutputTail = lazy(async () => ({ default: (await require.async('./client.turn-output.js')).TurnOutputTail }))
 
     function apply(ctx) {
       void (async () => {
@@ -48,6 +50,21 @@ window.__ModuleLoader__.load({
             h(LazyProgressDock, { jobs, sessionId: String(owner.sessionId), t: owner.t }))))
         })
         ctx.inject(['configForms'], (formCtx) => {
+          const configForm = formCtx.configForms.get(NS)
+          formCtx.effect(() => formCtx.slots.inject('conversation.chat.turnTail', () => formCtx.slots.register({
+            name: 'conversation.chat.turnTail',
+            id: 'dsh-humanize-turn-output',
+            order: 15,
+            locale: NS,
+          }, (owner) => h(Suspense, { fallback: null },
+            h(LazyTurnOutputTail, {
+              turn: owner.turn,
+              openFile: owner.openFile,
+              sessionId: String(owner.sessionId),
+              useChat: owner.useChat,
+              configForm,
+              t: owner.t,
+            })))), 'dsh-humanize: turn output card')
           // remote 代理按命名空间划分，inject 里声明过的命名空间才能访问。
           formCtx.inject(['remote', 'remote.session'], (remCtx) => {
             const configForms = formCtx.configForms

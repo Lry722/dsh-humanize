@@ -9,8 +9,13 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
-// 三个 chunk 的内容变化后必须重新运行生成版本戳的脚本，否则浏览器会继续用带旧版本参数的 chunk URL。
-const chunks = ['client/client.locales.js', 'client/client.settings.js', 'client/client.progress.js']
+// chunk 内容变化后必须重新运行生成版本戳的脚本，否则浏览器会继续用带旧版本参数的 chunk URL。
+const chunks = [
+  'client/client.locales.js',
+  'client/client.settings.js',
+  'client/client.progress.js',
+  'client/client.turn-output.js',
+]
 
 test('入口文件的版本戳与 chunk 内容一致', async () => {
   const contents = await Promise.all(chunks.map((file) => readFile(join(root, file))))

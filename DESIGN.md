@@ -246,6 +246,12 @@ workingDirectory.get(session) 只决定规则归属，轻量宿主退回会话�
 
 每个会话有一条处理队列，下一轮不会与上一轮合并并发修改同一输出文件。不同会话的写入和审查可以并行，自动合并另走一条串行队列。手动或压缩合并仍由全局合并锁仲裁，冲突时保留批注。
 
+输出链路另外记录 sessionId、turn、真实路径、状态、更新时间和失败原因。状态依次为 saving、processing 和 ready/failed；读取时按文件实际情况派生 missing/expired。元数据写在同目录的隐藏 JSON sidecar 中，Markdown 文件名和正文格式不变。sidecar 串行更新并校验所属会话和路径，插件重载后可以恢复轮次；没有 sidecar 的旧版输出按短 ID 找回，并尽量从会话日志恢复轮次。新 turn 入队后，旧任务的异步收尾不能覆盖新状态。
+
+`output/routes.js` 在认证 Connection 内注册只读 GET 路由，只接受一个 sessionId，不接受 path 或 filePath，响应带 no-store。路由只返回元数据，正文仍由 GUI 已有的授权文件读取服务打开。
+
+浏览器在 conversation.chat.turnTail 注册懒加载卡片。设置镜像里的 saveTurnOutputs 开启且当前节点是最新含可见正文的已结束 turn 时才挂载。卡片只在可见且处理中轮询状态，隐藏、终态、切轮和卸载都会取消计时器或作废请求。点击查看时再次校验会话和 turn，再调用 slot 的 openFile，复用右侧栏 Markdown 预览；不替换原助手消息，不自动打开侧栏，也不创建自动合并任务行。
+
 ### 暂存批注
 
 暂存批注保存为 markdown 文件，放在用户数据目录下，支持用户自行增改。
@@ -364,7 +370,7 @@ PATH 是文件时合并这一个文件，是目录时合并目录下所有有批
   `diff.js` 整理改动区段，多处改动分成多段。
   `binary-file.js` 用 isbinaryfile 判断二进制文件，读不到文件时按文本处理。
   `git-files.js` 把审查目标展开成受 git 管理且命中 review 范围的文件，增量模式带回改动前的内容。
-- `lib/output/`，最终回复输出。`turns.js` 跟踪 turn 末尾正文，按会话追加文件，串接立即审查和单次自动合并。
+- `lib/output/`，最终回复输出。`turns.js` 跟踪 turn 末尾正文，按会话覆盖文件，串接立即审查和单次自动合并，并维护轮次元数据。`routes.js` 提供会话级只读状态路由。
 - `lib/merge/`，合并子系统。
   `command.js` 注册 /humanize、/humanize-loop 和 compaction/end 三种触发方式并编排轮次，同时向最终回复输出提供单次合并入口。
   `agent.js` 负责合并子代理的派发和收尾。规范和批注经临时请求文件交给子代理，子代理结束后删除临时文件。
@@ -392,12 +398,13 @@ PATH 是文件时合并这一个文件，是目录时合并目录下所有有批
 - 不建目录级 barrel，模块之间保留直接相对路径。
 - `test/` 镜像 `lib/` 的目录结构，测试文件按模块命名。
 
-浏览器端的 client/ 目录拆为主入口加三个按需加载 chunk，与官方 dsh-client-ui-sidebar-terminal 的 client.js 和 client.terminal.js 是同一模式。主入口负责插槽注册，文案表、设置卡片和进度条各自是一个 chunk。
+浏览器端的 client/ 目录拆为主入口加四个按需加载 chunk，与官方 dsh-client-ui-sidebar-terminal 的 client.js 和 client.terminal.js 是同一模式。主入口负责插槽注册，文案表、设置卡片、进度条和输出卡片各自是一个 chunk。
 
-- `client/client.js`，入口文件，负责按需加载各 chunk。注册 conversation.input.dock 与两处设置插槽。
+- `client/client.js`，入口文件，负责按需加载各 chunk。注册 conversation.input.dock、conversation.chat.turnTail 与两处设置插槽。
 - `client/client.locales.js`，界面文案表，英文和中文各一份。
 - `client/client.settings.js`，设置卡片，通用表单控件与业务字段。
 - `client/client.progress.js`，输入框上方的进度条，渲染审查批次、单次合并和循环合并三种任务。
+- `client/client.turn-output.js`，最新有效 turn 的输出状态卡片，负责有界状态查询和调用内置文件预览。
 
 chunk 地址随主入口文件变化，浏览器可以长期缓存。改完 chunk 需要同步更新主入口，让浏览器加载新的 chunk。
 
