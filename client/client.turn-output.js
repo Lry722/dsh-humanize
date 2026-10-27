@@ -47,10 +47,7 @@ window.__ModuleLoader__.load({
       return metadata
     }
 
-    /**
-     * 单入口查询状态机。请求串行，隐藏会作废在途响应。只有处理中且可见时
-     * 才安排下一次查询。终态和网络错误都会让查询停下。
-     */
+    /** 单入口查询状态机，查询按顺序逐个发出。 */
     function createTurnOutputStore(options) {
       const fetchImpl = options.fetch
       const schedule = options.setTimeout ?? setTimeout
@@ -70,6 +67,7 @@ window.__ModuleLoader__.load({
         snapshot = next
         for (const listener of [...listeners]) listener()
       }
+      // 作废还没返回的响应，并清掉已安排的查询。
       const cancel = () => {
         generation += 1
         if (timer !== undefined) cancelSchedule(timer)
@@ -78,6 +76,7 @@ window.__ModuleLoader__.load({
         controller = undefined
       }
       const currentMetadata = () => metadataForTurn(snapshot.metadata, sessionId, turn)
+      // 只有在处理中且可见，并且没有在途请求时，才安排下一次查询。
       const shouldQuery = () => active && visible && controller === undefined
         && (snapshot.status === 'loading'
           || (snapshot.status === 'settled' && ACTIVE_PHASES.has(currentMetadata()?.phase)))
@@ -112,6 +111,7 @@ window.__ModuleLoader__.load({
             timer = schedule(load, pollMs)
           }
         } catch (error) {
+          // 网络错误让查询停在错误态，等到下次手动触发。
           if (ticket !== generation || !active || !visible || error?.name === 'AbortError') return
           controller = undefined
           publish({ status: 'error', metadata: null })
@@ -156,7 +156,7 @@ window.__ModuleLoader__.load({
       }
     }
 
-    // 输出入口是 Turn 的轻量操作项，只占很小的版面。
+    // 输出入口是 Turn 的一个操作项，只占很小的版面。
     const rootStyle = {
       boxSizing: 'border-box',
       display: 'flex',

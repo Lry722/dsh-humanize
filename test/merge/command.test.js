@@ -599,7 +599,7 @@ test('静默续用合并不向父会话投递子代理结算', async () => {
     ctx.subagents.listChildren = async () => [{ id: child.id, mode: 'continuable', label: 'humanize 批注合并' }]
     ctx.subagents.sendMessage = async () => {
       sendCalls += 1
-      throw new Error('不应使用会通知父会话的续用路径')
+      throw new Error('应当使用静默续用路径')
     }
     ctx.agents.resume = async () => {
       resumes += 1

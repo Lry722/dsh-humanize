@@ -247,7 +247,7 @@ test('历史重置保留系统头，下一轮连旧占位消息一起替换', as
   assert.equal(second.data.content[0].text, first.data.content[0].text)
 })
 
-test('空 surface 和只有系统头时不写入；无系统头时从第一个节点替换', async () => {
+test('空 surface 和只有系统头时不写入，无系统头时从第一个节点替换', async () => {
   const empty = makeChild('empty', [])
   const headOnly = makeChild('head-only', [0])
   const noHead = makeChild('no-head', [0, 1], 'user/message')
@@ -388,7 +388,7 @@ test('异常取消续用运行时只销毁本次精确句柄', async () => {
   assert.equal(harness.sends.length, 0)
 })
 
-test('恢复前重置失败时不发送请求，也不取消原有子代理', async () => {
+test('恢复前重置失败时不发送请求，并保留原有子代理', async () => {
   const child = makeChild()
   const harness = makeHarness({
     entries: [{ id: child.id, mode: 'continuable', label: MERGE_LABEL }],
@@ -422,7 +422,7 @@ test('旧 epoch 的 subagent/end 不会完成直接续用轮次', async () => {
   await run.dispose()
 })
 
-test('驻留子代理尚未退出时拒绝续用，不裁剪也不发送', async () => {
+test('驻留子代理尚未退出时拒绝续用，保留已有内容，不发送请求', async () => {
   const child = makeChild()
   const harness = makeHarness({
     entries: [{ id: child.id, mode: 'continuable', label: MERGE_LABEL }],
