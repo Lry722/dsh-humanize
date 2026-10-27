@@ -195,23 +195,34 @@ window.__ModuleLoader__.load({
           flex: none;
           width: calc(28px + var(--dsh-content-font-delta, 0px));
           height: calc(28px + var(--dsh-content-font-delta, 0px));
+          display: inline-flex;
+          align-items: stretch;
+          justify-content: center;
+          color: var(--dsw-alias-label-tertiary);
+          line-height: 0;
+        }
+        [data-dsh-humanize-output] > button,
+        [data-dsh-humanize-output-status] {
+          box-sizing: border-box;
+          width: 100%;
+          height: 100%;
           padding: 6px;
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          color: var(--dsw-alias-label-tertiary);
+          color: inherit;
         }
-        button[data-dsh-humanize-output] {
+        [data-dsh-humanize-output] > button {
           border: 0;
           border-radius: var(--dsw-radius-sm);
           background: transparent;
           cursor: pointer;
         }
-        button[data-dsh-humanize-output]:hover {
+        [data-dsh-humanize-output] > button:hover {
           background: var(--dsw-alias-interactive-bg-hover);
           color: var(--dsw-alias-label-secondary);
         }
-        [data-clock="end"]:has(> [data-dsh-humanize-output]) > span:last-child { order: 2; }
+        [data-clock="end"] > span:last-child { order: 2; }
         [data-dsh-humanize-output-spinner] { animation: dsh-humanize-output-spin 1s linear infinite; }
         @keyframes dsh-humanize-output-spin { to { transform: rotate(360deg); } }
         @media (prefers-reduced-motion: reduce) {
@@ -301,31 +312,28 @@ window.__ModuleLoader__.load({
         spinning = true
       }
       if (Icon === undefined) {
-        // 首次 effect 前保留观察锚点，不在操作栏留下空白文字行。
-        return h('span', {
-          ref: rootRef,
-          'aria-hidden': 'true',
-          'data-dsh-humanize-output': true,
-          style: { width: '1px', height: '1px', padding: 0, visibility: 'hidden' },
-        })
+        label = t('output.compact.loading')
+        Icon = IconLoadingOutlineRegular
+        spinning = true
       }
       const icon = h(Icon, { size: 17, 'data-dsh-humanize-output-spinner': spinning || undefined })
       const control = onClick === undefined
         ? h('span', {
-          ref: rootRef,
           role: 'img',
           'aria-label': label,
           'aria-live': 'polite',
-          'data-dsh-humanize-output': true,
+          'data-dsh-humanize-output-status': true,
         }, icon)
         : h('button', {
-          ref: rootRef,
           type: 'button',
           'aria-label': label,
-          'data-dsh-humanize-output': true,
           onClick,
         }, icon)
-      return h(Tooltip, { label, side: 'bottom' }, control)
+      // 外层节点必须跨状态保持稳定，否则可见性观察器会继续盯着已被替换的节点。
+      return h(Tooltip, { label, side: 'bottom' }, h('span', {
+        ref: rootRef,
+        'data-dsh-humanize-output': true,
+      }, control))
     }
 
     function TurnOutputAction(props) {
