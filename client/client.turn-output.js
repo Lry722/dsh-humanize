@@ -184,7 +184,6 @@ window.__ModuleLoader__.load({
       if (phase === 'saving') return 'output.saving'
       if (phase === 'processing') return 'output.processing'
       if (phase === 'ready') return 'output.ready'
-      if (phase === 'failed') return 'output.failed'
       if (phase === 'expired') return 'output.expired'
       return 'output.missing'
     }
@@ -241,7 +240,7 @@ window.__ModuleLoader__.load({
         }, t('output.retry'))
       } else if (metadata !== undefined) {
         statusText = t(compactStatusKey(metadata.phase))
-        statusHint = t(statusHintKey(metadata.phase))
+        statusHint = metadata.phase === 'failed' ? undefined : t(statusHintKey(metadata.phase))
         if (metadata.phase === 'ready' && typeof metadata.filePath === 'string') {
           action = h('button', {
             type: 'button',
