@@ -3,7 +3,7 @@ import type {} from '@deepseek-ai/dsh-jobs'
 
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
-    /** dsh-humanize 产生的合并结果说明。 */
+    /** dsh-humanize 产生的合并结果说明和历史重置占位消息。 */
     humanize: { kind: 'humanize' } & ContextFormed
   }
 }

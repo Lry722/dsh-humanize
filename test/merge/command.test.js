@@ -29,7 +29,12 @@ function makeCtx(agents, activation, llm, jobs) {
       // 派发前的合并子代理检查要看全部 agent。
       list: () => list,
     },
-    subagents: { startActivation: activation },
+    subagents: {
+      startActivation: activation,
+      listChildren: async () => [],
+      sendMessage: async () => { throw new Error('unexpected merge continuation') },
+      drainChildren: async () => {},
+    },
     ...(llm !== undefined ? { llm } : {}),
     commands: {
       register(def) { commands.set(def.name, def) },
@@ -49,6 +54,9 @@ function makeCtx(agents, activation, llm, jobs) {
     inject() {},
     emit(event, ...args) {
       for (const callback of [...(listeners.get(event) ?? [])]) callback(...args)
+    },
+    async emitSerial(event, ...args) {
+      for (const callback of [...(listeners.get(event) ?? [])]) await callback(...args)
     },
   }
 }
@@ -195,14 +203,39 @@ test('复审产生新批注后继续下一轮，收敛才结束', async () => {
     const { project, target } = await makeProject(storage)
     const agent = makeAgent('agent-1', 'session-1', project)
     let starts = 0
+    let sends = 0
     let reviews = 0
+    const catalog = []
+    const child = {
+      id: 'child-1',
+      status: 'idle',
+      session: {
+        id: 'child-1',
+        surface: { nodes: [0, 1, 2] },
+        append(type, data, options) {
+          assert.deepEqual(options.sourceEventSeqs, [1, 2])
+          this.surface.nodes = [0, 3]
+          return { seq: 3, type, data }
+        },
+      },
+    }
     const ctx = makeCtx([agent], async () => {
       starts += 1
-      const activation = deferredActivation(`child-${starts}`)
-      // 合并子代理总是立刻完成，第二轮要看复审是否真的又排了一轮。
+      const activation = deferredActivation('child-1')
+      catalog.push({ id: 'child-1', mode: 'continuable', label: 'humanize 批注合并' })
+      // 首轮立刻完成，第二轮通过 sendMessage 和 subagent/end 收尾。
       queueMicrotask(() => activation.resolve({ stopReason: 'completed' }))
       return activation.activation
     })
+    ctx.subagents.listChildren = async () => catalog
+    ctx.subagents.sendMessage = async () => {
+      sends += 1
+      await ctx.emitSerial('agent/created', { agent: child })
+      ctx.emit('subagent/start', { id: 'child-1', runId: 'run-2' })
+      queueMicrotask(() => ctx.emit('subagent/end', { id: 'child-1', runId: 'run-2', stopReason: 'completed' }))
+      return 'message-2'
+    }
+    ctx.sessionQuery = { readEvent: async () => ({ target: { type: 'system/message' } }) }
     const state = makeState()
     const scheduleReview = async (reviewAgent, filePath) => {
       reviews += 1
@@ -217,7 +250,9 @@ test('复审产生新批注后继续下一轮，收敛才结束', async () => {
     await ctx.commands.get('humanize-loop').handler({ agent, rawInput: '' })
     await waitFor(() => state.running.size === 0)
 
-    assert.equal(starts, 2)
+    assert.equal(starts, 1)
+    assert.equal(sends, 1)
+    assert.equal(catalog.length, 1)
     assert.equal(reviews, 2)
     // 复审结果只进任务行，会话只收到合并修改说明。
     const mergeNotices = agent.injected.filter((message) => /已按暂存批注修订/.test(message.content?.[0]?.text ?? ''))

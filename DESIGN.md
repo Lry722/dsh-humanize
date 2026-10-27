@@ -82,7 +82,11 @@ hmr 检测到改动后，会重载这个插件的整个依赖图。做法是把�
 
 合并子代理自己用文件工具分段读取文件内容，主会话的上下文保持隔离。
 
-合并子代理的模型默认跟随主会话当前的选择。`mergeProvider` 和 `mergeModel` 成对配置时覆盖这一对字段，`mergeReasoningEffort` 单独覆盖推理等级。
+每个父会话复用目录中最新一个带合并标签的 continuable 子代理，不再为每轮合并新增目录记录。目录来自持久会话索引，因此插件重载后仍能找回同一个子代理。首次激活用 activation.result 收尾；续用轮次在发送前注册监听，用同子代理的 subagent/end 回收本轮结果，turn/end 继续提供具体错误明细。
+
+续用时，冷恢复在 agent/created 阶段、排队输入释放前重置历史；仍在驻留的实例拒绝派发，等它自然退出后再重试。结果回收先记录本次 subagent/start 的 runId，只接受同一 runId 的 subagent/end，避免旧 epoch 的迟到事件提前完成新一轮。重置只读取 surface 头节点来识别受保护的系统提示词，再把系统头之后的完整后缀替换成一条固定文本的历史重置占位消息。下一轮会把上一条占位消息也纳入替换范围，所以占位消息始终只有一条。sourceEventSeqs 覆盖全部被遮蔽的 surface 节点。原始日志不删除，deriveMessages 不再投影旧轮次，模型输入因此不会跨轮积累。
+
+合并子代理的模型默认跟随主会话当前的选择。`mergeProvider` 和 `mergeModel` 成对配置时覆盖这一对字段，`mergeReasoningEffort` 单独覆盖推理等级。续用轮次通过 agent/request 应用本轮模型设置，不沿用首次激活时的旧路由。
 
 合并子代理出结果后，成功就清空对应暂存批注，失败保留批注。两种结果都在主会话留一行说明。
 
@@ -374,6 +378,7 @@ PATH 是文件时合并这一个文件，是目录时合并目录下所有有批
 - `lib/merge/`，合并子系统。
   `command.js` 注册 /humanize、/humanize-loop 和 compaction/end 三种触发方式并编排轮次，同时向最终回复输出提供单次合并入口。
   `agent.js` 负责合并子代理的派发和收尾。规范和批注经临时请求文件交给子代理，子代理结束后删除临时文件。
+  `child.js` 负责目录复用、续用结果回收、本轮模型路由与发送前 surface 历史重置。
   `lock.js` 负责跨会话的合并锁和合并子代理的身份判定。
   合并子代理按本包 cordis.patch.yml 里声明为 humanize-merge 的 preset 派发。
   运行轮次和待复审文件留在内存，插件重载会结束这次运行。

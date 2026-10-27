@@ -192,7 +192,9 @@ History serves troubleshooting only, and merging proceeds independently. The plu
 
 Run `/humanize <path>` to merge annotations for a file or directory. With no path, it uses the current working directory.
 
-The merge runs in a separate context. A manual merge sends a summary to the main session when it finishes; automatic merges do not inject this notice.
+The merge runs in a separate context. Each parent session reuses one merge subagent. Before a continued merge, the previous model-visible merge turns are replaced by one fixed reset marker, so old requests, replies, and tool calls are not sent to the model again. The durable session log is still retained.
+
+A manual merge sends a summary to the main session when it finishes; automatic merges do not inject this notice.
 
 The staged annotations for the merged files are cleared.
 
