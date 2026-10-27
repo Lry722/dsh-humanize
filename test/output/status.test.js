@@ -149,7 +149,7 @@ test('本轮正文写入失败时不把同名旧稿作为失败版本开放', as
   assert.equal(await readFile(output, 'utf8'), '第三轮恢复\n')
 })
 
-test('重载时未确认本轮保存的 sidecar 不开放同名旧稿', async (t) => {
+test('重载时，本轮保存尚未确认的 sidecar 不开放同名旧稿', async (t) => {
   const { host, outputRoot } = await fixture(t)
   const firstReview = deferred()
   const review = async (agent, filePath, before, after) => after === '第一轮\n'
@@ -175,7 +175,7 @@ test('重载时未确认本轮保存的 sidecar 不开放同名旧稿', async (t
   await waitForMetadata(outputs, host.session.id, (value) => value.turn === 2 && value.phase === 'ready')
 })
 
-test('输出开关、无正文和最新有效 turn 遵循现有保存语义', async (t) => {
+test('输出开关、无正文和最新有效轮次遵循现有保存语义', async (t) => {
   const { host, outputRoot } = await fixture(t, { enabled: false })
   const outputs = registerTurnOutputs(host.ctx, log, host.config, async () => ({ kind: 'no-spec' }), () => {})
   host.finish()

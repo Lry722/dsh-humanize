@@ -2,7 +2,7 @@
  * dsh-humanize 最终回复输出入口。
  *
  * 只在最新有效 turn 上显示。正文由 slot 的 openFile 交给内置 Markdown
- * 预览，本 chunk 只查询状态，不读取正文，也不渲染另一份助手消息。
+ * 预览，本 chunk 只查询状态，正文的读取和渲染都归预览负责。
  */
 window.__ModuleLoader__.load({
   id: 'dsh-humanize',
@@ -49,7 +49,7 @@ window.__ModuleLoader__.load({
 
     /**
      * 单入口查询状态机。请求串行，隐藏会作废在途响应。只有处理中且可见时
-     * 才安排下一次查询。终态和网络错误都不会自动轮询。
+     * 才安排下一次查询。终态和网络错误都会让轮询停下。
      */
     function createTurnOutputStore(options) {
       const fetchImpl = options.fetch
@@ -101,7 +101,7 @@ window.__ModuleLoader__.load({
           if (typeof body?.phase !== 'string') throw new Error('Invalid output metadata')
           controller = undefined
           publish({ status: 'settled', metadata: body })
-          // 不匹配的旧 turn 是终态，不为它继续刷新。新 turn 有自己的入口和查询。
+          // 不匹配的旧 turn 就停在终态，新 turn 有自己的入口和查询。
           if (ACTIVE_PHASES.has(currentMetadata()?.phase) && shouldQuery()) {
             timer = schedule(load, pollMs)
           }
@@ -147,7 +147,7 @@ window.__ModuleLoader__.load({
       }
     }
 
-    // 输出入口是 Turn 的轻量操作项，而不是一张抢占阅读注意力的通知卡。
+    // 输出入口是 Turn 的轻量操作项，只占很小的版面，避免做成抢占阅读注意力的通知卡。
     const rootStyle = {
       boxSizing: 'border-box',
       display: 'flex',
