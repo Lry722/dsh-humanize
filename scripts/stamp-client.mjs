@@ -19,8 +19,7 @@ const chunks = [
   'client/client.progress.js',
   'client/client.turn-output.js',
 ]
-// 版本戳只按文本内容计算。dev/master worktree 的 CRLF 和 LF 行尾会先统一成 LF，
-// 再参与计算。
+// 版本戳只按文本内容计算。计算前会先把 dev/master worktree 的 CRLF 行尾统一成 LF。
 const contents = chunks.map((file) => readFileSync(join(root, file), 'utf8').replace(/\r\n/g, '\n'))
 const hash = createHash('sha256').update(contents.join('\0')).digest('hex').slice(0, 8)
 const entry = join(root, 'client/client.js')

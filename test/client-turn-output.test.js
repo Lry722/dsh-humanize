@@ -96,7 +96,7 @@ test('状态响应严格匹配会话和 turn', async () => {
   assert.equal(metadataForTurn({ ...value, filePath: null }, 'session-1', 2), undefined)
 })
 
-test('仅可见且处理中时刷新，终态和隐藏都会停止', async () => {
+test('只有可见且处于处理中时才刷新，进入终态或隐藏后停止刷新', async () => {
   const { createTurnOutputStore } = await loadChunk()
   const clock = timers()
   const requests = []

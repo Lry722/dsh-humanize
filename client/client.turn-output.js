@@ -49,7 +49,7 @@ window.__ModuleLoader__.load({
 
     /**
      * 单入口查询状态机。请求串行，隐藏会作废在途响应。只有处理中且可见时
-     * 才安排下一次查询。终态和网络错误都会让轮询停下。
+     * 才安排下一次查询。终态和网络错误都会让查询停下。
      */
     function createTurnOutputStore(options) {
       const fetchImpl = options.fetch
@@ -147,7 +147,7 @@ window.__ModuleLoader__.load({
       }
     }
 
-    // 输出入口是 Turn 的轻量操作项，只占很小的版面，避免做成抢占阅读注意力的通知卡。
+    // 输出入口是 Turn 的轻量操作项，只占很小的版面。
     const rootStyle = {
       boxSizing: 'border-box',
       display: 'flex',

@@ -154,7 +154,7 @@ test('本轮正文写入失败时不把同名旧稿作为失败版本开放', as
   assert.equal(await readFile(output, 'utf8'), '第三轮恢复\n')
 })
 
-test('重载时，本轮保存尚未确认的 sidecar 不开放同名旧稿', async (t) => {
+test('重载时，本轮保存尚未确认的 sidecar 按 missing 报告', async (t) => {
   const { host, outputRoot } = await fixture(t)
   const firstReview = deferred()
   const review = async (agent, filePath, before, after) => after === '第一轮\n'
