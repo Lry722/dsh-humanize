@@ -23,7 +23,7 @@ Packing many style and rhetoric constraints into the main prompt splits the mode
 - **Mark at write time**: when content is written, separate code and data from text meant for people. Only human-facing writes trigger review.
 - **One style contract**: `PROSE.md` defines how prose should read.
 - **Cite each rule**: the reviewer annotates against individual `PROSE.md` rules and points at the expression that violates the rule.
-- **Apply later**: review runs in the background while the main session keeps moving. Annotations merge when the user asks for them.
+- **Apply later**: review runs in the background while the main session keeps moving. Annotations merge on demand or after compaction.
 
 ---
 
@@ -55,8 +55,8 @@ Open the dsh-humanize row in the Plugins list and edit its configuration. The bo
 - `reviewRetries`: number of retries after a failure. Minimum 0, maximum 3, default 1.
 - `reviewIntervalSeconds`: minimum time between reviews, counted from the end of the previous review. Writes during the interval are reviewed together when it ends. Minimum 0, maximum 3600, default 60. Set 0 to review without waiting.
 - `loopMaxRounds`: maximum rounds for loop merge. Minimum 1, maximum 10, default 3.
-- `saveTurnOutputs`: whether to keep only the latest main-session response in a system temp file and run one silent review and merge round when rules match. Default false.
-- `mergeOnCompaction`: whether to merge all staged annotations in the project when context compaction ends. Default true. When off, compaction does not trigger a merge; other triggers are unaffected.
+- `saveTurnOutputs`: whether to keep only the latest main-session response in a system temp file. With this on, clicking the polish icon in the action row of the latest eligible turn runs one silent review and merge round when rules match. Default false.
+- `mergeOnCompaction`: whether to merge all staged annotations under the session working directory when context compaction ends. Default true. When off, compaction does not trigger a merge; other triggers are unaffected.
 - `storageDir`: where staged annotations are stored. Leave empty for the default `~/.dsh/humanize`.
 
 Each of the review and merge model sections has a test button. It sends a minimal request to confirm the provider, model and reasoning effort respond. An empty model selection follows the session model for review. The test button requires both fields to be set.
@@ -67,9 +67,7 @@ Relative paths resolve against the process working directory. Changing the stora
 
 Review concurrency is shared across write review, batch review and re-review. A batch is also capped by the number of files it has to review. High concurrency can hit the model provider's rate limit.
 
-A call that hits a rate limit is recorded as failed and retried. A review that times out ends as aborted and is not retried.
-
-Other failures wait longer before each retry. After the retry budget is spent, the review is marked failed. Write review and batch review share this retry behavior.
+Rate limits and review timeouts are recorded as failed and retried. Every retry waits longer than the previous one. After the retry budget is spent, the review is marked failed. Write review and batch review share this retry behavior.
 
 When a batch review ends, it lists the files that still failed and why, up to three entries. The rest are counted only. If write reviews keep failing, a failed record appears in the task list and points at the review model configuration.
 
@@ -95,9 +93,9 @@ Specs come from three sources:
 
 The project root is the target file's git repository root, so project specs remain visible when the session starts in a subdirectory. A `PROSE.md` at the project root also works as a directory spec.
 
-`base.md` is an ordinary project spec. Its filename gives it no special scope or priority. Use `include: ["**/*"]` when it should provide project-wide rules.
+`base.md` is an ordinary project spec. Its filename gives it no special scope or priority. Omitting `include` applies it throughout the project. An explicit `include: ["**/*"]` has the same effect.
 
-Each spec has an implicit scope: everywhere for the user spec, the project for a project spec, and the directory subtree for a directory spec. Omitting `include` applies the spec throughout that scope. An explicit `include` can narrow it, using .gitignore syntax, and is evaluated independently for that spec. One spec's patterns never include or exclude another spec.
+Each spec has an implicit scope: everywhere for the user spec, the project for a project spec, and the directory subtree for a directory spec. Omitting `include` applies the spec throughout that scope. An explicit `include` can narrow it, using .gitignore syntax, and is evaluated independently for that spec. An empty list matches no files. One spec's patterns never include or exclude another spec.
 
 For example, a project spec can cover several directories and the root changelog:
 
@@ -139,13 +137,13 @@ Batch collection first drops files that no spec matches. Files matched by a spec
 
 Binary files such as images, archives, fonts and build output skip review. Detection samples the start of the file. Write review and batch review both use it. A batch review reports how many files it skipped.
 
-When the model writes a file it must declare `human_facing`. Pass true for content meant for people, false for pure code or data. Writes marked true enter review. The rest are skipped. A programmatic call that omits the field is treated as false and logs a warning.
+When the model writes a file through the wrapped `write` or `edit` tool, it must declare `human_facing`. Pass true for content meant for people, false for pure code or data. Writes marked true enter review. The rest are skipped. Writes through other tools, such as shell commands, are outside this check. A programmatic call that omits the field is treated as false and logs a warning.
 
 ### How reviews run
 
 After each review, the next write review waits one minute by default. Writes during the interval join the next review.
 
-A review only looks at the regions changed in this write.
+A write review of an existing file only looks at the regions changed in this write. A new file is reviewed in full.
 
 Reviews of the same file run serially. Writes from different sessions or subagents queue separately, and queued reviews are kept per agent without overwriting each other. While a merge runs, the reviews of the agent that started it are aborted or discarded. Reviews from other agents on the same target files are treated the same way. Batch reviews and merge re-reviews skip the interval and run immediately.
 
@@ -153,19 +151,25 @@ Reviews of the same file run serially. Writes from different sessions or subagen
 
 `saveTurnOutputs` is off by default. When enabled, the end of each main-session turn writes the last assistant message with visible text to `dsh-humanize-<uid>/output/<session-title>--<short-id>.md` under the system temp directory. Each write replaces the previous version, keeping only the latest response. Reasoning, tool calls, empty messages and internal subagent responses are not saved. No output file is actually created in the project directory.
 
-The filename uses the session title from the first saved turn. Path separators and other filesystem-unsafe characters become underscores, and an empty title falls back to `untitled-session`. The short ID suffix keeps same-title sessions separate. Later turns keep using the original file after a rename, and the suffix finds it after a plugin reload. Saving a new output cleans temporary outputs that have not been updated for 24 hours.
+The filename uses the session title from the first saved turn. Path separators and other filesystem-unsafe characters become underscores, and an empty title falls back to `untitled-session`. The short ID suffix keeps same-title sessions separate. Later turns keep using the original file after a rename, and the suffix finds it after a plugin reload. Saving a new output cleans temporary outputs that have not been updated for 24 hours. The cleanup scan runs at most once an hour.
 
-PROSE rules are still discovered and matched against the logical path `.agents/output/<session-title>--<short-id>.md` under the current working directory. This path is only a rule-matching label and need not exist. Review and merge share it, while all file I/O uses the real temp path. After the first new-version write, the plugin removes that session's legacy project output and its staged annotations.
+PROSE rules are still discovered and matched against the logical path `.agents/output/<session-title>--<short-id>.md` under the current working directory. This path is only a rule-matching label and need not exist. Review and merge share it, while all file I/O uses the real temp path. The first write also removes this session's project outputs that an older version left behind, along with their staged annotations.
 
-Each write saves only the original output and clears annotations from the previous turn. It does not start a review. Clicking the polish icon in the action row of the latest eligible turn immediately runs a full review without waiting for `reviewIntervalSeconds`. If no rules apply or review produces no annotations, polishing ends without dispatching a merge.
+Each write saves only the original output and clears annotations from the previous turn. Review starts only when the user clicks the polish icon. Clicking the icon in the action row of the latest eligible turn immediately runs a full review, without waiting for `reviewIntervalSeconds`. If no rules apply or review produces no annotations, polishing ends without dispatching a merge.
 
-When review produces annotations, one merge round runs silently and polishing finishes as soon as that merge completes. There is no re-review. No task progress row or main-session completion notice is created. Manual `/humanize` and `/humanize-loop` progress, results and re-review are unchanged. Replacement, review and merge are serial within one session, and merges of final turn outputs from different sessions are dispatched one at a time.
+When review produces annotations, one merge round runs silently and polishing finishes as soon as that merge completes, without a re-review.
+
+The merge round stays out of the task list and sends no completion notice to the main session.
+
+Manual `/humanize` and `/humanize-loop` progress, results and re-review are unchanged.
+
+Saving, review and merge are serial within one session, and merges of final turn outputs from different sessions are dispatched one at a time.
 
 After saving, the latest eligible turn shows a polish icon in its assistant action row, immediately after Fork. Clicking it shows a loading icon while polishing.
 
 The final file is compared with the original turn output. A clickable View icon is shown only when the content actually changed. Clicking it opens the built-in Markdown preview in the right sidebar.
 
-Unchanged and failed outputs show only their status icon, and hover text explains the state. The original assistant response is unchanged and the sidebar does not open automatically.
+Unchanged and failed outputs show only their status icon, and hover text explains the state. The original assistant response stays intact, and the sidebar opens only when the user clicks the View icon.
 
 Older turns have no entry, preventing them from opening newer content that replaced their output.
 
@@ -207,7 +211,7 @@ If the plugin reloads during a loop, that run ends. Completed merges still clear
 
 ### Background tasks
 
-Only manual `/humanize` and `/humanize-loop` runs register merge tasks. The loop progress bar shows the current round and the number of annotations in that round. Automatic merges triggered by compaction or final turn output run silently without a task row or result notice.
+Only manual `/humanize` and `/humanize-loop` runs register merge tasks. The loop progress bar shows the current round and the number of annotations in that round. Compaction-triggered merges and merges started from output polishing run silently without a task row or result notice.
 
 `/humanize` and `/humanize-loop` tasks can be cancelled from the task list. Cancelling a loop takes effect before the next round. Completed merges still clear their staged annotations.
 
@@ -241,9 +245,9 @@ All three modes keep only files matched by at least one spec. The pipeline then 
 
 Prompts sent to the model live in `prompts/` at the package root. Edit them directly:
 
-- `prompts/review-system.md`: system prompt for review calls, shared by write review and batch review.
+- `prompts/review-system.md`: system prompt for every review call.
 - `prompts/merge-request.md`: user message sent to the merge subagent. It contains the path to the merge request file.
-- `prompts/merge-header.md`: prompt at the start of the merge message, shared by all three merge triggers.
+- `prompts/merge-header.md`: prompt at the start of every merge message.
 - `prompts/human-facing-field.md`: description of the `human_facing` field in the wrapped tool.
 
 Review and merge read their prompt files on every call. The `human_facing` description is read when the wrapped tools are registered, so changes apply to new sessions.
