@@ -1,5 +1,5 @@
 /**
- * dsh-humanize 最终回复输出卡片。
+ * dsh-humanize 最终回复输出入口。
  *
  * 只在最新有效 turn 上显示。正文由 slot 的 openFile 交给内置 Markdown
  * 预览，本 chunk 只查询状态，不读取正文，也不渲染另一份助手消息。
@@ -48,7 +48,7 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * 单卡片查询状态机。请求串行，隐藏会作废在途响应。只有处理中且可见时
+     * 单入口查询状态机。请求串行，隐藏会作废在途响应。只有处理中且可见时
      * 才安排下一次查询。终态和网络错误都不会自动轮询。
      */
     function createTurnOutputStore(options) {
@@ -101,7 +101,7 @@ window.__ModuleLoader__.load({
           if (typeof body?.phase !== 'string') throw new Error('Invalid output metadata')
           controller = undefined
           publish({ status: 'settled', metadata: body })
-          // 不匹配的旧 turn 是终态，不为它继续刷新。新 turn 有自己的卡片和查询。
+          // 不匹配的旧 turn 是终态，不为它继续刷新。新 turn 有自己的入口和查询。
           if (ACTIVE_PHASES.has(currentMetadata()?.phase) && shouldQuery()) {
             timer = schedule(load, pollMs)
           }
@@ -147,45 +147,47 @@ window.__ModuleLoader__.load({
       }
     }
 
+    // 输出入口是 Turn 的轻量操作项，而不是一张抢占阅读注意力的通知卡。
     const rootStyle = {
       boxSizing: 'border-box',
-      width: '100%',
-      border: '1px solid var(--dsw-alias-border-l2)',
-      borderRadius: '10px',
-      background: 'var(--dsw-specific-tip)',
-      padding: '10px 12px',
       display: 'flex',
-      flexDirection: 'column',
-      gap: '6px',
+      alignItems: 'center',
+      flexWrap: 'wrap',
+      columnGap: '6px',
+      rowGap: '2px',
+      width: 'fit-content',
+      maxWidth: '100%',
+      minHeight: '28px',
+      padding: '2px 0',
     }
     const headingStyle = {
-      color: 'var(--dsw-alias-label-primary)',
-      fontSize: '13px',
-      fontWeight: 500,
+      color: 'var(--dsw-alias-label-secondary)',
+      fontSize: '12px',
+      fontWeight: 400,
       lineHeight: '20px',
+      whiteSpace: 'nowrap',
     }
     const statusStyle = {
-      margin: 0,
       color: 'var(--dsw-alias-label-tertiary)',
       fontSize: '12px',
-      lineHeight: 1.5,
-      overflowWrap: 'anywhere',
+      lineHeight: '20px',
+      whiteSpace: 'nowrap',
     }
-    const actionsStyle = { display: 'flex', gap: '8px', marginTop: '2px' }
     const buttonStyle = {
-      alignSelf: 'flex-start',
-      border: '1px solid var(--dsw-alias-border-l2)',
-      borderRadius: '7px',
-      background: 'var(--dsw-alias-bg-layer-3)',
-      color: 'var(--dsw-alias-label-primary)',
+      flex: 'none',
+      border: 0,
+      borderRadius: '4px',
+      background: 'transparent',
+      color: 'var(--dsw-alias-brand-primary)',
       cursor: 'pointer',
       font: 'inherit',
       fontSize: '12px',
       lineHeight: '20px',
-      padding: '4px 10px',
+      padding: '2px 4px',
+      whiteSpace: 'nowrap',
     }
 
-    function statusKey(phase) {
+    function statusHintKey(phase) {
       if (phase === 'saving') return 'output.saving'
       if (phase === 'processing') return 'output.processing'
       if (phase === 'ready') return 'output.ready'
@@ -194,8 +196,17 @@ window.__ModuleLoader__.load({
       return 'output.missing'
     }
 
+    function compactStatusKey(phase) {
+      if (phase === 'saving') return 'output.compact.saving'
+      if (phase === 'processing') return 'output.compact.processing'
+      if (phase === 'ready') return 'output.compact.ready'
+      if (phase === 'failed') return 'output.compact.failed'
+      if (phase === 'expired') return 'output.compact.expired'
+      return 'output.compact.missing'
+    }
+
     function OutputCard(props) {
-      const { configForm, openFile, sessionId, turn } = props
+      const { openFile, sessionId, turn } = props
       const t = typeof props.t === 'function' ? props.t : (key) => key
       const [store] = useState(() => createTurnOutputStore({ fetch: (...args) => window.fetch(...args) }))
       const state = useSyncExternalStore(store.subscribe, store.getSnapshot)
@@ -226,20 +237,21 @@ window.__ModuleLoader__.load({
       }, [store, sessionId, turn.turn])
 
       const metadata = metadataForTurn(state.metadata, sessionId, turn.turn)
-      let content = null
+      let statusText
+      let statusHint
+      let action = null
       if (state.status === 'error') {
-        content = h('section', { style: rootStyle, 'aria-label': t('output.title') },
-          h('div', { style: headingStyle }, t('output.title')),
-          h('p', { style: statusStyle }, t('output.unavailable')),
-          h('div', { style: actionsStyle }, h('button', {
-            type: 'button', style: buttonStyle, onClick: () => store.retry(),
-          }, t('output.retry'))))
+        statusText = t('output.compact.unavailable')
+        statusHint = t('output.unavailable')
+        action = h('button', {
+          type: 'button', style: buttonStyle, onClick: () => store.retry(),
+        }, t('output.retry'))
       } else if (metadata !== undefined) {
+        statusText = t(compactStatusKey(metadata.phase))
+        statusHint = t(statusHintKey(metadata.phase))
         const canOpen = (metadata.phase === 'ready' || metadata.phase === 'failed') && typeof metadata.filePath === 'string'
-        content = h('section', { style: rootStyle, 'aria-label': t('output.title') },
-          h('div', { style: headingStyle }, t('output.title')),
-          h('p', { style: statusStyle, 'aria-live': 'polite' }, t(statusKey(metadata.phase))),
-          canOpen ? h('div', { style: actionsStyle }, h('button', {
+        if (canOpen) {
+          action = h('button', {
             type: 'button',
             style: buttonStyle,
             onClick: () => {
@@ -249,12 +261,16 @@ window.__ModuleLoader__.load({
                 openFile(current.filePath)
               }
             },
-          }, t(metadata.phase === 'failed' ? 'output.openSaved' : 'output.open'))) : null)
+          }, t(metadata.phase === 'failed' ? 'output.openSaved' : 'output.open'))
+        }
       } else if (state.status === 'loading') {
-        content = h('section', { style: rootStyle, 'aria-label': t('output.title') },
-          h('div', { style: headingStyle }, t('output.title')),
-          h('p', { style: statusStyle }, t('output.loading')))
+        statusText = t('output.compact.loading')
+        statusHint = t('output.loading')
       }
+      const content = statusText === undefined ? null : h('section', { style: rootStyle, 'aria-label': t('output.title') },
+        h('span', { style: headingStyle }, t('output.title')),
+        h('span', { style: statusStyle, title: statusHint, 'aria-live': 'polite' }, `· ${statusText}`),
+        action)
       // 保留一个无视觉内容的观察锚点。关闭输出或不匹配时不发起后台轮询。
       return h('div', { ref: rootRef, style: { minHeight: '1px' } }, content)
     }
