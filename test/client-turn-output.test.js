@@ -25,7 +25,7 @@ async function loadChunk() {
     Tooltip() {},
     IconSparkleRegular() {},
     IconLoadingOutlineRegular() {},
-    IconCheckCircleFillRegular() {},
+    IconDeliverDocRegular() {},
     IconCheckOutlineRegular() {},
     IconWarningOutlineRegular() {},
   }

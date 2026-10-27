@@ -16,7 +16,7 @@ window.__ModuleLoader__.load({
       Tooltip,
       IconSparkleRegular,
       IconLoadingOutlineRegular,
-      IconCheckCircleFillRegular,
+      IconDeliverDocRegular,
       IconCheckOutlineRegular,
       IconWarningOutlineRegular,
     } = require('@deepseek-ai/dsh-client-ui-primitives')
@@ -288,11 +288,9 @@ window.__ModuleLoader__.load({
           Icon = IconSparkleRegular
           onClick = () => store.polish()
         } else {
-          label = metadata.phase === 'ready'
-            ? `${t('output.compact.ready')} · ${t('output.open')}`
-            : t(compactStatusKey(metadata.phase))
+          label = t(compactStatusKey(metadata.phase))
           if (metadata.phase === 'ready') {
-            Icon = IconCheckCircleFillRegular
+            Icon = IconDeliverDocRegular
             onClick = () => {
               // 点击时重新校验，异步状态已经切轮后不能沿用旧闭包打开文件。
               const current = metadataForTurn(store.getSnapshot().metadata, sessionId, turn)
