@@ -496,7 +496,7 @@ test('压缩结束触发静默合并，不创建进度或结果通知', async ()
   }
 })
 
-test('自动输出合并使用逻辑规则路径，且不创建进度或完成通知', async () => {
+test('自动输出合并使用逻辑规则路径，不复审且不创建进度或完成通知', async () => {
   const storage = await mkdtemp(join(tmpdir(), 'humanize-merge-quiet-'))
   setStorageRootResolver(() => storage)
   try {
@@ -520,7 +520,7 @@ test('自动输出合并使用逻辑规则路径，且不创建进度或完成�
       filePath: target,
       content: '1. "最新回复。"\n',
       rulePath,
-    }], { quiet: true })
+    }], { quiet: true, skipReReview: true })
     await run.started
     const requestPath = /The merge request is in (\S+\.merge\.md)\./.exec(activationSpec.request.prompt[0].text)[1]
     const request = await readFile(requestPath, 'utf8')
@@ -531,8 +531,7 @@ test('自动输出合并使用逻辑规则路径，且不创建进度或完成�
     await run.done
     assert.equal(jobs.started.length, 0)
     assert.equal(noticeTexts(agent), '')
-    assert.equal(reviews.calls.length, 1)
-    assert.equal(reviews.calls[0].rulePath, rulePath)
+    assert.equal(reviews.calls.length, 0)
   } finally {
     await removeStorage(storage)
   }

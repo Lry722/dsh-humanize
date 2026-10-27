@@ -244,9 +244,9 @@ DSH 的 GenerateOptions 没有 JSON 模式参数，适配器也不会转发 resp
 
 每轮原子覆盖上一版，只保留最新回复。写入后清除上一轮暂存批注，保存原始输出并进入 pending，不自动审查。手动触发后才以 before = undefined 调用立即审查，确保模型全量审查新正文。保存时顺带清理超过 24 小时未更新的输出，清理扫描最多每小时一次；功能关闭时不执行扫描或写入。新版首次写入后还清理这个会话旧版位于项目 .agents/output 的输出和批注，避免旧批注在其他触发路径里重新写回项目。
 
-workingDirectory.get(session) 只决定规则归属，轻量宿主退回会话头里的 cwd。真实文件路径 filePath 用于读写、暂存和合并，项目内 `.agents/output/<同名文件>` 作为 rulePath 仅用于 PROSE 发现和 include/review 匹配，不要求实际存在。rulePath 经过审查队列、staged 项、合并请求和 reviewInputs 传递，因此首轮审查、合并和合并后复审使用同一套项目规则；普通文件没有 rulePath，默认仍按真实路径匹配。
+workingDirectory.get(session) 只决定规则归属，轻量宿主退回会话头里的 cwd。真实文件路径 filePath 用于读写、暂存和合并，项目内 `.agents/output/<同名文件>` 作为 rulePath 仅用于 PROSE 发现和 include/review 匹配，不要求实际存在。rulePath 经过审查队列、staged 项和合并请求传递，因此审查与合并使用同一套项目规则；普通文件没有 rulePath，默认仍按真实路径匹配。
 
-点击润色后，没有适用规则或没有批注时流程到此结束。有批注时复用单次合并运行并传入 quiet，完成合并与复审后不继续循环。quiet 不创建 jobs 任务行，也不通过 agent.inject 留下成功或失败通知；只有手动斜杠命令保留进度与结果说明。
+点击润色后，没有适用规则或没有批注时流程到此结束。有批注时复用单次合并运行，传入 quiet 和 skipReReview：合并完成立即结束，不再复审或继续循环。quiet 不创建 jobs 任务行，也不通过 agent.inject 留下成功或失败通知；只有手动斜杠命令保留进度与结果说明。
 
 每个会话有一条处理队列，下一轮不会与上一轮合并并发修改同一输出文件。不同会话的写入和审查可以并行，输出合并另走一条串行队列。手动或压缩合并仍由全局合并锁仲裁，冲突时保留批注。
 

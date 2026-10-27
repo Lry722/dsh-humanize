@@ -286,7 +286,7 @@ test('手动润色时带上规则路径并保持静默，同一会话等待合�
     const output = sessionOutputPath(outputRoot, session.id, '合并输出')
     assert.equal(merges[0].target, output)
     assert.equal(merges[0].staged[0].rulePath, sessionOutputRulePath(root, output))
-    assert.deepEqual(merges[0].options, { quiet: true })
+    assert.deepEqual(merges[0].options, { quiet: true, skipReReview: true })
     assert.match(merges[0].staged[0].content, /第 1 轮批注/)
 
     events.push(
