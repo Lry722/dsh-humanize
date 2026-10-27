@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile, rm, utimes, writeFile } from 'node:fs/promises'
+import { chmod, mkdtemp, readFile, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { registerTurnOutputs, sessionOutputPath, setTurnOutputRootResolver } from '../../lib/output/turns.js'
@@ -121,6 +121,58 @@ test('状态覆盖处理中和就绪，新 turn 立即作废旧 turn', async (t)
   firstReview.resolve({ kind: 'no-spec' })
   await waitForMetadata(outputs, host.session.id, (value) => value.phase === 'ready' && value.turn === 2)
   assert.equal(await readFile(output, 'utf8'), '第二轮\n')
+})
+
+test('本轮正文写入失败时不把同名旧稿作为失败版本开放', async (t) => {
+  if (process.platform === 'win32' || process.getuid?.() === 0) {
+    t.skip('需要非 root 用户的目录写权限')
+    return
+  }
+  const { host, outputRoot } = await fixture(t)
+  const outputs = registerTurnOutputs(host.ctx, log, host.config, async () => ({ kind: 'no-spec' }), () => {})
+  host.finish()
+  await waitForMetadata(outputs, host.session.id, (value) => value.phase === 'ready')
+  const output = sessionOutputPath(outputRoot, host.session.id, '状态输出')
+
+  await chmod(outputRoot, 0o500)
+  try {
+    host.addTurn(2, '第二轮无法保存')
+    const failed = await waitForMetadata(outputs, host.session.id, (value) => value.turn === 2 && value.phase === 'missing')
+    assert.equal(failed.filePath, output)
+    assert.equal(await readFile(output, 'utf8'), '第一轮\n')
+  } finally {
+    await chmod(outputRoot, 0o700)
+  }
+
+  host.addTurn(3, '第三轮恢复')
+  await waitForMetadata(outputs, host.session.id, (value) => value.turn === 3 && value.phase === 'ready')
+  assert.equal(await readFile(output, 'utf8'), '第三轮恢复\n')
+})
+
+test('重载时未确认本轮保存的 sidecar 不开放同名旧稿', async (t) => {
+  const { host, outputRoot } = await fixture(t)
+  const firstReview = deferred()
+  const review = async (agent, filePath, before, after) => after === '第一轮\n'
+    ? firstReview.promise
+    : { kind: 'no-spec' }
+  const outputs = registerTurnOutputs(host.ctx, log, host.config, review, () => {})
+  const output = sessionOutputPath(outputRoot, host.session.id, '状态输出')
+  host.finish()
+  await waitForMetadata(outputs, host.session.id, (value) => value.phase === 'processing')
+
+  // 第二轮在第一轮审查后排队，saving sidecar 已落盘，但正文仍是第一轮。
+  host.addTurn(2, '第二轮')
+  await waitForMetadata(outputs, host.session.id, (value) => value.turn === 2 && value.phase === 'saving')
+  assert.equal(await readFile(output, 'utf8'), '第一轮\n')
+  const restored = registerTurnOutputs(host.ctx, log, host.config, review, () => {})
+  const recovered = await restored.readOutput(host.session.id)
+  assert.equal(recovered.turn, 2)
+  assert.equal(recovered.phase, 'missing')
+  assert.equal(recovered.filePath, output)
+  assert.equal(await readFile(output, 'utf8'), '第一轮\n')
+
+  firstReview.resolve({ kind: 'no-spec' })
+  await waitForMetadata(outputs, host.session.id, (value) => value.turn === 2 && value.phase === 'ready')
 })
 
 test('输出开关、无正文和最新有效 turn 遵循现有保存语义', async (t) => {
