@@ -1,8 +1,8 @@
 /**
  * dsh-humanize 最终回复输出入口。
  *
- * 只在最新有效 turn 上显示。正文由 slot 的 openFile 交给内置 Markdown
- * 预览，本 chunk 只查询状态，正文的读取和渲染都归预览负责。
+ * 只在最新有效 turn 的助手操作栏显示。正文交给内置 Markdown 预览，
+ * 本 chunk 只查询状态，正文的读取和渲染都归预览负责。
  */
 window.__ModuleLoader__.load({
   id: 'dsh-humanize',
@@ -12,6 +12,14 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
     const { useEffect, useRef, useState, useSyncExternalStore } = React
+    const {
+      Tooltip,
+      IconSparkleRegular,
+      IconLoadingOutlineRegular,
+      IconCheckCircleFillRegular,
+      IconCheckOutlineRegular,
+      IconWarningOutlineRegular,
+    } = require('@deepseek-ai/dsh-client-ui-primitives')
 
     const ACTIVE_PHASES = new Set(['saving', 'processing'])
     const KNOWN_PHASES = new Set(['disabled', 'saving', 'pending', 'processing', 'ready', 'unchanged', 'failed', 'missing', 'expired'])
@@ -35,6 +43,22 @@ window.__ModuleLoader__.load({
         if (location?.end && turnHasOutput(snapshot, turn)) return turn
       }
       return null
+    }
+
+    /** 操作栏只给 messageId；仅当其就是最新有效 turn 的收尾消息时挂载。 */
+    function latestOutputTurnForMessage(snapshot, messageId) {
+      const turn = latestOutputTurn(snapshot)
+      if (turn === null) return null
+      const closing = snapshot.timeline.turns.get(turn)?.data?.get('turn-tail')?.closing
+      return closing?.finalNode?.messageId === messageId ? turn : null
+    }
+
+    /** 与内置 Chat 相同，通过当前会话的授权文件地址打开绝对或相对路径。 */
+    function sessionFileAddress(sessionId, path) {
+      const normalized = path.replace(/\\/g, '/').replace(/^(?:\.\/)+/, '')
+      const encodeSegment = (segment) => encodeURIComponent(segment).replace(/%3A/gi, ':')
+      const encodedPath = normalized.split('/').map(encodeSegment).join('/')
+      return `dsh-resource://file/session/${encodeSegment(sessionId)}/${encodedPath}`
     }
 
     /** 响应和点击都校验会话、轮次与文件字段，旧响应不能打开新内容。 */
@@ -156,45 +180,45 @@ window.__ModuleLoader__.load({
       }
     }
 
-    // 输出入口是 Turn 的一个操作项，只占很小的版面。
-    const rootStyle = {
-      boxSizing: 'border-box',
-      display: 'flex',
-      alignItems: 'center',
-      flexWrap: 'wrap',
-      columnGap: '6px',
-      rowGap: '2px',
-      width: 'fit-content',
-      maxWidth: '100%',
-      minHeight: '28px',
-      padding: '2px 0',
-    }
-    const statusStyle = {
-      color: 'var(--dsw-alias-label-secondary)',
-      fontSize: '12px',
-      lineHeight: '20px',
-      whiteSpace: 'nowrap',
-    }
-    const buttonStyle = {
-      flex: 'none',
-      border: 0,
-      borderRadius: '4px',
-      background: 'transparent',
-      color: 'var(--dsw-alias-brand-primary)',
-      cursor: 'pointer',
-      font: 'inherit',
-      fontSize: '12px',
-      lineHeight: '20px',
-      padding: '2px 4px',
-      whiteSpace: 'nowrap',
-    }
-
-    function statusHintKey(phase) {
-      if (phase === 'saving') return 'output.saving'
-      if (phase === 'processing') return 'output.processing'
-      if (phase === 'ready') return 'output.ready'
-      if (phase === 'expired') return 'output.expired'
-      return 'output.missing'
+    // 与内置消息操作按钮保持同一尺寸。assistant-actions 在 DOM 中位于 Fork
+    // 之前；flex order 把本入口放到 Fork 后，并让用量和时间继续排在最后。
+    const outputStyleId = 'dsh-humanize-turn-output'
+    if (typeof document !== 'undefined'
+      && document.querySelector(`style[data-plugin-css=${JSON.stringify(outputStyleId)}]`) === null) {
+      const tag = document.createElement('style')
+      tag.dataset.plugin = 'dsh-humanize'
+      tag.dataset.pluginCss = outputStyleId
+      tag.textContent = `
+        [data-dsh-humanize-output] {
+          order: 1;
+          box-sizing: border-box;
+          flex: none;
+          width: calc(28px + var(--dsh-content-font-delta, 0px));
+          height: calc(28px + var(--dsh-content-font-delta, 0px));
+          padding: 6px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          color: var(--dsw-alias-label-tertiary);
+        }
+        button[data-dsh-humanize-output] {
+          border: 0;
+          border-radius: var(--dsw-radius-sm);
+          background: transparent;
+          cursor: pointer;
+        }
+        button[data-dsh-humanize-output]:hover {
+          background: var(--dsw-alias-interactive-bg-hover);
+          color: var(--dsw-alias-label-secondary);
+        }
+        [data-clock="end"]:has(> [data-dsh-humanize-output]) > span:last-child { order: 2; }
+        [data-dsh-humanize-output-spinner] { animation: dsh-humanize-output-spin 1s linear infinite; }
+        @keyframes dsh-humanize-output-spin { to { transform: rotate(360deg); } }
+        @media (prefers-reduced-motion: reduce) {
+          [data-dsh-humanize-output-spinner] { animation: none; }
+        }
+      `
+      document.head.appendChild(tag)
     }
 
     function compactStatusKey(phase) {
@@ -207,15 +231,15 @@ window.__ModuleLoader__.load({
       return 'output.compact.missing'
     }
 
-    function OutputCard(props) {
-      const { openFile, sessionId, turn } = props
+    function OutputAction(props) {
+      const { openResource, sessionId, turn } = props
       const t = typeof props.t === 'function' ? props.t : (key) => key
       const [store] = useState(() => createTurnOutputStore({ fetch: (...args) => window.fetch(...args) }))
       const state = useSyncExternalStore(store.subscribe, store.getSnapshot)
       const rootRef = useRef(null)
 
       useEffect(() => {
-        store.start(sessionId, turn.turn)
+        store.start(sessionId, turn)
         let intersecting = true
         let observer
         const syncVisibility = () => {
@@ -236,66 +260,95 @@ window.__ModuleLoader__.load({
           if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', syncVisibility)
           store.stop()
         }
-      }, [store, sessionId, turn.turn])
+      }, [store, sessionId, turn])
 
-      const metadata = metadataForTurn(state.metadata, sessionId, turn.turn)
-      let statusText
-      let statusHint
-      let action = null
+      const metadata = metadataForTurn(state.metadata, sessionId, turn)
+      let label
+      let Icon
+      let spinning = false
+      let onClick
       if (state.status === 'error') {
-        statusText = t('output.compact.unavailable')
-        statusHint = t('output.unavailable')
-        action = h('button', {
-          type: 'button', style: buttonStyle, onClick: () => store.retry(),
-        }, t('output.retry'))
+        label = t('output.retry')
+        Icon = IconWarningOutlineRegular
+        onClick = () => store.retry()
       } else if (metadata !== undefined) {
         if (metadata.phase === 'pending') {
-          action = h('button', {
-            type: 'button', style: buttonStyle, onClick: () => store.polish(),
-          }, t('output.polish'))
+          label = t('output.polish')
+          Icon = IconSparkleRegular
+          onClick = () => store.polish()
         } else {
-          statusText = t(compactStatusKey(metadata.phase))
-          statusHint = (metadata.phase === 'failed' || metadata.phase === 'unchanged')
-            ? undefined
-            : t(statusHintKey(metadata.phase))
-          if (metadata.phase === 'ready' && typeof metadata.filePath === 'string') {
-            action = h('button', {
-              type: 'button',
-              style: buttonStyle,
-              onClick: () => {
-                // 点击时重新校验，异步状态已经切轮后不能沿用旧闭包打开文件。
-                const current = metadataForTurn(store.getSnapshot().metadata, sessionId, turn.turn)
-                if (current?.phase === 'ready' && typeof current.filePath === 'string') openFile(current.filePath)
-              },
-            }, t('output.open'))
-          }
+          label = metadata.phase === 'ready'
+            ? `${t('output.compact.ready')} · ${t('output.open')}`
+            : t(compactStatusKey(metadata.phase))
+          if (metadata.phase === 'ready') {
+            Icon = IconCheckCircleFillRegular
+            onClick = () => {
+              // 点击时重新校验，异步状态已经切轮后不能沿用旧闭包打开文件。
+              const current = metadataForTurn(store.getSnapshot().metadata, sessionId, turn)
+              if (current?.phase === 'ready' && typeof current.filePath === 'string') {
+                openResource(sessionFileAddress(sessionId, current.filePath))
+              }
+            }
+          } else if (metadata.phase === 'unchanged') Icon = IconCheckOutlineRegular
+          else if (metadata.phase === 'saving' || metadata.phase === 'processing') {
+            Icon = IconLoadingOutlineRegular
+            spinning = true
+          } else Icon = IconWarningOutlineRegular
         }
       } else if (state.status === 'loading') {
-        statusText = t('output.compact.loading')
-        statusHint = t('output.loading')
+        label = t('output.compact.loading')
+        Icon = IconLoadingOutlineRegular
+        spinning = true
       }
-      const content = statusText === undefined && action === null ? null : h('section', { style: rootStyle, 'aria-label': t('output.title') },
-        statusText === undefined ? null : h('span', { style: statusStyle, title: statusHint, 'aria-live': 'polite' }, statusText),
-        action)
-      // 保留一个无视觉内容的观察锚点。关闭输出或不匹配时不发起后台轮询。
-      return h('div', { ref: rootRef, style: { minHeight: '1px' } }, content)
+      if (Icon === undefined) {
+        // 首次 effect 前保留观察锚点，不在操作栏留下空白文字行。
+        return h('span', {
+          ref: rootRef,
+          'aria-hidden': 'true',
+          'data-dsh-humanize-output': true,
+          style: { width: '1px', height: '1px', padding: 0, visibility: 'hidden' },
+        })
+      }
+      const icon = h(Icon, { size: 17, 'data-dsh-humanize-output-spinner': spinning || undefined })
+      const control = onClick === undefined
+        ? h('span', {
+          ref: rootRef,
+          role: 'img',
+          'aria-label': label,
+          'aria-live': 'polite',
+          'data-dsh-humanize-output': true,
+        }, icon)
+        : h('button', {
+          ref: rootRef,
+          type: 'button',
+          'aria-label': label,
+          'data-dsh-humanize-output': true,
+          onClick,
+        }, icon)
+      return h(Tooltip, { label, side: 'bottom' }, control)
     }
 
-    function TurnOutputTail(props) {
-      const { configForm, turn, useChat } = props
-      const latest = useChat(latestOutputTurn)
+    function TurnOutputAction(props) {
+      const { configForm, messageId, useChat } = props
+      const selectTurn = React.useCallback(
+        (snapshot) => latestOutputTurnForMessage(snapshot, messageId),
+        [messageId],
+      )
+      const turn = useChat(selectTurn)
       const config = useSyncExternalStore(
         React.useCallback((listener) => configForm.subscribe(listener), [configForm]),
         React.useCallback(() => configForm.getSnapshot(), [configForm]),
       )
       const enabled = config.status === 'ready' && config.value?.settings?.saveTurnOutputs === true
-      if (!enabled || latest !== turn.turn) return null
-      return h(OutputCard, props)
+      if (!enabled || turn === null) return null
+      return h(OutputAction, { ...props, turn })
     }
 
-    module.exports.TurnOutputTail = TurnOutputTail
+    module.exports.TurnOutputAction = TurnOutputAction
     module.exports.createTurnOutputStore = createTurnOutputStore
     module.exports.latestOutputTurn = latestOutputTurn
+    module.exports.latestOutputTurnForMessage = latestOutputTurnForMessage
+    module.exports.sessionFileAddress = sessionFileAddress
     module.exports.metadataForTurn = metadataForTurn
     return module.exports
   },

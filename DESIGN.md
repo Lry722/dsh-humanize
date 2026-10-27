@@ -254,7 +254,7 @@ workingDirectory.get(session) 只决定规则归属，轻量宿主退回会话�
 
 `output/routes.js` 在认证 Connection 内注册 GET 查询和 POST 手动润色路由。GET 只接受一个 sessionId，POST 另带一个正整数 turn，均不接受 path 或 filePath，响应带 no-store。路由只返回元数据，正文仍由 GUI 已有的授权文件读取服务打开。
 
-浏览器在 conversation.chat.turnTail 注册懒加载入口。设置镜像里的 saveTurnOutputs 开启且当前节点是最新含可见正文的已结束 turn 时才挂载。入口使用透明底单行操作项，pending 只显示“润色输出”按钮，点击后通过 POST 触发当前 turn，再显示短状态和按需提供的查看或重试动作。它只在可见且保存或润色处理中时轮询，pending 和其他终态不轮询；隐藏、切轮和卸载都会取消计时器或作废请求。只有 ready 提供查看动作，unchanged 和 failed 不开放文件入口。点击查看时再次校验会话、turn 和 ready 状态，再调用 slot 的 openFile，复用右侧栏 Markdown 预览；不替换原助手消息，不自动打开侧栏，也不创建输出合并任务行。
+浏览器在 conversation.chat.assistant-actions 注册懒加载入口。设置镜像里的 saveTurnOutputs 开启且消息就是最新含可见正文、已结束 turn 的收尾消息时才挂载，入口因此只出现一次。插件把这个扩展项排到 Fork 后、用量和时间前，用与内置操作按钮一致的图标占位，不再在回复下方单独占一行。pending 显示润色图标，点击后通过 POST 触发当前 turn；saving/processing 显示加载图标，ready 显示查看图标，unchanged 和 failed 显示状态图标，文字含义放在悬停提示里，错误时显示重试图标。它只在可见且保存或润色处理中时轮询，pending 和其他终态不轮询；隐藏、切轮和卸载都会取消计时器或作废请求。只有 ready 提供查看动作，unchanged 和 failed 不开放文件入口。点击查看时再次校验会话、turn 和 ready 状态，再用会话作用域文件地址调用右侧栏 Markdown 预览；不替换原助手消息，不自动打开侧栏，也不创建输出合并任务行。
 
 ### 暂存批注
 
@@ -405,7 +405,7 @@ PATH 是文件时合并这一个文件，是目录时合并目录下所有有批
 
 浏览器端的 client/ 目录拆为主入口加四个按需加载 chunk，与官方 dsh-client-ui-sidebar-terminal 的 client.js 和 client.terminal.js 是同一模式。主入口负责插槽注册，文案表、设置卡片、进度条和输出入口各自是一个 chunk。
 
-- `client/client.js`，入口文件，负责按需加载各 chunk。注册 conversation.input.dock、conversation.chat.turnTail 与两处设置插槽。
+- `client/client.js`，入口文件，负责按需加载各 chunk。注册 conversation.input.dock、conversation.chat.assistant-actions 与两处设置插槽。
 - `client/client.locales.js`，界面文案表，英文和中文各一份。
 - `client/client.settings.js`，设置卡片，通用表单控件与业务字段。
 - `client/client.progress.js`，输入框上方的进度条，渲染审查批次、单次合并和循环合并三种任务。

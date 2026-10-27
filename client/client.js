@@ -6,7 +6,7 @@
  */
 // 各 chunk 的 URL 版本号由本文件的元数据算出。改完 chunk 后跑
 // `npm run stamp:client` 更新下面这一行。
-// chunks: ee9851b4
+// chunks: 71a3be42
 window.__ModuleLoader__.load({
   id: 'dsh-humanize',
   factory: (require) => {
@@ -26,7 +26,7 @@ window.__ModuleLoader__.load({
     /** 进度条 chunk，只在首次出现审查任务时请求。 */
     const LazyProgressDock = lazy(async () => ({ default: (await require.async('./client.progress.js')).ProgressDock }))
     /** 输出入口只在最新有效 turn 首次出现时加载。 */
-    const LazyTurnOutputTail = lazy(async () => ({ default: (await require.async('./client.turn-output.js')).TurnOutputTail }))
+    const LazyTurnOutputAction = lazy(async () => ({ default: (await require.async('./client.turn-output.js')).TurnOutputAction }))
 
     function apply(ctx) {
       void (async () => {
@@ -51,20 +51,20 @@ window.__ModuleLoader__.load({
         })
         ctx.inject(['configForms'], (formCtx) => {
           const configForm = formCtx.configForms.get(NS)
-          formCtx.effect(() => formCtx.slots.inject('conversation.chat.turnTail', () => formCtx.slots.register({
-            name: 'conversation.chat.turnTail',
+          formCtx.effect(() => formCtx.slots.inject('conversation.chat.assistant-actions', () => formCtx.slots.register({
+            name: 'conversation.chat.assistant-actions',
             id: 'dsh-humanize-turn-output',
-            order: 15,
+            order: 20,
             locale: NS,
           }, (owner) => h(Suspense, { fallback: null },
-            h(LazyTurnOutputTail, {
-              turn: owner.turn,
-              openFile: owner.openFile,
+            h(LazyTurnOutputAction, {
+              messageId: owner.messageId,
+              openResource: (address) => ctx.sidebarRight.openResource(address),
               sessionId: String(owner.sessionId),
               useChat: owner.useChat,
               configForm,
               t: owner.t,
-            })))), 'dsh-humanize: turn output card')
+            })))), 'dsh-humanize: turn output action')
           // remote 代理按命名空间划分，inject 里声明过的命名空间才能访问。
           formCtx.inject(['remote', 'remote.session'], (remCtx) => {
             const configForms = formCtx.configForms
@@ -101,7 +101,7 @@ window.__ModuleLoader__.load({
     }
 
     exports.name = 'dsh-humanize'
-    exports.inject = ['slots', 'locale']
+    exports.inject = ['slots', 'locale', 'sidebarRight']
     exports.apply = apply
     return module.exports
   },

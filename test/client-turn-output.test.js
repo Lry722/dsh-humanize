@@ -21,8 +21,17 @@ async function loadChunk() {
     useSyncExternalStore() {},
     useCallback() {},
   }
+  const primitives = {
+    Tooltip() {},
+    IconSparkleRegular() {},
+    IconLoadingOutlineRegular() {},
+    IconCheckCircleFillRegular() {},
+    IconCheckOutlineRegular() {},
+    IconWarningOutlineRegular() {},
+  }
   return definition.factory((name) => {
     if (name === 'react') return react
+    if (name === '@deepseek-ai/dsh-client-ui-primitives') return primitives
     throw new Error(`unexpected module ${name}`)
   })
 }
@@ -85,6 +94,35 @@ test('最新有效 turn 跳过空白正文和尚未结束的轮次', async () =>
     nodes: { get: (key) => nodes.get(key) },
   }
   assert.equal(latestOutputTurn(snapshot), 2)
+})
+
+test('操作栏只标记最新有效 turn 的收尾消息', async () => {
+  const { latestOutputTurnForMessage } = await loadChunk()
+  const turns = new Map([
+    [1, { end: {}, data: new Map([['turn-tail', { closing: { finalNode: { messageId: 'm1' } } }]]) }],
+    [2, { end: {}, data: new Map([['turn-tail', { closing: { finalNode: { messageId: 'm2' } } }]]) }],
+    [3, { end: undefined, data: new Map([['turn-tail', { closing: { finalNode: { messageId: 'm3' } } }]]) }],
+  ])
+  const snapshot = {
+    timeline: { turnOrder: [1, 2, 3], turns },
+    locations: { getTurn: (turn) => [`a${turn}`] },
+    nodes: { get: () => ({ kind: 'assistant-step', data: { blocks: [{ kind: 'text', text: '正文' }] } }) },
+  }
+  assert.equal(latestOutputTurnForMessage(snapshot, 'm2'), 2)
+  assert.equal(latestOutputTurnForMessage(snapshot, 'm1'), null)
+  assert.equal(latestOutputTurnForMessage(snapshot, 'm3'), null)
+})
+
+test('输出文件通过会话作用域地址打开', async () => {
+  const { sessionFileAddress } = await loadChunk()
+  assert.equal(
+    sessionFileAddress('session id', '/tmp/a b.md'),
+    'dsh-resource://file/session/session%20id//tmp/a%20b.md',
+  )
+  assert.equal(
+    sessionFileAddress('session-1', 'C:\\tmp\\a.md'),
+    'dsh-resource://file/session/session-1/C:/tmp/a.md',
+  )
 })
 
 test('状态响应严格匹配会话和 turn', async () => {
