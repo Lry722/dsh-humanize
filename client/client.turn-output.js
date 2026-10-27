@@ -2,7 +2,7 @@
  * dsh-humanize 最终回复输出入口。
  *
  * 只在最新有效 turn 的助手操作栏显示。正文交给内置 Markdown 预览，
- * 本 chunk 只查询状态，正文的读取和渲染都归预览负责。
+ * 本 chunk 只查询状态。
  */
 window.__ModuleLoader__.load({
   id: 'dsh-humanize',
@@ -45,7 +45,7 @@ window.__ModuleLoader__.load({
       return null
     }
 
-    /** 操作栏只给 messageId；仅当其就是最新有效 turn 的收尾消息时挂载。 */
+    /** 操作栏只提供 messageId。只有当它是最新有效 turn 的收尾消息时才挂载。 */
     function latestOutputTurnForMessage(snapshot, messageId) {
       const turn = latestOutputTurn(snapshot)
       if (turn === null) return null
@@ -181,7 +181,7 @@ window.__ModuleLoader__.load({
     }
 
     // 与内置消息操作按钮保持同一尺寸。assistant-actions 在 DOM 中位于 Fork
-    // 之前；flex order 把本入口放到 Fork 后，并让用量和时间继续排在最后。
+    // 之前。flex order 把本入口放到 Fork 后，并让用量和时间继续排在最后。
     const outputStyleId = 'dsh-humanize-turn-output'
     if (typeof document !== 'undefined'
       && document.querySelector(`style[data-plugin-css=${JSON.stringify(outputStyleId)}]`) === null) {

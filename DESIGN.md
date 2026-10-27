@@ -408,7 +408,7 @@ PATH 是文件时合并这一个文件，是目录时合并目录下所有有批
 - `client/client.js`，入口文件，负责按需加载各 chunk。注册 conversation.input.dock、conversation.chat.assistant-actions 与两处设置插槽。
 - `client/client.locales.js`，界面文案表，英文和中文各一份。
 - `client/client.settings.js`，设置卡片，通用表单控件与业务字段。
-- `client/client.progress.js`，输入框上方的进度条，渲染审查批次、单次合并和循环合并三种任务。
+- `client/client.progress.js`，输入框上方的进度条，渲染审查批次、单次合并和循环合并三种后台任务。
 - `client/client.turn-output.js`，最新有效 turn 的输出状态卡片，负责有界状态查询和调用内置文件预览。
 
 chunk 地址随主入口文件变化，浏览器可以长期缓存。改完 chunk 需要同步更新主入口，让浏览器加载新的 chunk。

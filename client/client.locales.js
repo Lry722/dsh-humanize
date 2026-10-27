@@ -154,7 +154,7 @@ window.__ModuleLoader__.load({
       "settings.reviewIntervalSeconds": "审查间隔（秒）",
       "settings.reviewIntervalSecondsHint": "两次审查之间的最小间隔，从上一次审查结束开始计时。间隔内到达的写入会在计时结束后一起审查。取值范围为 0 到 3600 秒，默认值为 60 秒。设为 0 时立即审查。",
       "settings.loopMaxRounds": "循环合并轮次上限",
-      "settings.loopMaxRoundsHint": "/humanize-loop 每轮合并后复审，还有新批注就继续合并，达到上限则停下。最小值为 1，最大值为 10，默认值为 3。",
+      "settings.loopMaxRoundsHint": "/humanize-loop 每轮合并后复审，还有新批注就继续合并，达到上限就停止。取值范围为 1 到 10，默认值为 3。",
       "settings.saveTurnOutputs": "保存最新一轮回复",
       "settings.saveTurnOutputsHint": "主会话回复只保留最新一轮，存到系统临时目录并自动清理。点击助手操作栏的润色图标后，匹配规则时静默执行一轮审查和合并。手动合并仍显示进度。默认关闭。",
       "settings.mergeOnCompaction": "上下文压缩结束时自动合并",

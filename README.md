@@ -170,11 +170,17 @@ The filename uses the session title from the first saved turn. Path separators a
 
 PROSE rules are still discovered and matched against the logical path `.agents/output/<session-title>--<short-id>.md` under the current working directory. This path is only a rule-matching label and need not exist. Review and merge share it, while all file I/O uses the real temp path. After the first new-version write, the plugin removes that session's legacy project output and its staged annotations.
 
-Each write saves only the original output and clears annotations from the previous turn; it does not start a review. Clicking the polish icon in the action row of the latest eligible turn immediately runs a full review without waiting for `reviewIntervalSeconds`. If no rules apply, the review scope excludes the file, or review produces no annotations, polishing ends without dispatching a merge.
+Each write saves only the original output and clears annotations from the previous turn. It does not start a review. Clicking the polish icon in the action row of the latest eligible turn immediately runs a full review without waiting for `reviewIntervalSeconds`. If no rules apply, the review scope excludes the file, or review produces no annotations, polishing ends without dispatching a merge.
 
-When review produces annotations, one merge round runs silently and polishing finishes as soon as that merge completes; there is no re-review. No task progress row or main-session completion notice is created. Manual `/humanize` and `/humanize-loop` progress, results and re-review are unchanged. Replacement, review and merge are serial within one session, and output merges from different sessions are dispatched one at a time.
+When review produces annotations, one merge round runs silently and polishing finishes as soon as that merge completes. There is no re-review. No task progress row or main-session completion notice is created. Manual `/humanize` and `/humanize-loop` progress, results and re-review are unchanged. Replacement, review and merge are serial within one session, and merges of final turn outputs from different sessions are dispatched one at a time.
 
-After saving, the latest eligible turn shows a polish icon in its assistant action row, immediately after Fork, instead of occupying a separate line below the response. Clicking it shows a loading icon while polishing. The final file is compared with the original turn output: a clickable View icon is shown only when the content actually changed, opening the built-in Markdown preview in the right sidebar. Unchanged and failed outputs show only their status icon, with no View action, and hover text explains the state. The original assistant response is unchanged and the sidebar does not open automatically. Older turns have no entry, preventing them from opening newer content that replaced their output.
+After saving, the latest eligible turn shows a polish icon in its assistant action row, immediately after Fork. Clicking it shows a loading icon while polishing.
+
+The final file is compared with the original turn output. A clickable View icon is shown only when the content actually changed. Clicking it opens the built-in Markdown preview in the right sidebar.
+
+Unchanged and failed outputs show only their status icon, and hover text explains the state. The original assistant response is unchanged and the sidebar does not open automatically.
+
+Older turns have no entry, preventing them from opening newer content that replaced their output.
 
 ### Staged annotations
 
