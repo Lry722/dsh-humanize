@@ -16,6 +16,8 @@ function makeChild(id = 'child-1', nodes = [0, 1, 2], headType = 'system/message
   let nextSeq = nodes.length > 0 ? Math.max(...nodes) + 1 : 0
   const events = new Map(nodes.map((seq, index) => [seq, { type: index === 0 ? headType : 'user/message' }]))
   const appends = []
+  const steers = []
+  let idle = deferred()
   const session = {
     id,
     surface: { nodes: [...nodes] },
@@ -43,6 +45,12 @@ function makeChild(id = 'child-1', nodes = [0, 1, 2], headType = 'system/message
     session,
     appends,
     events,
+    steers,
+    disposals: 0,
+    begin() { idle = deferred() },
+    steer(message) { steers.push(message) },
+    whenIdle() { return idle.promise },
+    finish() { idle.resolve() },
     addSurface() {
       session.append('user/message', { content: [{ type: 'text', text: `node ${nextSeq}` }] }, { surfaceOp: 'append' })
     },
@@ -54,6 +62,9 @@ function makeHarness({ entries = [], children = new Map() } = {}) {
   const activations = new Map()
   const sends = []
   const starts = []
+  const resumes = []
+  const presetMounts = []
+  const delegationContexts = []
   let live
   let drains = 0
   const ctx = {
@@ -73,7 +84,45 @@ function makeHarness({ entries = [], children = new Map() } = {}) {
         if (index >= 0) list.splice(index, 1)
       }
     },
-    agents: { get: (id) => live?.session.id === id ? live : undefined },
+    agents: {
+      get: (id) => live?.session.id === id ? live : undefined,
+      async resume(options) {
+        const child = children.get(options.resumeSessionId)
+        if (child === undefined) throw new Error('missing persisted child')
+        child.begin()
+        live = child
+        resumes.push({ childId: child.id, options })
+        const childCtx = {
+          get(name) {
+            if (name !== 'agentPresets') return undefined
+            return { async mount(_ctx, preset) { presetMounts.push(preset) } }
+          },
+          systemPrompt: {
+            context(value) { delegationContexts.push(value) },
+            getContextOrder(name) { return name },
+          },
+        }
+        try {
+          await options.setup?.(childCtx)
+          for (const callback of [...(listeners.get('agent/created') ?? [])]) {
+            await callback({ agent: child })
+          }
+        } catch (error) {
+          if (live === child) live = undefined
+          throw error
+        }
+        let disposed = false
+        return {
+          agent: child,
+          async dispose() {
+            if (disposed) return
+            disposed = true
+            child.disposals += 1
+            if (live === child) live = undefined
+          },
+        }
+      },
+    },
     subagents: {
       async listChildren() { return entries },
       async startActivation(spec) {
@@ -93,17 +142,9 @@ function makeHarness({ entries = [], children = new Map() } = {}) {
         starts.push(spec)
         return activation
       },
-      async sendMessage(_agent, childId, content) {
-        const child = children.get(childId)
-        const runId = `run-${sends.length + 1}`
-        for (const callback of [...(listeners.get('agent/created') ?? [])]) {
-          await callback({ agent: child })
-        }
-        for (const callback of [...(listeners.get('subagent/start') ?? [])]) {
-          callback({ id: childId, runId })
-        }
-        sends.push({ childId, content, runId, nodes: [...child.session.surface.nodes] })
-        return `message-${sends.length}`
+      async sendMessage(...args) {
+        sends.push(args)
+        throw new Error('静默合并不应调用 sendMessage')
       },
       async drainChildren() { drains += 1 },
     },
@@ -115,6 +156,9 @@ function makeHarness({ entries = [], children = new Map() } = {}) {
     activations,
     sends,
     starts,
+    resumes,
+    presetMounts,
+    delegationContexts,
     setLive(child) { live = child },
     get drains() { return drains },
     emit(event, ...args) {
@@ -131,6 +175,11 @@ function makeHarness({ entries = [], children = new Map() } = {}) {
 }
 
 const parent = { id: 'parent-1', session: { id: 'parent-1' } }
+
+function finishResumed(harness, child, reason = { kind: 'completed' }) {
+  harness.emit('session/event', { id: child.id }, { type: 'turn/end', data: { reason } })
+  child.finish()
+}
 
 test('真实 Session 连续重置后只向模型投影系统头和一条占位消息', async () => {
   const session = new Session('real-merge-reset')
@@ -232,6 +281,7 @@ test('连续三轮合并只创建一个目录子代理，并复用同一个会�
   assert.equal(harness.starts.length, 1)
   assert.equal(harness.entries.length, 1)
   assert.equal(harness.starts[0].label, MERGE_LABEL)
+  assert.equal(harness.starts[0].delivery, 'caller')
   harness.activations.get(first.childId).resolve({ stopReason: 'completed' })
   await first.result
   await first.dispose()
@@ -242,24 +292,30 @@ test('连续三轮合并只创建一个目录子代理，并复用同一个会�
   assert.equal(second.childId, first.childId)
   assert.equal(harness.starts.length, 1)
   assert.equal(harness.entries.length, 1)
-  assert.equal(harness.sends.length, 1)
-  assert.equal(harness.sends[0].content[0].text, 'second request')
-  assert.deepEqual(harness.sends[0].nodes, [0, 3])
+  assert.equal(harness.resumes.length, 1)
+  assert.equal(harness.sends.length, 0)
+  assert.equal(child.steers[0].content[1].text, 'second request')
+  assert.deepEqual(child.session.surface.nodes, [0, 3])
+  assert.deepEqual(harness.presetMounts, ['humanize-merge'])
+  assert.equal(harness.delegationContexts.length, 1)
   child.addSurface()
   child.addSurface()
-  harness.emit('subagent/end', { id: child.id, runId: harness.sends[0].runId, stopReason: 'completed' })
+  finishResumed(harness, child)
   assert.equal((await second.result).stopReason, 'completed')
   await second.dispose()
+  assert.equal(child.disposals, 1)
 
   const third = await dispatchMergeChild(ctx, parent, 'third request', { provider: 'p3', model: 'm3' })
   assert.equal(third.childId, first.childId)
   assert.equal(harness.starts.length, 1)
   assert.equal(harness.entries.length, 1)
-  assert.equal(harness.sends.length, 2)
-  assert.deepEqual(harness.sends[1].nodes, [0, 6])
-  harness.emit('subagent/end', { id: child.id, runId: harness.sends[1].runId, stopReason: 'completed' })
+  assert.equal(harness.resumes.length, 2)
+  assert.equal(harness.sends.length, 0)
+  assert.deepEqual(child.session.surface.nodes, [0, 6])
+  finishResumed(harness, child)
   await third.result
   await third.dispose()
+  assert.equal(child.disposals, 2)
   assert.equal(harness.drains, 0)
 })
 
@@ -281,11 +337,7 @@ test('续用应用本轮模型路由，并保留子代理错误明细', async ()
   harness.emit('subagent/end', { id: 'another-child', stopReason: 'completed' })
   assert.equal(await Promise.race([run.result, Promise.resolve('pending')]), 'pending')
 
-  harness.emit('session/event', { id: child.id }, {
-    type: 'turn/end',
-    data: { reason: { kind: 'error', error: { message: '429 quota exceeded' } } },
-  })
-  harness.emit('subagent/end', { id: child.id, runId: harness.sends[0].runId, stopReason: 'error' })
+  finishResumed(harness, child, { kind: 'error', error: { message: '429 quota exceeded' } })
   assert.equal((await run.result).stopReason, 'error')
   assert.equal(run.failure, '429 quota exceeded')
   await run.dispose()
@@ -317,12 +369,12 @@ test('续用保留同路由父 agent 的推理等级和输出上限', async () =
     maxTokens: 123,
     temperature: 0.4,
   })
-  harness.emit('subagent/end', { id: child.id, runId: harness.sends[0].runId, stopReason: 'completed' })
+  finishResumed(harness, child)
   await run.result
   await run.dispose()
 })
 
-test('只有异常取消续用运行时才 drain 驻留子代理', async () => {
+test('异常取消续用运行时只销毁本次精确句柄', async () => {
   const child = makeChild()
   const harness = makeHarness({
     entries: [{ id: child.id, mode: 'continuable', label: MERGE_LABEL }],
@@ -331,7 +383,9 @@ test('只有异常取消续用运行时才 drain 驻留子代理', async () => {
   const run = await dispatchMergeChild(harness.ctx, parent, 'request', undefined)
   await run.cancel()
   await run.cancel()
-  assert.equal(harness.drains, 1)
+  assert.equal(child.disposals, 1)
+  assert.equal(harness.drains, 0)
+  assert.equal(harness.sends.length, 0)
 })
 
 test('恢复前重置失败时不发送请求，也不取消原有子代理', async () => {
@@ -352,28 +406,18 @@ test('恢复前重置失败时不发送请求，也不取消原有子代理', as
   assert.equal(harness.drains, 0)
 })
 
-test('旧 epoch 的结束事件不会提前完成新的续用轮次', async () => {
+test('旧 epoch 的 subagent/end 不会完成直接续用轮次', async () => {
   const child = makeChild()
   const harness = makeHarness({
     entries: [{ id: child.id, mode: 'continuable', label: MERGE_LABEL }],
     children: new Map([[child.id, child]]),
   })
-  const sendMessage = harness.ctx.subagents.sendMessage
-  const entered = deferred()
-  const release = deferred()
-  harness.ctx.subagents.sendMessage = async (...args) => {
-    entered.resolve()
-    await release.promise
-    return sendMessage(...args)
-  }
-  const dispatch = dispatchMergeChild(harness.ctx, parent, 'request', undefined)
-  await entered.promise
+  const run = await dispatchMergeChild(harness.ctx, parent, 'request', undefined)
   harness.emit('subagent/end', { id: child.id, runId: 'previous-epoch', stopReason: 'completed' })
-  release.resolve()
-  const run = await dispatch
   assert.equal(await Promise.race([run.result, Promise.resolve('pending')]), 'pending')
+  assert.equal(harness.sends.length, 0)
 
-  harness.emit('subagent/end', { id: child.id, runId: harness.sends[0].runId, stopReason: 'completed' })
+  finishResumed(harness, child)
   assert.equal((await run.result).stopReason, 'completed')
   await run.dispose()
 })

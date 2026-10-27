@@ -82,9 +82,9 @@ hmr 检测到改动后，会重载这个插件的整个依赖图。做法是把�
 
 合并子代理自己用文件工具分段读取文件内容，主会话的上下文保持隔离。
 
-每个父会话复用目录中最新一个带合并标签的 continuable 子代理，不再为每轮合并新增目录记录。目录来自持久会话索引，因此插件重载后仍能找回同一个子代理。首次激活用 activation.result 收尾；续用轮次在发送前注册监听，用同子代理的 subagent/end 回收本轮结果，turn/end 继续提供具体错误明细。
+每个父会话复用目录中最新一个带合并标签的 continuable 子代理，不再为每轮合并新增目录记录。目录来自持久会话索引，因此插件重载后仍能找回同一个子代理。首次激活用 activation.result 收尾。续用轮次改用 agents.resume 取得本次精确 AgentHandle，向子代理自身发送 steer，再用 turn/end 和 whenIdle 回收结束原因与错误明细，最后销毁同一句柄。
 
-续用时，冷恢复在 agent/created 阶段、排队输入释放前重置历史；仍在驻留的实例拒绝派发，等它自然退出后再重试。结果回收先记录本次 subagent/start 的 runId，只接受同一 runId 的 subagent/end，避免旧 epoch 的迟到事件提前完成新一轮。重置只读取 surface 头节点来识别受保护的系统提示词，再把系统头之后的完整后缀替换成一条固定文本的历史重置占位消息。下一轮会把上一条占位消息也纳入替换范围，所以占位消息始终只有一条。sourceEventSeqs 覆盖全部被遮蔽的 surface 节点。原始日志不删除，deriveMessages 不再投影旧轮次，模型输入因此不会跨轮积累。
+续用不能调用 subagents.sendMessage：它的冷恢复会把 activation 的 delivery 默认设成 parent，完成时自动向主会话投递一条子代理结算消息。直接恢复不产生这条平台结算，自动润色因此仍然静默，只保留插件原有的通知路径。恢复时的 setup 重挂固定 humanize-merge preset 和委派权限提示；agent/created 阶段在排队输入释放前重置历史，仍在驻留的实例则拒绝派发。重置只读取 surface 头节点来识别受保护的系统提示词，再把系统头之后的完整后缀替换成一条固定文本的历史重置占位消息。下一轮会把上一条占位消息也纳入替换范围，所以占位消息始终只有一条。sourceEventSeqs 覆盖全部被遮蔽的 surface 节点。原始日志不删除，deriveMessages 不再投影旧轮次，模型输入因此不会跨轮积累。
 
 合并子代理的模型默认跟随主会话当前的选择。`mergeProvider` 和 `mergeModel` 成对配置时覆盖这一对字段，`mergeReasoningEffort` 单独覆盖推理等级。续用轮次通过 agent/request 应用本轮模型设置，不沿用首次激活时的旧路由。
 

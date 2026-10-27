@@ -28,6 +28,7 @@ function makeCtx(agents, activation, llm, jobs) {
       get: (id) => byId.get(id) ?? bySession.get(id),
       // 派发前的合并子代理检查要看全部 agent。
       list: () => list,
+      resume: async () => { throw new Error('unexpected merge resume') },
     },
     subagents: {
       startActivation: activation,
@@ -203,12 +204,23 @@ test('复审产生新批注后继续下一轮，收敛才结束', async () => {
     const { project, target } = await makeProject(storage)
     const agent = makeAgent('agent-1', 'session-1', project)
     let starts = 0
-    let sends = 0
+    let resumes = 0
     let reviews = 0
     const catalog = []
+    let idleResolve
     const child = {
       id: 'child-1',
       status: 'idle',
+      steer() {
+        queueMicrotask(() => {
+          ctx.emit('session/event', { id: 'child-1' }, {
+            type: 'turn/end',
+            data: { reason: { kind: 'completed' } },
+          })
+          idleResolve()
+        })
+      },
+      whenIdle() { return new Promise((resolve) => { idleResolve = resolve }) },
       session: {
         id: 'child-1',
         surface: { nodes: [0, 1, 2] },
@@ -223,17 +235,15 @@ test('复审产生新批注后继续下一轮，收敛才结束', async () => {
       starts += 1
       const activation = deferredActivation('child-1')
       catalog.push({ id: 'child-1', mode: 'continuable', label: 'humanize 批注合并' })
-      // 首轮立刻完成，第二轮通过 sendMessage 和 subagent/end 收尾。
+      // 首轮立刻完成，第二轮由插件直接恢复并等待精确句柄空闲。
       queueMicrotask(() => activation.resolve({ stopReason: 'completed' }))
       return activation.activation
     })
     ctx.subagents.listChildren = async () => catalog
-    ctx.subagents.sendMessage = async () => {
-      sends += 1
+    ctx.agents.resume = async () => {
+      resumes += 1
       await ctx.emitSerial('agent/created', { agent: child })
-      ctx.emit('subagent/start', { id: 'child-1', runId: 'run-2' })
-      queueMicrotask(() => ctx.emit('subagent/end', { id: 'child-1', runId: 'run-2', stopReason: 'completed' }))
-      return 'message-2'
+      return { agent: child, dispose: async () => {} }
     }
     ctx.sessionQuery = { readEvent: async () => ({ target: { type: 'system/message' } }) }
     const state = makeState()
@@ -251,12 +261,13 @@ test('复审产生新批注后继续下一轮，收敛才结束', async () => {
     await waitFor(() => state.running.size === 0)
 
     assert.equal(starts, 1)
-    assert.equal(sends, 1)
+    assert.equal(resumes, 1)
     assert.equal(catalog.length, 1)
     assert.equal(reviews, 2)
     // 复审结果只进任务行，会话只收到合并修改说明。
     const mergeNotices = agent.injected.filter((message) => /已按暂存批注修订/.test(message.content?.[0]?.text ?? ''))
     assert.equal(mergeNotices.length, 2)
+    assert.equal(agent.injected.length, 2)
     await assert.rejects(readFile(stagingPathFor(target)), /ENOENT/)
   } finally {
     await removeStorage(storage)
@@ -546,6 +557,67 @@ test('静默合并的子代理调用失败时也不注入通知', async () => {
 
     assert.equal(jobs.started.length, 0)
     assert.equal(noticeTexts(agent), '')
+  } finally {
+    await removeStorage(storage)
+  }
+})
+
+test('静默续用合并不向父会话投递子代理结算', async () => {
+  const storage = await mkdtemp(join(tmpdir(), 'humanize-merge-quiet-resume-'))
+  setStorageRootResolver(() => storage)
+  try {
+    const { project, target } = await makeProject(storage)
+    const agent = makeAgent('agent-1', 'session-1', project)
+    const jobs = makeJobs()
+    const ctx = makeCtx([agent], async () => { throw new Error('不应新建合并子代理') }, undefined, jobs)
+    let idleResolve
+    let resumes = 0
+    let disposals = 0
+    let sendCalls = 0
+    const child = {
+      id: 'child-quiet-resume',
+      session: {
+        id: 'child-quiet-resume',
+        surface: { nodes: [0, 1] },
+        append(type, data, options) {
+          assert.deepEqual(options.sourceEventSeqs, [1])
+          this.surface.nodes = [0, 2]
+          return { seq: 2, type, data }
+        },
+      },
+      steer() {
+        queueMicrotask(() => {
+          ctx.emit('session/event', { id: child.id }, {
+            type: 'turn/end',
+            data: { reason: { kind: 'completed' } },
+          })
+          idleResolve()
+        })
+      },
+      whenIdle() { return new Promise((resolve) => { idleResolve = resolve }) },
+    }
+    ctx.subagents.listChildren = async () => [{ id: child.id, mode: 'continuable', label: 'humanize 批注合并' }]
+    ctx.subagents.sendMessage = async () => {
+      sendCalls += 1
+      throw new Error('不应使用会通知父会话的续用路径')
+    }
+    ctx.agents.resume = async () => {
+      resumes += 1
+      await ctx.emitSerial('agent/created', { agent: child })
+      return { agent: child, async dispose() { disposals += 1 } }
+    }
+    ctx.sessionQuery = { readEvent: async () => ({ target: { type: 'system/message' } }) }
+    const state = makeState()
+    const merge = registerMerge(ctx, log, { loopMaxRounds: 1 }, state, makeReviews().scheduleReview, async () => {}, () => {})
+
+    const run = merge.startMergeOnce(agent, target, [{ filePath: target, content: '1. "第一版。"\n' }], { quiet: true })
+    assert.equal((await run.started).started, true)
+    await run.done
+    assert.equal(resumes, 1)
+    assert.equal(disposals, 1)
+    assert.equal(sendCalls, 0)
+    assert.equal(jobs.started.length, 0)
+    assert.equal(agent.injected.length, 0)
   } finally {
     await removeStorage(storage)
   }
