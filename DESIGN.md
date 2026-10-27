@@ -250,7 +250,7 @@ workingDirectory.get(session) 只决定规则归属，轻量宿主退回会话�
 
 `output/routes.js` 在认证 Connection 内注册只读 GET 路由，只接受一个 sessionId，不接受 path 或 filePath，响应带 no-store。路由只返回元数据，正文仍由 GUI 已有的授权文件读取服务打开。
 
-浏览器在 conversation.chat.turnTail 注册懒加载入口。设置镜像里的 saveTurnOutputs 开启且当前节点是最新含可见正文的已结束 turn 时才挂载。入口使用透明底单行操作项，标题、短状态和动作位于同一行，完整状态说明只作为悬浮提示，不占用额外正文行。它只在可见且处理中轮询状态，隐藏、终态、切轮和卸载都会取消计时器或作废请求。点击查看时再次校验会话和 turn，再调用 slot 的 openFile，复用右侧栏 Markdown 预览；不替换原助手消息，不自动打开侧栏，也不创建自动合并任务行。
+浏览器在 conversation.chat.turnTail 注册懒加载入口。设置镜像里的 saveTurnOutputs 开启且当前节点是最新含可见正文的已结束 turn 时才挂载。入口使用透明底单行操作项，只显示短状态和按需提供的查看或重试动作，完整状态说明只作为悬浮提示，不占用额外正文行。它只在可见且处理中轮询状态，隐藏、终态、切轮和卸载都会取消计时器或作废请求。点击查看时再次校验会话和 turn，再调用 slot 的 openFile，复用右侧栏 Markdown 预览；不替换原助手消息，不自动打开侧栏，也不创建自动合并任务行。
 
 ### 暂存批注
 

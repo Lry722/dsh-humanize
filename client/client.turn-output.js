@@ -160,15 +160,8 @@ window.__ModuleLoader__.load({
       minHeight: '28px',
       padding: '2px 0',
     }
-    const headingStyle = {
-      color: 'var(--dsw-alias-label-secondary)',
-      fontSize: '12px',
-      fontWeight: 400,
-      lineHeight: '20px',
-      whiteSpace: 'nowrap',
-    }
     const statusStyle = {
-      color: 'var(--dsw-alias-label-tertiary)',
+      color: 'var(--dsw-alias-label-secondary)',
       fontSize: '12px',
       lineHeight: '20px',
       whiteSpace: 'nowrap',
@@ -268,8 +261,7 @@ window.__ModuleLoader__.load({
         statusHint = t('output.loading')
       }
       const content = statusText === undefined ? null : h('section', { style: rootStyle, 'aria-label': t('output.title') },
-        h('span', { style: headingStyle }, t('output.title')),
-        h('span', { style: statusStyle, title: statusHint, 'aria-live': 'polite' }, `· ${statusText}`),
+        h('span', { style: statusStyle, title: statusHint, 'aria-live': 'polite' }, statusText),
         action)
       // 保留一个无视觉内容的观察锚点。关闭输出或不匹配时不发起后台轮询。
       return h('div', { ref: rootRef, style: { minHeight: '1px' } }, content)
