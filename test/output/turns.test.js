@@ -162,7 +162,7 @@ test('开启后覆盖为最新回复，项目目录不写文件且旧批注被�
     const session = makeSession('session-latest', initialCwd, events, { title: '首轮标题' })
     const host = makeHarness(session, currentCwd)
     const reviews = []
-    registerTurnOutputs(host.ctx, log, { saveTurnOutputs: true }, async (agent, filePath, before, after, signal, rulePath) => {
+    const outputs = registerTurnOutputs(host.ctx, log, { saveTurnOutputs: true }, async (agent, filePath, before, after, signal, rulePath) => {
       reviews.push({ filePath, before, after, rulePath, existing: await readStaging(filePath) })
       return { kind: 'ok', annotations: 0 }
     }, () => { throw new Error('没有批注时不应合并') })
@@ -174,6 +174,8 @@ test('开启后覆盖为最新回复，项目目录不写文件且旧批注被�
     await writeStaging(legacy, '1. "旧版项目内批注"\n')
     events.push(turnBoundary('turn/end', 1))
     host.publish()
+    assert.equal(reviews.length, 0)
+    await outputs.polishOutput(session.id, 1)
     await waitFor(() => reviews.length === 1)
     assert.equal(await readFile(output, 'utf8'), '第一轮最终回复\n')
     assert.equal(reviews[0].before, undefined)
@@ -190,6 +192,8 @@ test('开启后覆盖为最新回复，项目目录不写文件且旧批注被�
       turnBoundary('turn/end', 2),
     )
     host.publish()
+    assert.equal(reviews.length, 1)
+    await outputs.polishOutput(session.id, 2)
     await waitFor(() => reviews.length === 2)
     assert.equal(await readFile(output, 'utf8'), '第二轮最终回复\n')
     await assert.rejects(readFile(sessionOutputPath(outputRoot, session.id, '修改后的标题'), 'utf8'), /ENOENT/)
@@ -225,8 +229,8 @@ test('不同会话写入不同临时文件，子代理的回复会被跳过', as
       return { kind: 'no-spec' }
     }
     const merge = () => { throw new Error('不应合并') }
-    registerTurnOutputs(firstHost.ctx, log, { saveTurnOutputs: true }, review, merge)
-    registerTurnOutputs(secondHost.ctx, log, { saveTurnOutputs: true }, review, merge)
+    const firstOutputs = registerTurnOutputs(firstHost.ctx, log, { saveTurnOutputs: true }, review, merge)
+    const secondOutputs = registerTurnOutputs(secondHost.ctx, log, { saveTurnOutputs: true }, review, merge)
     registerTurnOutputs(childHost.ctx, log, { saveTurnOutputs: true }, review, merge)
 
     firstEvents.push(turnBoundary('turn/end', 1))
@@ -235,6 +239,9 @@ test('不同会话写入不同临时文件，子代理的回复会被跳过', as
     firstHost.publish()
     secondHost.publish()
     childHost.publish()
+    assert.equal(reviews, 0)
+    await firstOutputs.polishOutput(first.id, 1)
+    await secondOutputs.polishOutput(second.id, 1)
     await waitFor(() => reviews === 2)
     assert.equal(await readFile(sessionOutputPath(outputRoot, first.id, '同名会话'), 'utf8'), '主会话\n')
     assert.equal(await readFile(sessionOutputPath(outputRoot, second.id, '同名会话'), 'utf8'), '另一个主会话\n')
@@ -246,7 +253,7 @@ test('不同会话写入不同临时文件，子代理的回复会被跳过', as
   }
 })
 
-test('自动合并时带上规则路径并保持静默，同一会话等待合并结束再覆盖', async () => {
+test('手动润色时带上规则路径并保持静默，同一会话等待合并结束再覆盖', async () => {
   const root = await mkdtemp(join(tmpdir(), 'humanize-output-merge-'))
   const outputRoot = join(root, 'output')
   setTurnOutputRootResolver(() => outputRoot)
@@ -270,10 +277,11 @@ test('自动合并时带上规则路径并保持静默，同一会话等待合�
         : Promise.resolve()
       return { started: Promise.resolve({ started: true }), done }
     }
-    registerTurnOutputs(host.ctx, log, { saveTurnOutputs: true }, review, merge)
+    const outputs = registerTurnOutputs(host.ctx, log, { saveTurnOutputs: true }, review, merge)
 
     events.push(turnBoundary('turn/end', 1))
     host.publish()
+    await outputs.polishOutput(session.id, 1)
     await waitFor(() => merges.length === 1)
     const output = sessionOutputPath(outputRoot, session.id, '合并输出')
     assert.equal(merges[0].target, output)
@@ -291,7 +299,9 @@ test('自动合并时带上规则路径并保持静默，同一会话等待合�
     assert.equal(reviews.length, 1)
     assert.equal(await readFile(output, 'utf8'), '第一轮\n')
 
+    const secondPolish = outputs.polishOutput(session.id, 2)
     releaseFirstMerge()
+    await secondPolish
     await waitFor(() => merges.length === 2 && reviews.length === 2)
     assert.equal(await readFile(output, 'utf8'), '第二轮\n')
   } finally {
@@ -320,12 +330,13 @@ test('保存新输出前清理超过 24 小时的临时文件', async () => {
     const session = makeSession('session-new', root, events, { title: '新输出' })
     const host = makeHarness(session)
     let reviews = 0
-    registerTurnOutputs(host.ctx, log, { saveTurnOutputs: true }, async () => {
+    const outputs = registerTurnOutputs(host.ctx, log, { saveTurnOutputs: true }, async () => {
       reviews += 1
       return { kind: 'no-spec' }
     }, () => { throw new Error('不应合并') })
     events.push(turnBoundary('turn/end', 1))
     host.publish()
+    await outputs.polishOutput(session.id, 1)
     await waitFor(() => reviews === 1)
 
     await assert.rejects(readFile(expired, 'utf8'), /ENOENT/)

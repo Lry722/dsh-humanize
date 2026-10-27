@@ -116,6 +116,7 @@ test('状态覆盖处理中和就绪，新 turn 立即作废旧 turn', async (t)
   const outputs = registerTurnOutputs(host.ctx, log, host.config, review, merge)
   const output = sessionOutputPath(outputRoot, host.session.id, '状态输出')
   host.finish()
+  await outputs.polishOutput(host.session.id, 1)
   await waitForMetadata(outputs, host.session.id, (value) => value.phase === 'processing')
   assert.equal((await outputs.readOutput(host.session.id)).turn, 1)
 
@@ -124,6 +125,8 @@ test('状态覆盖处理中和就绪，新 turn 立即作废旧 turn', async (t)
   assert.equal(queued.phase, 'saving')
   assert.equal(queued.turn, 2)
   firstReview.resolve({ kind: 'no-spec' })
+  await waitForMetadata(outputs, host.session.id, (value) => value.phase === 'pending' && value.turn === 2)
+  await outputs.polishOutput(host.session.id, 2)
   await waitForMetadata(outputs, host.session.id, (value) => value.phase === 'ready' && value.turn === 2)
   assert.equal(await readFile(output, 'utf8'), '第二轮（已润色）\n')
 })
@@ -136,6 +139,7 @@ test('本轮正文写入失败时不把同名旧稿作为失败版本开放', as
   const { host, outputRoot } = await fixture(t)
   const outputs = registerTurnOutputs(host.ctx, log, host.config, async () => ({ kind: 'no-spec' }), () => {})
   host.finish()
+  await outputs.polishOutput(host.session.id, 1)
   await waitForMetadata(outputs, host.session.id, (value) => value.phase === 'unchanged')
   const output = sessionOutputPath(outputRoot, host.session.id, '状态输出')
 
@@ -150,6 +154,7 @@ test('本轮正文写入失败时不把同名旧稿作为失败版本开放', as
   }
 
   host.addTurn(3, '第三轮恢复')
+  await outputs.polishOutput(host.session.id, 3)
   await waitForMetadata(outputs, host.session.id, (value) => value.turn === 3 && value.phase === 'unchanged')
   assert.equal(await readFile(output, 'utf8'), '第三轮恢复\n')
 })
@@ -163,6 +168,7 @@ test('重载时，本轮保存尚未确认的 sidecar 按 missing 报告', async
   const outputs = registerTurnOutputs(host.ctx, log, host.config, review, () => {})
   const output = sessionOutputPath(outputRoot, host.session.id, '状态输出')
   host.finish()
+  await outputs.polishOutput(host.session.id, 1)
   await waitForMetadata(outputs, host.session.id, (value) => value.phase === 'processing')
 
   // 第二轮在第一轮审查后排队，saving sidecar 已落盘，但正文仍是第一轮。
@@ -177,7 +183,7 @@ test('重载时，本轮保存尚未确认的 sidecar 按 missing 报告', async
   assert.equal(await readFile(output, 'utf8'), '第一轮\n')
 
   firstReview.resolve({ kind: 'no-spec' })
-  await waitForMetadata(outputs, host.session.id, (value) => value.turn === 2 && value.phase === 'unchanged')
+  await waitForMetadata(outputs, host.session.id, (value) => value.turn === 2 && value.phase === 'pending')
 })
 
 test('输出开关、无正文和最新有效轮次遵循现有保存语义', async (t) => {
@@ -189,6 +195,7 @@ test('输出开关、无正文和最新有效轮次遵循现有保存语义', as
   assert.equal((await outputs.readOutput(host.session.id)).phase, 'missing')
 
   host.addTurn(2, '可见输出')
+  await outputs.polishOutput(host.session.id, 2)
   await waitForMetadata(outputs, host.session.id, (value) => value.phase === 'unchanged')
   assert.equal((await outputs.readOutput(host.session.id)).turn, 2)
   host.addTurn(3, '  \n')
@@ -202,19 +209,23 @@ test('同名会话相互隔离，改名和重载后仍恢复正确轮次', async
   const { host, outputRoot, root } = await fixture(t)
   const outputs = registerTurnOutputs(host.ctx, log, host.config, async () => ({ kind: 'no-spec' }), () => {})
   host.finish()
-  await waitForMetadata(outputs, host.session.id, (value) => value.phase === 'unchanged')
+  await waitForMetadata(outputs, host.session.id, (value) => value.phase === 'pending')
   const originalPath = sessionOutputPath(outputRoot, host.session.id, '状态输出')
   host.session.title = '改名后的标题'
 
   const restored = registerTurnOutputs(host.ctx, log, host.config, async () => ({ kind: 'no-spec' }), () => {})
-  const recovered = await restored.readOutput(host.session.id)
+  let recovered = await restored.readOutput(host.session.id)
   assert.equal(recovered.filePath, originalPath)
   assert.equal(recovered.turn, 1)
-  assert.equal(recovered.phase, 'unchanged')
+  assert.equal(recovered.phase, 'pending')
+  await restored.polishOutput(host.session.id, 1)
+  recovered = await waitForMetadata(restored, host.session.id, (value) => value.phase === 'unchanged')
+  assert.equal(recovered.filePath, originalPath)
 
   const other = makeHarness(root, 'session-other', '状态输出')
   const otherOutputs = registerTurnOutputs(other.ctx, log, other.config, async () => ({ kind: 'no-spec' }), () => {})
   other.finish()
+  await otherOutputs.polishOutput(other.session.id, 1)
   await waitForMetadata(otherOutputs, other.session.id, (value) => value.phase === 'unchanged')
   assert.notEqual((await otherOutputs.readOutput(other.session.id)).filePath, originalPath)
   assert.equal((await outputs.readOutput(host.session.id)).filePath, originalPath)
@@ -231,6 +242,7 @@ test('审查失败和合并未启动都保留输出文件并报告失败', async
   const merge = () => ({ started: Promise.resolve({ started: false, error: 'merge busy' }), done: Promise.resolve() })
   const outputs = registerTurnOutputs(host.ctx, log, host.config, review, merge)
   host.finish()
+  await outputs.polishOutput(host.session.id, 1)
   await waitForMetadata(outputs, host.session.id, (value) => value.phase === 'failed')
   const failed = await outputs.readOutput(host.session.id)
   assert.equal(failed.error, 'merge busy')
@@ -239,6 +251,7 @@ test('审查失败和合并未启动都保留输出文件并报告失败', async
 
   failReview = true
   host.addTurn(2, '审查失败')
+  await outputs.polishOutput(host.session.id, 2)
   await waitForMetadata(outputs, host.session.id, (value) => value.phase === 'failed' && value.error === 'review failed')
   assert.equal(await readFile(sessionOutputPath(outputRoot, host.session.id, '状态输出'), 'utf8'), '审查失败\n')
 })
@@ -247,6 +260,7 @@ test('无变化文件缺失或超过 24 小时分别报告 missing 和 expired',
   const { host, outputRoot } = await fixture(t)
   const outputs = registerTurnOutputs(host.ctx, log, host.config, async () => ({ kind: 'ok', annotations: 0 }), () => {})
   host.finish()
+  await outputs.polishOutput(host.session.id, 1)
   await waitForMetadata(outputs, host.session.id, (value) => value.phase === 'unchanged')
   const output = sessionOutputPath(outputRoot, host.session.id, '状态输出')
   await rm(output)

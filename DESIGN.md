@@ -238,19 +238,19 @@ DSH 的 GenerateOptions 没有 JSON 模式参数，适配器也不会转发 resp
 
 真实输出位于系统临时目录下的 `dsh-humanize-<uid>/output/<会话标题>--<短ID>.md`。标题从 sessionTitle.get(session) 读取，清理文件系统不安全字符并按 UTF-8 字节数截断；空标题使用 `untitled-session`。短 ID 后缀区分同名会话。文件名在首次输出时确定，标题变化后按后缀找回原文件，插件重载后也同样有效。
 
-每轮原子覆盖上一版，只保留最新回复。写入后清除上一轮暂存批注，并以 before = undefined 调用立即审查，确保模型全量审查新正文。保存时顺带清理超过 24 小时未更新的输出，清理扫描最多每小时一次；功能关闭时不执行扫描或写入。新版首次写入后还清理这个会话旧版位于项目 .agents/output 的输出和批注，避免旧批注在其他触发路径里重新写回项目。
+每轮原子覆盖上一版，只保留最新回复。写入后清除上一轮暂存批注，保存原始输出并进入 pending，不自动审查。手动触发后才以 before = undefined 调用立即审查，确保模型全量审查新正文。保存时顺带清理超过 24 小时未更新的输出，清理扫描最多每小时一次；功能关闭时不执行扫描或写入。新版首次写入后还清理这个会话旧版位于项目 .agents/output 的输出和批注，避免旧批注在其他触发路径里重新写回项目。
 
 workingDirectory.get(session) 只决定规则归属，轻量宿主退回会话头里的 cwd。真实文件路径 filePath 用于读写、暂存和合并，项目内 `.agents/output/<同名文件>` 作为 rulePath 仅用于 PROSE 发现和 include/review 匹配，不要求实际存在。rulePath 经过审查队列、staged 项、合并请求和 reviewInputs 传递，因此首轮审查、合并和合并后复审使用同一套项目规则；普通文件没有 rulePath，默认仍按真实路径匹配。
 
-没有适用规则或没有批注时流程到此结束。有批注时复用单次合并运行并传入 quiet，完成合并与复审后不继续循环。quiet 不创建 jobs 任务行，也不通过 agent.inject 留下成功或失败通知；只有手动斜杠命令保留进度与结果说明。
+点击润色后，没有适用规则或没有批注时流程到此结束。有批注时复用单次合并运行并传入 quiet，完成合并与复审后不继续循环。quiet 不创建 jobs 任务行，也不通过 agent.inject 留下成功或失败通知；只有手动斜杠命令保留进度与结果说明。
 
-每个会话有一条处理队列，下一轮不会与上一轮合并并发修改同一输出文件。不同会话的写入和审查可以并行，自动合并另走一条串行队列。手动或压缩合并仍由全局合并锁仲裁，冲突时保留批注。
+每个会话有一条处理队列，下一轮不会与上一轮合并并发修改同一输出文件。不同会话的写入和审查可以并行，输出合并另走一条串行队列。手动或压缩合并仍由全局合并锁仲裁，冲突时保留批注。
 
-输出链路另外记录 sessionId、turn、真实路径、状态、更新时间和失败原因。状态依次为 saving、processing 和 ready/unchanged/failed；成功处理后读取最终文件并与本轮原始正文比较，内容不同为 ready，完全一致为 unchanged。读取时按文件实际情况派生 missing/expired。元数据写在同目录的隐藏 JSON sidecar 中，Markdown 文件名和正文格式不变。sidecar 内部的 bodySaved 标记只有本轮正文原子写成功后才为真；写入前失败或中断恢复均按 missing 处理，不能因为同名旧稿仍存在就允许打开。旧版无法证明保存时机的 failed 同样保守按未保存处理。sidecar 串行更新并校验所属会话和路径，插件重载后可以恢复轮次；没有 sidecar 的旧版输出按短 ID 找回，并尽量从会话日志恢复轮次。新 turn 入队后，旧任务的异步收尾不能覆盖新状态。
+输出链路另外记录 sessionId、turn、真实路径、状态、更新时间和失败原因。状态依次为 saving、pending，点击后进入 processing，最后得到 ready/unchanged/failed；成功处理后读取最终文件并与本轮原始正文比较，内容不同为 ready，完全一致为 unchanged。读取时按文件实际情况派生 missing/expired。元数据写在同目录的隐藏 JSON sidecar 中，Markdown 文件名和正文格式不变。sidecar 内部的 bodySaved 标记只有本轮正文原子写成功后才为真；写入前失败或中断恢复均按 missing 处理，不能因为同名旧稿仍存在就允许打开。旧版无法证明保存时机的 failed 同样保守按未保存处理。sidecar 串行更新并校验所属会话和路径，插件重载后可以恢复轮次；没有 sidecar 的旧版输出按短 ID 找回，并尽量从会话日志恢复轮次。新 turn 入队后，旧任务的异步收尾不能覆盖新状态。
 
-`output/routes.js` 在认证 Connection 内注册只读 GET 路由，只接受一个 sessionId，不接受 path 或 filePath，响应带 no-store。路由只返回元数据，正文仍由 GUI 已有的授权文件读取服务打开。
+`output/routes.js` 在认证 Connection 内注册 GET 查询和 POST 手动润色路由。GET 只接受一个 sessionId，POST 另带一个正整数 turn，均不接受 path 或 filePath，响应带 no-store。路由只返回元数据，正文仍由 GUI 已有的授权文件读取服务打开。
 
-浏览器在 conversation.chat.turnTail 注册懒加载入口。设置镜像里的 saveTurnOutputs 开启且当前节点是最新含可见正文的已结束 turn 时才挂载。入口使用透明底单行操作项，只显示短状态和按需提供的查看或重试动作，完整状态说明只作为悬浮提示，不占用额外正文行。它只在可见且处理中轮询状态，隐藏、终态、切轮和卸载都会取消计时器或作废请求。只有 ready 提供查看动作，unchanged 和 failed 不开放文件入口。点击查看时再次校验会话、turn 和 ready 状态，再调用 slot 的 openFile，复用右侧栏 Markdown 预览；不替换原助手消息，不自动打开侧栏，也不创建自动合并任务行。
+浏览器在 conversation.chat.turnTail 注册懒加载入口。设置镜像里的 saveTurnOutputs 开启且当前节点是最新含可见正文的已结束 turn 时才挂载。入口使用透明底单行操作项，pending 只显示“润色输出”按钮，点击后通过 POST 触发当前 turn，再显示短状态和按需提供的查看或重试动作。它只在可见且保存或润色处理中时轮询，pending 和其他终态不轮询；隐藏、切轮和卸载都会取消计时器或作废请求。只有 ready 提供查看动作，unchanged 和 failed 不开放文件入口。点击查看时再次校验会话、turn 和 ready 状态，再调用 slot 的 openFile，复用右侧栏 Markdown 预览；不替换原助手消息，不自动打开侧栏，也不创建输出合并任务行。
 
 ### 暂存批注
 

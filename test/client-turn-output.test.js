@@ -96,7 +96,7 @@ test('状态响应严格匹配会话和 turn', async () => {
   assert.equal(metadataForTurn({ ...value, filePath: null }, 'session-1', 2), undefined)
 })
 
-test('只有可见且处于处理中时才刷新，进入终态或隐藏后停止刷新', async () => {
+test('点击后才开始润色，仅处理中且可见时刷新', async () => {
   const { createTurnOutputStore } = await loadChunk()
   const clock = timers()
   const requests = []
@@ -114,7 +114,17 @@ test('只有可见且处于处理中时才刷新，进入终态或隐藏后停�
   assert.equal(requests.length, 0)
   store.setVisible(true)
   assert.equal(requests.length, 1)
-  requests[0].resolve(response(metadata('session-1', 1, 'processing')))
+  requests[0].resolve(response(metadata('session-1', 1, 'pending')))
+  await settle()
+  assert.equal(store.getSnapshot().metadata.phase, 'pending')
+  assert.equal(clock.pending.size, 0)
+
+  store.polish()
+  assert.equal(requests.length, 2)
+  assert.equal(requests[1].options.method, 'POST')
+  assert.match(requests[1].url, /sessionId=session-1&turn=1/)
+  assert.equal(store.getSnapshot().metadata.phase, 'processing')
+  requests[1].resolve(response(metadata('session-1', 1, 'processing')))
   await settle()
   assert.equal(store.getSnapshot().metadata.phase, 'processing')
   assert.equal(clock.pending.size, 1)
@@ -122,10 +132,10 @@ test('只有可见且处于处理中时才刷新，进入终态或隐藏后停�
   store.setVisible(false)
   assert.equal(clock.pending.size, 0)
   for (const callback of [...clock.pending.values()]) callback()
-  assert.equal(requests.length, 1)
-  store.setVisible(true)
   assert.equal(requests.length, 2)
-  requests[1].resolve(response(metadata('session-1', 1, 'ready')))
+  store.setVisible(true)
+  assert.equal(requests.length, 3)
+  requests[2].resolve(response(metadata('session-1', 1, 'ready')))
   await settle()
   assert.equal(store.getSnapshot().metadata.phase, 'ready')
   assert.equal(clock.pending.size, 0)

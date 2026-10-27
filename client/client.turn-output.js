@@ -14,7 +14,7 @@ window.__ModuleLoader__.load({
     const { useEffect, useRef, useState, useSyncExternalStore } = React
 
     const ACTIVE_PHASES = new Set(['saving', 'processing'])
-    const KNOWN_PHASES = new Set(['disabled', 'saving', 'processing', 'ready', 'unchanged', 'failed', 'missing', 'expired'])
+    const KNOWN_PHASES = new Set(['disabled', 'saving', 'pending', 'processing', 'ready', 'unchanged', 'failed', 'missing', 'expired'])
     const POLL_MS = 1000
 
     function turnHasOutput(snapshot, turn) {
@@ -82,15 +82,21 @@ window.__ModuleLoader__.load({
         && (snapshot.status === 'loading'
           || (snapshot.status === 'settled' && ACTIVE_PHASES.has(currentMetadata()?.phase)))
 
-      const load = async () => {
-        if (!shouldQuery()) return
+      const load = async (method = 'GET') => {
+        const polishing = method === 'POST'
+        if (polishing) {
+          if (!active || !visible || controller !== undefined || currentMetadata()?.phase !== 'pending') return
+        } else if (!shouldQuery()) return
         if (timer !== undefined) cancelSchedule(timer)
         timer = undefined
         const ticket = ++generation
         const request = new AbortController()
         controller = request
+        if (polishing) publish({ status: 'settled', metadata: { ...currentMetadata(), phase: 'processing' } })
         try {
-          const response = await fetchImpl(`api/humanize.turn-output?sessionId=${encodeURIComponent(sessionId)}`, {
+          const action = polishing ? `&turn=${encodeURIComponent(turn)}` : ''
+          const response = await fetchImpl(`api/humanize.turn-output?sessionId=${encodeURIComponent(sessionId)}${action}`, {
+            method,
             cache: 'no-store',
             headers: { accept: 'application/json' },
             signal: request.signal,
@@ -131,6 +137,9 @@ window.__ModuleLoader__.load({
           visible = next
           if (!visible) cancel()
           else void load()
+        },
+        polish() {
+          void load('POST')
         },
         retry() {
           if (!active) return
@@ -240,27 +249,33 @@ window.__ModuleLoader__.load({
           type: 'button', style: buttonStyle, onClick: () => store.retry(),
         }, t('output.retry'))
       } else if (metadata !== undefined) {
-        statusText = t(compactStatusKey(metadata.phase))
-        statusHint = (metadata.phase === 'failed' || metadata.phase === 'unchanged')
-          ? undefined
-          : t(statusHintKey(metadata.phase))
-        if (metadata.phase === 'ready' && typeof metadata.filePath === 'string') {
+        if (metadata.phase === 'pending') {
           action = h('button', {
-            type: 'button',
-            style: buttonStyle,
-            onClick: () => {
-              // 点击时重新校验，异步状态已经切轮后不能沿用旧闭包打开文件。
-              const current = metadataForTurn(store.getSnapshot().metadata, sessionId, turn.turn)
-              if (current?.phase === 'ready' && typeof current.filePath === 'string') openFile(current.filePath)
-            },
-          }, t('output.open'))
+            type: 'button', style: buttonStyle, onClick: () => store.polish(),
+          }, t('output.polish'))
+        } else {
+          statusText = t(compactStatusKey(metadata.phase))
+          statusHint = (metadata.phase === 'failed' || metadata.phase === 'unchanged')
+            ? undefined
+            : t(statusHintKey(metadata.phase))
+          if (metadata.phase === 'ready' && typeof metadata.filePath === 'string') {
+            action = h('button', {
+              type: 'button',
+              style: buttonStyle,
+              onClick: () => {
+                // 点击时重新校验，异步状态已经切轮后不能沿用旧闭包打开文件。
+                const current = metadataForTurn(store.getSnapshot().metadata, sessionId, turn.turn)
+                if (current?.phase === 'ready' && typeof current.filePath === 'string') openFile(current.filePath)
+              },
+            }, t('output.open'))
+          }
         }
       } else if (state.status === 'loading') {
         statusText = t('output.compact.loading')
         statusHint = t('output.loading')
       }
-      const content = statusText === undefined ? null : h('section', { style: rootStyle, 'aria-label': t('output.title') },
-        h('span', { style: statusStyle, title: statusHint, 'aria-live': 'polite' }, statusText),
+      const content = statusText === undefined && action === null ? null : h('section', { style: rootStyle, 'aria-label': t('output.title') },
+        statusText === undefined ? null : h('span', { style: statusStyle, title: statusHint, 'aria-live': 'polite' }, statusText),
         action)
       // 保留一个无视觉内容的观察锚点。关闭输出或不匹配时不发起后台轮询。
       return h('div', { ref: rootRef, style: { minHeight: '1px' } }, content)
