@@ -242,19 +242,16 @@ window.__ModuleLoader__.load({
       } else if (metadata !== undefined) {
         statusText = t(compactStatusKey(metadata.phase))
         statusHint = t(statusHintKey(metadata.phase))
-        const canOpen = (metadata.phase === 'ready' || metadata.phase === 'failed') && typeof metadata.filePath === 'string'
-        if (canOpen) {
+        if (metadata.phase === 'ready' && typeof metadata.filePath === 'string') {
           action = h('button', {
             type: 'button',
             style: buttonStyle,
             onClick: () => {
               // 点击时重新校验，异步状态已经切轮后不能沿用旧闭包打开文件。
               const current = metadataForTurn(store.getSnapshot().metadata, sessionId, turn.turn)
-              if ((current?.phase === 'ready' || current?.phase === 'failed') && typeof current.filePath === 'string') {
-                openFile(current.filePath)
-              }
+              if (current?.phase === 'ready' && typeof current.filePath === 'string') openFile(current.filePath)
             },
-          }, t(metadata.phase === 'failed' ? 'output.openSaved' : 'output.open'))
+          }, t('output.open'))
         }
       } else if (state.status === 'loading') {
         statusText = t('output.compact.loading')

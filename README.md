@@ -174,7 +174,7 @@ Every write immediately runs a full review of the latest response without waitin
 
 When review produces annotations, one merge and re-review round runs silently: no task progress row or main-session completion notice is created. Manual `/humanize` and `/humanize-loop` progress and results are unchanged. Further annotations produced by re-review remain staged as they do for a manual single merge; they do not trigger an automatic loop. Replacement, review and merge are serial within one session, and automatic merges from different sessions are dispatched one at a time.
 
-With outputs enabled, the latest eligible turn shows concise polishing, ready or failed status in a compact single-line action row with a transparent background. Once ready, “View” opens the output in the built-in Markdown preview in the right sidebar. If finalization fails, the last saved version remains available. The original assistant response is unchanged and the sidebar does not open automatically. Older turns have no entry, preventing them from opening newer content that replaced their output.
+With outputs enabled, the latest eligible turn shows concise polishing, ready or failed status in a compact single-line action row with a transparent background. Once ready, “View” opens the output in the built-in Markdown preview in the right sidebar. If finalization fails, only the failed status is shown and no View action is provided. The original assistant response is unchanged and the sidebar does not open automatically. Older turns have no entry, preventing them from opening newer content that replaced their output.
 
 ### Staged annotations
 
