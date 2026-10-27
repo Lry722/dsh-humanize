@@ -18,8 +18,8 @@ const chunks = [
 ]
 
 test('入口文件的版本戳与 chunk 内容一致', async () => {
-  const contents = await Promise.all(chunks.map((file) => readFile(join(root, file))))
-  // 与 scripts/stamp-client.mjs 的算法保持一致。
+  const contents = await Promise.all(chunks.map(async (file) => (await readFile(join(root, file), 'utf8')).replace(/\r\n/g, '\n')))
+  // 与 scripts/stamp-client.mjs 的算法保持一致，忽略 worktree 行尾差异。
   const hash = createHash('sha256').update(contents.join('\0')).digest('hex').slice(0, 8)
   const entry = await readFile(join(root, 'client/client.js'), 'utf8')
   const marker = /^\/\/ chunks: ([0-9a-f]{8})$/m.exec(entry)

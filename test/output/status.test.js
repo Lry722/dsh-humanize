@@ -163,7 +163,7 @@ test('同名会话相互隔离，改名和重载后仍恢复正确轮次', async
   assert.equal((await outputs.readOutput(host.session.id)).filePath, originalPath)
 })
 
-test('审查失败和合并未启动都保留可读文件并报告失败', async (t) => {
+test('审查失败和合并未启动都保留输出文件并报告失败', async (t) => {
   const { host, outputRoot } = await fixture(t)
   let failReview = false
   const review = async (agent, filePath) => {

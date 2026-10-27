@@ -246,7 +246,7 @@ test('不同会话写入不同临时文件，子代理的回复会被跳过', as
   }
 })
 
-test('自动合并携带规则路径且静默，同一会话等待合并结束再覆盖', async () => {
+test('自动合并时带上规则路径并保持静默，同一会话等待合并结束再覆盖', async () => {
   const root = await mkdtemp(join(tmpdir(), 'humanize-output-merge-'))
   const outputRoot = join(root, 'output')
   setTurnOutputRootResolver(() => outputRoot)

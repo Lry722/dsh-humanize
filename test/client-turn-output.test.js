@@ -132,7 +132,7 @@ test('仅可见且处理中时刷新，终态和隐藏都会停止', async () =>
   store.stop()
 })
 
-test('切轮和隐藏会使迟到响应失效', async () => {
+test('切换 turn 和隐藏会使迟到响应失效', async () => {
   const { createTurnOutputStore } = await loadChunk()
   const requests = []
   const store = createTurnOutputStore({
