@@ -246,11 +246,11 @@ workingDirectory.get(session) 只决定规则归属，轻量宿主退回会话�
 
 每个会话有一条处理队列，下一轮不会与上一轮合并并发修改同一输出文件。不同会话的写入和审查可以并行，自动合并另走一条串行队列。手动或压缩合并仍由全局合并锁仲裁，冲突时保留批注。
 
-输出链路另外记录 sessionId、turn、真实路径、状态、更新时间和失败原因。状态依次为 saving、processing 和 ready/failed；读取时按文件实际情况派生 missing/expired。元数据写在同目录的隐藏 JSON sidecar 中，Markdown 文件名和正文格式不变。sidecar 内部的 bodySaved 标记只有本轮正文原子写成功后才为真；写入前失败或中断恢复均按 missing 处理，不能因为同名旧稿仍存在就允许打开。旧版无法证明保存时机的 failed 同样保守按未保存处理。sidecar 串行更新并校验所属会话和路径，插件重载后可以恢复轮次；没有 sidecar 的旧版输出按短 ID 找回，并尽量从会话日志恢复轮次。新 turn 入队后，旧任务的异步收尾不能覆盖新状态。
+输出链路另外记录 sessionId、turn、真实路径、状态、更新时间和失败原因。状态依次为 saving、processing 和 ready/unchanged/failed；成功处理后读取最终文件并与本轮原始正文比较，内容不同为 ready，完全一致为 unchanged。读取时按文件实际情况派生 missing/expired。元数据写在同目录的隐藏 JSON sidecar 中，Markdown 文件名和正文格式不变。sidecar 内部的 bodySaved 标记只有本轮正文原子写成功后才为真；写入前失败或中断恢复均按 missing 处理，不能因为同名旧稿仍存在就允许打开。旧版无法证明保存时机的 failed 同样保守按未保存处理。sidecar 串行更新并校验所属会话和路径，插件重载后可以恢复轮次；没有 sidecar 的旧版输出按短 ID 找回，并尽量从会话日志恢复轮次。新 turn 入队后，旧任务的异步收尾不能覆盖新状态。
 
 `output/routes.js` 在认证 Connection 内注册只读 GET 路由，只接受一个 sessionId，不接受 path 或 filePath，响应带 no-store。路由只返回元数据，正文仍由 GUI 已有的授权文件读取服务打开。
 
-浏览器在 conversation.chat.turnTail 注册懒加载入口。设置镜像里的 saveTurnOutputs 开启且当前节点是最新含可见正文的已结束 turn 时才挂载。入口使用透明底单行操作项，只显示短状态和按需提供的查看或重试动作，完整状态说明只作为悬浮提示，不占用额外正文行。它只在可见且处理中轮询状态，隐藏、终态、切轮和卸载都会取消计时器或作废请求。只有 ready 提供查看动作，failed 不开放文件入口。点击查看时再次校验会话、turn 和 ready 状态，再调用 slot 的 openFile，复用右侧栏 Markdown 预览；不替换原助手消息，不自动打开侧栏，也不创建自动合并任务行。
+浏览器在 conversation.chat.turnTail 注册懒加载入口。设置镜像里的 saveTurnOutputs 开启且当前节点是最新含可见正文的已结束 turn 时才挂载。入口使用透明底单行操作项，只显示短状态和按需提供的查看或重试动作，完整状态说明只作为悬浮提示，不占用额外正文行。它只在可见且处理中轮询状态，隐藏、终态、切轮和卸载都会取消计时器或作废请求。只有 ready 提供查看动作，unchanged 和 failed 不开放文件入口。点击查看时再次校验会话、turn 和 ready 状态，再调用 slot 的 openFile，复用右侧栏 Markdown 预览；不替换原助手消息，不自动打开侧栏，也不创建自动合并任务行。
 
 ### 暂存批注
 

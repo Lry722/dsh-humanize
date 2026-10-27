@@ -14,7 +14,7 @@ window.__ModuleLoader__.load({
     const { useEffect, useRef, useState, useSyncExternalStore } = React
 
     const ACTIVE_PHASES = new Set(['saving', 'processing'])
-    const KNOWN_PHASES = new Set(['disabled', 'saving', 'processing', 'ready', 'failed', 'missing', 'expired'])
+    const KNOWN_PHASES = new Set(['disabled', 'saving', 'processing', 'ready', 'unchanged', 'failed', 'missing', 'expired'])
     const POLL_MS = 1000
 
     function turnHasOutput(snapshot, turn) {
@@ -192,6 +192,7 @@ window.__ModuleLoader__.load({
       if (phase === 'saving') return 'output.compact.saving'
       if (phase === 'processing') return 'output.compact.processing'
       if (phase === 'ready') return 'output.compact.ready'
+      if (phase === 'unchanged') return 'output.compact.unchanged'
       if (phase === 'failed') return 'output.compact.failed'
       if (phase === 'expired') return 'output.compact.expired'
       return 'output.compact.missing'
@@ -240,7 +241,9 @@ window.__ModuleLoader__.load({
         }, t('output.retry'))
       } else if (metadata !== undefined) {
         statusText = t(compactStatusKey(metadata.phase))
-        statusHint = metadata.phase === 'failed' ? undefined : t(statusHintKey(metadata.phase))
+        statusHint = (metadata.phase === 'failed' || metadata.phase === 'unchanged')
+          ? undefined
+          : t(statusHintKey(metadata.phase))
         if (metadata.phase === 'ready' && typeof metadata.filePath === 'string') {
           action = h('button', {
             type: 'button',
