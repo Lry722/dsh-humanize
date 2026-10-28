@@ -203,7 +203,7 @@ Manual `/humanize` and `/humanize-loop` runs show progress and results in the ta
 
 ### Action row
 
-After saving, the latest eligible turn shows a polish icon in its assistant action row, immediately after Fork. Clicking it shows a loading icon while polishing.
+After saving, the latest eligible turn shows a polish icon in its assistant action row, immediately after Fork. Clicking it shows a loading icon while polishing. When the next turn starts, the previous entry stays visible until that turn ends and saves its new output.
 
 The final file is compared with the original turn output. A clickable View icon is shown only when the content actually changed. Clicking it opens the built-in Markdown preview in the right sidebar.
 
