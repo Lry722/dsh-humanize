@@ -260,7 +260,7 @@ DSH 的 GenerateOptions 没有 JSON 模式参数，适配器也不会转发 resp
 
 ### 子代理复用与历史重置
 
-每个父会话复用目录中最新一个带合并标签的 continuable 子代理，不再为每轮合并新增目录记录。目录来自持久会话索引，因此插件重载后仍能找回同一个子代理。首次激活用 activation.result 收尾。续用轮次改用 agents.resume 取得本次精确 AgentHandle，向子代理自身发送 steer，再用 turn/end 和 whenIdle 回收结束原因与错误明细，最后销毁同一句柄。
+每个父会话复用目录中最新一个带合并标签的 continuable 子代理，每轮合并共用这条目录记录。目录来自持久会话索引，因此插件重载后仍能找回同一个子代理。首次激活用 activation.result 收尾。续用轮次改用 agents.resume 取得本次精确 AgentHandle，向子代理自身发送 steer，再用 turn/end 和 whenIdle 回收结束原因与错误明细，最后销毁同一句柄。
 
 续用不能调用 subagents.sendMessage：它的冷恢复会把 activation 的 delivery 默认设成 parent，完成时自动向主会话投递一条子代理结算消息。直接恢复不产生这条平台结算，自动润色因此仍然静默，只保留插件原有的通知路径。
 
@@ -294,25 +294,25 @@ DSH 的 GenerateOptions 没有 JSON 模式参数，适配器也不会转发 resp
 
 ### 保存与文件名
 
-`saveTurnOutputs` 控制这条可选链路，默认关闭。插件增量监听 turn/start、assistant/message 和 turn/end，正常路径不回读整份会话日志。每个主会话只保留当前 turn 最后一条含非空白可见正文的助手消息，turn 结束时删除候选。正文取全部 text block 按顺序拼接的结果，保留原始空白；推理、工具调用和子代理内部回复不进入输出。
+`saveTurnOutputs` 控制这条可选链路，默认关闭。插件增量监听 turn/start、assistant/message 和 turn/end，正常路径不回读整份会话日志。每个主会话只保留当前 turn 最后一条含非空白可见正文的助手消息，turn 结束时删除候选。正文取全部 text block 按顺序拼接的结果，保留原始空白。推理、工具调用和子代理内部回复不进入输出。
 
-真实输出位于系统临时目录下的 `dsh-humanize-<uid>/output/<会话标题>--<短ID>.md`。标题从 sessionTitle.get(session) 读取，清理文件系统不安全字符并按 UTF-8 字节数截断；空标题使用 `untitled-session`。短 ID 后缀区分同名会话。文件名在首次输出时确定，标题变化后按后缀找回原文件，插件重载后也同样有效。
+真实输出位于系统临时目录下的 `dsh-humanize-<uid>/output/<会话标题>--<短ID>.md`。标题从 sessionTitle.get(session) 读取，清理文件系统不安全字符并按 UTF-8 字节数截断。空标题使用 `untitled-session`。短 ID 后缀区分同名会话。文件名在首次输出时确定，标题变化后按后缀找回原文件，插件重载后也同样有效。
 
 ### 逻辑路径与清理
 
 每轮原子覆盖上一版，只保留最新回复。写入后清除上一轮暂存批注，保存原始输出并进入 pending，不自动审查。手动触发后才以 before = undefined 调用立即审查，确保模型全量审查新正文。
 
-保存时顺带清理超过 24 小时未更新的输出，清理扫描最多每小时一次；功能关闭时不执行扫描或写入。新版首次写入后还清理这个会话旧版位于项目 .agents/output 的输出和批注，避免旧批注在其他触发路径里重新写回项目。
+保存时顺带清理超过 24 小时未更新的输出，清理扫描最多每小时一次。功能关闭时不执行扫描或写入。新版首次写入后，还会清理这个会话旧版留在项目 .agents/output 下的输出和批注。这样可以避免旧批注在其他触发路径里重新写回项目。
 
-workingDirectory.get(session) 只决定规则归属，轻量宿主退回会话头里的 cwd。真实文件路径 filePath 用于读写、暂存和合并，项目内 `.agents/output/<同名文件>` 作为 rulePath 仅用于 PROSE 发现和 include 匹配，不要求实际存在。rulePath 经过审查队列、staged 项和合并请求传递，因此审查与合并使用同一套项目规则；普通文件没有 rulePath，默认仍按真实路径匹配。
+workingDirectory.get(session) 只决定规则归属，轻量宿主退回会话头里的 cwd。真实文件路径 filePath 用于读写、暂存和合并，项目内 `.agents/output/<同名文件>` 作为 rulePath 仅用于 PROSE 发现和 include 匹配，不要求实际存在。rulePath 经过审查队列、暂存批注和合并请求传递，因此审查与合并使用同一套项目规则。普通文件没有 rulePath，默认仍按真实路径匹配。
 
 ### 润色与状态
 
-点击润色后，没有适用规则或没有批注时流程到此结束。有批注时复用单次合并运行，传入 quiet 和 skipReReview：合并完成立即结束，不再复审或继续循环。quiet 不创建 jobs 任务行，也不通过 agent.inject 留下成功或失败通知；只有手动斜杠命令保留进度与结果说明。
+点击润色后，只有适用规则和批注都存在时流程才继续。有批注时复用单次合并运行，传入 quiet 和 skipReReview：合并完成立即结束，不再复审或继续循环。quiet 不创建 jobs 任务行，也不通过 agent.inject 留下成功或失败通知。只有手动斜杠命令保留进度与结果说明。
 
 每个会话有一条处理队列，下一轮不会与上一轮合并并发修改同一输出文件。不同会话的写入和审查可以并行，输出合并另走一条串行队列。手动、压缩和输出合并仍由全局合并锁仲裁，冲突时保留批注。
 
-输出链路另外记录 sessionId、turn、真实路径、状态、更新时间和失败原因。状态依次为 saving、pending，点击后进入 processing，最后得到 ready/unchanged/failed；成功处理后读取最终文件并与本轮原始正文比较，内容不同为 ready，完全一致为 unchanged。读取时按文件实际情况派生 missing/expired。
+输出链路另外记录 sessionId、turn、真实路径、状态、更新时间和失败原因。状态依次为 saving、pending，点击后进入 processing，最后得到 ready/unchanged/failed。成功处理后读取最终文件并与本轮原始正文比较，内容不同为 ready，完全一致为 unchanged。读取时按文件实际情况派生 missing/expired。
 
 元数据写在同目录的隐藏 JSON sidecar 中，Markdown 文件名和正文格式不变。sidecar 内部的 bodySaved 标记只有本轮正文原子写成功后才为真。
 
@@ -350,7 +350,7 @@ pending 显示润色图标，点击后通过 POST 触发当前 turn；saving/pro
 
 平台在上下文压缩结束时往会话日志里写一条 compaction/end 事件。插件订阅 session/event，收到这条事件就合并会话工作目录下的暂存批注。压缩本身失败时事件里带着 error 字段，这种情况直接跳过。
 
-这条独立派发链路传入 quiet，不创建 jobs 任务行，也不注入结果通知。关闭 mergeOnCompaction 后，压缩不再触发合并，其他触发方式不受影响。
+这条独立派发链路传入 quiet，跳过 jobs 任务行和结果通知。关闭 mergeOnCompaction 后，压缩不再触发合并，其他触发方式照常工作。
 
 ### 手动审查批次
 

@@ -163,7 +163,7 @@ After each review, the next write review waits one minute by default. Writes dur
 
 A write review of an existing file only looks at the regions changed in this write. A new file is reviewed in full. The review call still receives the full file. Markers only limit where new annotations may point.
 
-Reviews of the same file run serially. Writes from different sessions or subagents queue separately, and queued reviews are kept per agent without overwriting each other. While a merge runs, the reviews of the agent that started it are aborted or discarded. Reviews from other agents on the same target files are treated the same way. Batch reviews and merge re-reviews skip the interval and run immediately.
+Reviews of the same file run serially. Writes from different sessions or subagents queue separately, and each agent keeps its own pending review entry. While a merge runs, the reviews of the agent that started it are aborted or discarded. Reviews from other agents on the same target files are treated the same way. Batch reviews and merge re-reviews skip the interval and run immediately.
 
 ### Concurrency and retries
 
@@ -197,9 +197,9 @@ PROSE rules are still discovered and matched against the logical path `.agents/o
 
 Each write saves only the original output and clears annotations from the previous turn. Review starts only when the user clicks the polish icon. Clicking the icon in the action row of the latest eligible turn immediately runs a full review, without waiting for `reviewIntervalSeconds`. If no rules apply or review produces no annotations, polishing ends without dispatching a merge.
 
-When review produces annotations, one merge round runs silently and polishing finishes as soon as that merge completes, without a re-review. The merge round stays out of the task list and sends no completion notice to the main session.
+When review produces annotations, one merge round runs silently. Polishing finishes as soon as that merge completes, and a re-review is skipped. The merge round stays out of the task list and skips the result notice to the main session.
 
-Manual `/humanize` and `/humanize-loop` progress, results and re-review are unchanged. Saving, review and merge are serial within one session, and merges of final turn outputs from different sessions are dispatched one at a time.
+Manual `/humanize` and `/humanize-loop` runs show progress and results in the task list, and re-review the merged files. Saving, review and merge are serial within one session, and merges of final turn outputs from different sessions are dispatched one at a time.
 
 ### Action row
 
@@ -263,9 +263,9 @@ The merge target, round and files awaiting re-review stay in memory. If staged a
 
 ### Automatic merges
 
-`mergeOnCompaction` defaults to true. When context compaction ends, the plugin merges all staged annotations under the session working directory. When the setting is off, compaction does not trigger a merge; other triggers are unaffected. These merges run silently, without a task row or result notice. They still re-review the files they changed.
+`mergeOnCompaction` defaults to true. When context compaction ends, the plugin merges all staged annotations under the session working directory. When the setting is off, compaction skips the merge, while manual commands and polishing still merge. These merges run silently and skip the task row and result notice. They still re-review the files they changed.
 
-The merge that follows output polishing is also silent. It runs one round and does not re-review. See [Final turn outputs](#final-turn-outputs).
+The merge that follows output polishing is also silent. It runs one round and skips re-review. See [Final turn outputs](#final-turn-outputs).
 
 ### Background tasks
 
