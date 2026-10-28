@@ -186,10 +186,10 @@ test('一轮合并后复审没有新批注时正常结束', async () => {
     await waitFor(() => state.running.size === 0)
     assert.equal(reviews.calls.length, 1)
     assert.equal(jobs.started.length, 1)
-    assert.match(noticeTexts(agent), /已按暂存批注修订/)
+    assert.match(noticeTexts(agent), /已按暂存批注润色/)
     // 摘要长度上限只作用于折叠行，正文的完整文件清单照常显示。
     const notice = agent.injected.find((message) => message.source?.form === 'notice')
-    assert.equal(notice.source.summary, '已按暂存批注修订 1 个文件。')
+    assert.equal(notice.source.summary, '已按暂存批注润色 1 个文件。')
     assert.match(notice.content[0].text, /doc\.md/)
     await assert.rejects(readFile(stagingPathFor(join(project, 'doc.md'))), /ENOENT/)
   } finally {
@@ -234,7 +234,7 @@ test('复审产生新批注后继续下一轮，收敛才结束', async () => {
     const ctx = makeCtx([agent], async () => {
       starts += 1
       const activation = deferredActivation('child-1')
-      catalog.push({ id: 'child-1', mode: 'continuable', label: 'humanize 批注合并' })
+      catalog.push({ id: 'child-1', mode: 'continuable', label: 'humanize 行文润色' })
       // 首轮立刻完成，第二轮由插件直接恢复并等待精确句柄空闲。
       queueMicrotask(() => activation.resolve({ stopReason: 'completed' }))
       return activation.activation
@@ -264,8 +264,8 @@ test('复审产生新批注后继续下一轮，收敛才结束', async () => {
     assert.equal(resumes, 1)
     assert.equal(catalog.length, 1)
     assert.equal(reviews, 2)
-    // 复审结果只进任务行，会话只收到合并修改说明。
-    const mergeNotices = agent.injected.filter((message) => /已按暂存批注修订/.test(message.content?.[0]?.text ?? ''))
+    // 复审结果只进任务行，会话只收到润色修改说明。
+    const mergeNotices = agent.injected.filter((message) => /已按暂存批注润色/.test(message.content?.[0]?.text ?? ''))
     assert.equal(mergeNotices.length, 2)
     assert.equal(agent.injected.length, 2)
     await assert.rejects(readFile(stagingPathFor(target)), /ENOENT/)
@@ -342,7 +342,7 @@ test('不同会话的合并运行互斥', async () => {
 
     const second = await ctx.commands.get('humanize').handler({ agent: secondAgent, rawInput: '' })
     assert.equal(second.kind, 'error')
-    assert.match(second.text, /已有批注合并正在进行/)
+    assert.match(second.text, /已有行文润色正在进行/)
 
     activation.resolve({ stopReason: 'completed' })
     await waitFor(() => state.running.size === 0 && state.mergeRun === null)
@@ -370,7 +370,7 @@ test('复审失败时按失败结束，不再宣称收敛', async () => {
     await waitFor(() => state.running.size === 0)
 
     assert.match(noticeTexts(agent), /第 1 轮复审有 1 个文件失败/)
-    assert.doesNotMatch(noticeTexts(agent), /循环合并结束/)
+    assert.doesNotMatch(noticeTexts(agent), /循环润色结束/)
     assert.equal(state.mergeRun, null)
   } finally {
     await removeStorage(storage)
@@ -405,7 +405,7 @@ test('一次 /humanize 复审还有批注也到此为止，只跑这一轮', asy
 
     assert.equal(starts, 1)
     assert.equal(reviews, 1)
-    assert.match(noticeTexts(agent), /已按暂存批注修订/)
+    assert.match(noticeTexts(agent), /已按暂存批注润色/)
     // 单次合并只跑一轮，复审产生的批注留在暂存里。
     assert.equal(await readFile(stagingPathFor(target), 'utf8').then(() => true), true)
   } finally {
@@ -434,7 +434,7 @@ test('插件重载后运行结束，已完成的合并直接收尾', async () =>
     assert.equal(reviews.calls.length, 0)
     // 子代理已完成时合并照常收尾。清掉暂存，并留下成功说明。
     await assert.rejects(readFile(stagingPathFor(target), 'utf8'), /ENOENT/)
-    assert.match(noticeTexts(agent), /已按暂存批注修订/)
+    assert.match(noticeTexts(agent), /已按暂存批注润色/)
   } finally {
     await removeStorage(storage)
   }
@@ -595,7 +595,7 @@ test('静默续用合并不向父会话投递子代理结算', async () => {
       },
       whenIdle() { return new Promise((resolve) => { idleResolve = resolve }) },
     }
-    ctx.subagents.listChildren = async () => [{ id: child.id, mode: 'continuable', label: 'humanize 批注合并' }]
+    ctx.subagents.listChildren = async () => [{ id: child.id, mode: 'continuable', label: 'humanize 行文润色' }]
     ctx.subagents.sendMessage = async () => {
       sendCalls += 1
       throw new Error('应当使用静默续用路径')

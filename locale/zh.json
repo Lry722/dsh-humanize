@@ -1,21 +1,21 @@
 {
   "meta": {
     "title": "行文审查",
-    "description": "标记面向人类的写入，按 PROSE.md 审查交付内容，并合并暂存批注。"
+    "description": "标记面向人类的写入，按 PROSE.md 审查交付内容，并按暂存批注润色行文。"
   },
   "settings": {
     "reviewProvider": "审查所用模型的提供方，留空时跟随会话当前使用的模型",
     "reviewModel": "审查所用模型，留空时跟随会话当前使用的模型",
     "reviewReasoningEffort": "审查模型的推理等级，留空时使用模型自身的默认值",
-    "mergeProvider": "合并子代理所用模型的提供方，留空时跟随会话当前使用的模型",
-    "mergeModel": "合并子代理所用模型，留空时跟随会话当前使用的模型",
-    "mergeReasoningEffort": "合并子代理的推理等级，留空时跟随会话当前使用的推理等级",
+    "mergeProvider": "润色子代理所用模型的提供方，留空时跟随会话当前使用的模型",
+    "mergeModel": "润色子代理所用模型，留空时跟随会话当前使用的模型",
+    "mergeReasoningEffort": "润色子代理的推理等级，留空时跟随会话当前使用的推理等级",
     "reviewConcurrency": "审查并发数，指同时进行的审查调用上限。所有审查调用共用这个上限。具体数值由模型提供方的速率限制决定",
     "reviewRetries": "重试次数。重试用尽后记为失败",
     "reviewIntervalSeconds": "两次审查之间的最小间隔，从上一次审查结束开始计时。间隔内到达的写入合并到下一次审查",
-    "loopMaxRounds": "循环合并的轮次上限",
-    "saveTurnOutputs": "把主会话最新一轮的助手正文保存到系统临时目录，只保留最新版并自动清理。点击助手操作栏的润色图标后，匹配规则时静默执行一轮审查和合并。默认关闭",
-    "mergeOnCompaction": "上下文压缩结束时自动合并会话工作目录下的暂存批注",
+    "loopMaxRounds": "循环润色的轮次上限",
+    "saveTurnOutputs": "把主会话最新一轮的助手正文保存到系统临时目录，只保留最新版并自动清理。点击助手操作栏的润色图标后，匹配规则时静默执行一轮审查和行文润色。默认关闭",
+    "mergeOnCompaction": "上下文压缩结束时自动按暂存批注润色行文",
     "storageDir": "暂存批注的保存位置。留空时使用默认位置 ~/.dsh/humanize。相对路径按进程工作目录解析"
   }
 }

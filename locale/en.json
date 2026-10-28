@@ -1,21 +1,21 @@
 {
   "meta": {
     "title": "Humanize",
-    "description": "Mark human-facing writes, review delivered prose against PROSE.md, and merge annotations."
+    "description": "Mark human-facing writes, review delivered prose against PROSE.md, and polish prose from staged annotations."
   },
   "settings": {
     "reviewProvider": "Review model provider. Leave empty to follow the model currently used by the session.",
     "reviewModel": "Review model. Leave empty to follow the model currently used by the session.",
     "reviewReasoningEffort": "Reasoning effort for the review model. Leave empty to use the model's own default.",
-    "mergeProvider": "Model provider for merge subagents. Leave empty to follow the model currently used by the session.",
-    "mergeModel": "Model for merge subagents. Leave empty to follow the model currently used by the session.",
-    "mergeReasoningEffort": "Reasoning effort for merge subagents. Leave empty to follow the reasoning effort currently used by the session.",
+    "mergeProvider": "Model provider for polish subagents. Leave empty to follow the model currently used by the session.",
+    "mergeModel": "Model for polish subagents. Leave empty to follow the model currently used by the session.",
+    "mergeReasoningEffort": "Reasoning effort for polish subagents. Leave empty to follow the reasoning effort currently used by the session.",
     "reviewConcurrency": "Maximum number of concurrent review calls. All review calls share this limit. Choose a value appropriate for the model provider's rate limits.",
     "reviewRetries": "Number of retries. A review is marked as failed after all retries are exhausted.",
     "reviewIntervalSeconds": "Minimum interval between reviews, counted from the end of the previous review. Writes arriving during the interval are combined into the next review.",
-    "loopMaxRounds": "Maximum number of rounds in a merge loop.",
-    "saveTurnOutputs": "Save the latest main-session response to a system temp file, replacing older content and cleaning it automatically. Click the polish icon in the assistant action row to trigger one silent review and merge round when rules apply. Off by default.",
-    "mergeOnCompaction": "Automatically merge staged annotations under the session working directory when context compaction finishes.",
+    "loopMaxRounds": "Maximum number of rounds in a polish loop.",
+    "saveTurnOutputs": "Save the latest main-session response to a system temp file, replacing older content and cleaning it automatically. Click the polish icon in the assistant action row to trigger one silent review and polish round when rules apply. Off by default.",
+    "mergeOnCompaction": "Automatically polish prose from staged annotations under the session working directory when context compaction finishes.",
     "storageDir": "Where staged annotations are stored. Leave empty to use the default location ~/.dsh/humanize. Relative paths are resolved against the process working directory."
   }
 }
