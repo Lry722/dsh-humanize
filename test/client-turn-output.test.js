@@ -27,6 +27,7 @@ async function loadChunk() {
     IconLoadingOutlineRegular() {},
     IconDeliverDocRegular() {},
     IconCheckOutlineRegular() {},
+    IconInfoOutlineRegular() {},
     IconWarningOutlineRegular() {},
   }
   return definition.factory((name) => {
@@ -132,6 +133,8 @@ test('状态响应严格匹配会话和 turn', async () => {
   assert.equal(metadataForTurn(value, 'session-1', 1), undefined)
   assert.equal(metadataForTurn(value, 'session-2', 2), undefined)
   assert.equal(metadataForTurn({ ...value, filePath: null }, 'session-1', 2), undefined)
+  const noSpec = metadata('session-1', 2, 'no-spec')
+  assert.equal(metadataForTurn(noSpec, 'session-1', 2), noSpec)
 })
 
 test('点击后才开始润色，仅处理中且可见时刷新', async () => {

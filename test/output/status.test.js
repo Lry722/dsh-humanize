@@ -140,7 +140,7 @@ test('本轮正文写入失败时不把同名旧稿作为失败版本开放', as
   const outputs = registerTurnOutputs(host.ctx, log, host.config, async () => ({ kind: 'no-spec' }), () => {})
   host.finish()
   await outputs.polishOutput(host.session.id, 1)
-  await waitForMetadata(outputs, host.session.id, (value) => value.phase === 'unchanged')
+  await waitForMetadata(outputs, host.session.id, (value) => value.phase === 'no-spec')
   const output = sessionOutputPath(outputRoot, host.session.id, '状态输出')
 
   await chmod(outputRoot, 0o500)
@@ -155,7 +155,7 @@ test('本轮正文写入失败时不把同名旧稿作为失败版本开放', as
 
   host.addTurn(3, '第三轮恢复')
   await outputs.polishOutput(host.session.id, 3)
-  await waitForMetadata(outputs, host.session.id, (value) => value.turn === 3 && value.phase === 'unchanged')
+  await waitForMetadata(outputs, host.session.id, (value) => value.turn === 3 && value.phase === 'no-spec')
   assert.equal(await readFile(output, 'utf8'), '第三轮恢复\n')
 })
 
@@ -196,11 +196,11 @@ test('输出开关、无正文和最新有效轮次遵循现有保存语义', as
 
   host.addTurn(2, '可见输出')
   await outputs.polishOutput(host.session.id, 2)
-  await waitForMetadata(outputs, host.session.id, (value) => value.phase === 'unchanged')
+  await waitForMetadata(outputs, host.session.id, (value) => value.phase === 'no-spec')
   assert.equal((await outputs.readOutput(host.session.id)).turn, 2)
   host.addTurn(3, '  \n')
   const blank = await outputs.readOutput(host.session.id)
-  assert.equal(blank.phase, 'unchanged')
+  assert.equal(blank.phase, 'no-spec')
   assert.equal(blank.turn, 2)
   assert.equal(await readFile(sessionOutputPath(outputRoot, host.session.id, '状态输出'), 'utf8'), '可见输出\n')
 })
@@ -219,14 +219,14 @@ test('同名会话相互隔离，改名和重载后仍恢复正确轮次', async
   assert.equal(recovered.turn, 1)
   assert.equal(recovered.phase, 'pending')
   await restored.polishOutput(host.session.id, 1)
-  recovered = await waitForMetadata(restored, host.session.id, (value) => value.phase === 'unchanged')
+  recovered = await waitForMetadata(restored, host.session.id, (value) => value.phase === 'no-spec')
   assert.equal(recovered.filePath, originalPath)
 
   const other = makeHarness(root, 'session-other', '状态输出')
   const otherOutputs = registerTurnOutputs(other.ctx, log, other.config, async () => ({ kind: 'no-spec' }), () => {})
   other.finish()
   await otherOutputs.polishOutput(other.session.id, 1)
-  await waitForMetadata(otherOutputs, other.session.id, (value) => value.phase === 'unchanged')
+  await waitForMetadata(otherOutputs, other.session.id, (value) => value.phase === 'no-spec')
   assert.notEqual((await otherOutputs.readOutput(other.session.id)).filePath, originalPath)
   assert.equal((await outputs.readOutput(host.session.id)).filePath, originalPath)
 })

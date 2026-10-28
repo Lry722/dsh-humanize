@@ -18,11 +18,12 @@ window.__ModuleLoader__.load({
       IconLoadingOutlineRegular,
       IconDeliverDocRegular,
       IconCheckOutlineRegular,
+      IconInfoOutlineRegular,
       IconWarningOutlineRegular,
     } = require('@deepseek-ai/dsh-client-ui-primitives')
 
     const ACTIVE_PHASES = new Set(['saving', 'processing'])
-    const KNOWN_PHASES = new Set(['disabled', 'saving', 'pending', 'processing', 'ready', 'unchanged', 'failed', 'missing', 'expired'])
+    const KNOWN_PHASES = new Set(['disabled', 'saving', 'pending', 'processing', 'ready', 'unchanged', 'no-spec', 'failed', 'missing', 'expired'])
     const POLL_MS = 1000
 
     function turnHasOutput(snapshot, turn) {
@@ -237,6 +238,7 @@ window.__ModuleLoader__.load({
       if (phase === 'processing') return 'output.compact.processing'
       if (phase === 'ready') return 'output.compact.ready'
       if (phase === 'unchanged') return 'output.compact.unchanged'
+      if (phase === 'no-spec') return 'output.compact.noSpec'
       if (phase === 'failed') return 'output.compact.failed'
       if (phase === 'expired') return 'output.compact.expired'
       return 'output.compact.missing'
@@ -299,6 +301,7 @@ window.__ModuleLoader__.load({
               }
             }
           } else if (metadata.phase === 'unchanged') Icon = IconCheckOutlineRegular
+          else if (metadata.phase === 'no-spec') Icon = IconInfoOutlineRegular
           else if (metadata.phase === 'saving' || metadata.phase === 'processing') {
             Icon = IconLoadingOutlineRegular
             spinning = true

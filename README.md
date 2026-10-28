@@ -195,9 +195,9 @@ PROSE rules are still discovered and matched against the logical path `.agents/o
 
 ### Polishing
 
-Each write saves only the original output and clears annotations from the previous turn. Review starts only when the user clicks the polish icon. Clicking the icon in the action row of the latest eligible turn immediately runs a full review, without waiting for `reviewIntervalSeconds`. If no rules apply or review produces no annotations, output polishing ends without dispatching a prose-polish run.
+Each write saves only the original output and clears annotations from the previous turn. Review starts only when the user clicks the polish icon. Clicking the icon in the action row of the latest eligible turn immediately runs a full review, without waiting for `reviewIntervalSeconds`. If no rules apply, polishing ends with a separate no-rule state instead of reporting unchanged output. If rules apply but review produces no annotations, output polishing ends without dispatching a prose-polish run.
 
-When review produces annotations, one prose-polish round runs silently. Output polishing finishes as soon as that round completes, and a re-review is skipped. The polish round stays out of the task list and skips the result notice to the main session.
+When review produces annotations, one prose-polish round runs silently. Output polishing finishes as soon as that round completes, and a re-review is skipped. The polish round runs without a task-list entry or a result notice to the main session.
 
 Manual `/humanize` and `/humanize-loop` runs show progress and results in the task list, and re-review the polished files. Saving, review and prose polishing are serial within one session, and polish runs for final turn outputs from different sessions are dispatched one at a time.
 
@@ -207,7 +207,7 @@ After saving, the latest eligible turn shows a polish icon in its assistant acti
 
 The final file is compared with the original turn output. A clickable View icon is shown only when the content actually changed. Clicking it opens the built-in Markdown preview in the right sidebar.
 
-Unchanged and failed outputs show only their status icon, and hover text explains the state. The original assistant response stays intact, and the sidebar opens only when the user clicks the View icon.
+No-rule, unchanged and failed outputs show only their status icon, and hover text explains the state. The original assistant response stays intact, and the sidebar opens only when the user clicks the View icon.
 
 Older turns have no entry, preventing them from opening newer content that replaced their output.
 
