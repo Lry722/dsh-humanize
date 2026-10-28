@@ -1,20 +1,16 @@
 # dsh-humanize
 
-English | [简体中文](README.zh.md)
+English | [简体中文](README.zh.md) | [Design (Chinese)](DESIGN.md)
 
 > Let reasoning models focus on the work. Let what they deliver read like a person wrote it.
 
 `dsh-humanize` is a plugin for `deepseek-harness`. It targets the machine-sounding jargon that coding-specialized models produce on complex tasks.
-
----
 
 ## Why it exists
 
 Coding-specialized models handle complex engineering reasoning, but their prose drifts toward machine jargon. That costs the reader extra effort.
 
 Packing many style and rhetoric constraints into the main prompt splits the model's reasoning attention, and complex tasks get slower.
-
----
 
 ## How it works
 
@@ -24,8 +20,6 @@ Packing many style and rhetoric constraints into the main prompt splits the mode
 - **One style contract**: `PROSE.md` defines how prose should read.
 - **Cite each rule**: the reviewer annotates against individual `PROSE.md` rules and points at the expression that violates the rule.
 - **Apply later**: review runs in the background while the main session keeps moving. Annotations merge on demand or after compaction.
-
----
 
 ## Install
 
@@ -43,33 +37,47 @@ dsh plugin --profile web add link:/path/to/dsh-humanize
 
 Restart dsh after installation.
 
+## Quick reference
+
+| Command | What it does |
+| --- | --- |
+| `/humanize [path]` | Merge staged annotations once, then re-review the changed files. |
+| `/humanize-loop [path]` | Merge and re-review in rounds until no annotations remain or the round limit is reached. |
+| `/humanize-review [path]` | Review git-tracked files under the path. |
+| `/humanize-review --changed [path]` | Review files changed since HEAD. |
+| `/humanize-review --recent N [path]` | Review files touched by the last N commits. |
+
+`path` defaults to the session working directory. The `--changed` and `--recent` flags can come before or after the path. Reviews keep only files matched by at least one spec.
+
 ## Configuration
 
-Open the dsh-humanize row in the Plugins list and edit its configuration. The bottom of the settings page shows where staged annotations, annotation history, review request records, and final turn outputs are stored, with a copy button beside each path. These settings take effect immediately:
+Open the dsh-humanize row in the Plugins list and edit its configuration. All settings take effect immediately.
 
-- `reviewProvider` and `reviewModel`: the model used for review, picked from the host model catalog. Defaults to the model the session is using.
-- `reviewReasoningEffort`: reasoning effort for the review model, picked from the efforts that model publishes. Defaults to the model's own default.
-- `mergeProvider` and `mergeModel`: the model used by the merge subagent, with the same controls as the review model. The merge subagent covers `/humanize`, `/humanize-loop`, compaction-triggered and final-turn-output merges. Defaults to the model the main session is using. Set both fields together. If only one is set, both follow the session model.
-- `mergeReasoningEffort`: reasoning effort for the merge subagent, picked from the efforts that model publishes. Defaults to the reasoning effort the main session is using.
-- `reviewConcurrency`: maximum number of concurrent review calls, shared across write review, batch review and re-review. Minimum 1, default 3.
-- `reviewRetries`: number of retries after a failure. Minimum 0, maximum 3, default 1.
-- `reviewIntervalSeconds`: minimum time between reviews, counted from the end of the previous review. Writes during the interval are reviewed together when it ends. Minimum 0, maximum 3600, default 60. Set 0 to review without waiting.
-- `loopMaxRounds`: maximum rounds for loop merge. Minimum 1, maximum 10, default 3.
-- `saveTurnOutputs`: whether to keep only the latest main-session response in a system temp file. With this on, clicking the polish icon in the action row of the latest eligible turn runs one silent review and merge round when rules match. Default false.
-- `mergeOnCompaction`: whether to merge all staged annotations under the session working directory when context compaction ends. Default true. When off, compaction does not trigger a merge; other triggers are unaffected.
-- `storageDir`: where staged annotations are stored. Leave empty for the default `~/.dsh/humanize`.
+### Settings
 
-Each of the review and merge model sections has a test button. It sends a minimal request to confirm the provider, model and reasoning effort respond. An empty model selection follows the session model for review. The test button requires both fields to be set.
+| Setting | Default | Description |
+| --- | --- | --- |
+| `reviewProvider`, `reviewModel` | Session model | Provider and model for review calls, picked from the host model catalog. |
+| `reviewReasoningEffort` | Model default | Reasoning effort for review calls, picked from the efforts the model publishes. |
+| `mergeProvider`, `mergeModel` | Session model | Provider and model for merge subagents, picked with the same controls. They apply to every merge trigger. |
+| `mergeReasoningEffort` | Session effort | Reasoning effort for merge subagents, picked from the efforts the model publishes. |
+| `reviewConcurrency` | `3` | Maximum concurrent review calls. Minimum 1. |
+| `reviewRetries` | `1` | Retries after a failed review. Range 0 to 3. |
+| `reviewIntervalSeconds` | `60` | Minimum gap before the next write review, counted from the end of the previous review. Range 0 to 3600. Set 0 to review immediately. |
+| `loopMaxRounds` | `3` | Maximum rounds for `/humanize-loop`. Range 1 to 10. |
+| `saveTurnOutputs` | `false` | Keep the latest main-session response in a system temp file. |
+| `mergeOnCompaction` | `true` | Merge staged annotations when context compaction ends. |
+| `storageDir` | Empty | Where staged annotations are stored. The default is `~/.dsh/humanize`. |
 
-Review request records are stored separately in the system temp directory. The exact path appears at the bottom of the settings page. When a review response cannot be parsed, the raw response is written next to the review request record for comparison.
+The review and merge model sections each have a test button. It sends a minimal request to confirm the provider, model and reasoning effort respond. Set both fields of a model pair before testing. During normal calls, a pair with only one field set follows the session model.
 
-Relative paths resolve against the process working directory. Changing the storage location leaves the old contents in place.
+### Storage paths
 
-Review concurrency is shared across write review, batch review and re-review. A batch is also capped by the number of files it has to review. High concurrency can hit the model provider's rate limit.
+The bottom of the settings page shows where staged annotations, annotation history, review request records, and final turn outputs are stored. Each path has a copy button.
 
-Rate limits and review timeouts are recorded as failed and retried. Every retry waits longer than the previous one. After the retry budget is spent, the review is marked failed. Write review and batch review share this retry behavior.
+Relative paths resolve against the process working directory. Changing `storageDir` leaves the old contents in place.
 
-When a batch review ends, it lists the files that still failed and why, up to three entries. The rest are counted only. If write reviews keep failing, a failed record appears in the task list and points at the review model configuration.
+### Config file
 
 You can also pass the same settings to the `dsh-humanize` entry in the profile's `cordis.patch.yml`:
 
@@ -81,9 +89,9 @@ You can also pass the same settings to the `dsh-humanize` entry in the profile's
       reviewModel: deepseek-chat
 ```
 
-## Usage
+## Writing specs
 
-### Spec sources
+### Sources and scope
 
 Specs come from three sources:
 
@@ -95,7 +103,11 @@ The project root is the target file's git repository root, so project specs rema
 
 `base.md` is an ordinary project spec. Its filename gives it no special scope or priority. Omitting `include` applies it throughout the project. An explicit `include: ["**/*"]` has the same effect.
 
-Each spec has an implicit scope: everywhere for the user spec, the project for a project spec, and the directory subtree for a directory spec. Omitting `include` applies the spec throughout that scope. An explicit `include` can narrow it, using .gitignore syntax, and is evaluated independently for that spec. An empty list matches no files. One spec's patterns never include or exclude another spec.
+Each spec has an implicit scope: everywhere for the user spec, the project for a project spec, and the directory subtree for a directory spec. Omitting `include` applies the spec throughout that scope.
+
+### Include patterns
+
+An explicit `include` narrows the spec's scope, using .gitignore syntax. It is evaluated independently for that spec. An empty list matches no files. One spec's patterns never include or exclude another spec.
 
 For example, a project spec can cover several directories and the root changelog:
 
@@ -110,9 +122,13 @@ include:
 
 Anchored patterns in project specs resolve from the project root. In directory specs they resolve from the directory containing `PROSE.md`. Thus `/CHANGELOG.md` in a project spec names only the root changelog. Within one `include` list, the last matching pattern wins, and a `!` prefix excludes a match.
 
+### Priority and inheritance
+
 Specs merge in ascending numeric `priority` order, defaulting to 0. Ties put the user spec first, then project specs sorted by path, then directory specs from shallower to deeper. Later rules take precedence when they conflict.
 
 If a matching spec declares `inherit: false`, it clears all previously accepted specs before adding itself. Matching specs later in the order are still added.
+
+### Rule format
 
 Every applicable spec must contain a level-1 `# Rules` heading. Numbered lines under it are review rules. Every other level-1 section is passed to review and merge unchanged as supplementary context, such as definitions or a glossary. For example:
 
@@ -129,9 +145,11 @@ Abuse: xxx
 
 Only numbered lines under `# Rules` take part in global rule numbering. Numbers in other sections stay as written. An applicable spec without a `# Rules` heading fails review with an error.
 
-### Review scope
+## Review pipeline
 
-A file enters review when at least one spec applies and the merged set contains at least one numbered rule. `include` selects the applicable specs; `priority` and `inherit` only affect merging. There is no separate review declaration.
+### What enters review
+
+A file enters review when at least one spec applies and the merged set contains at least one numbered rule. `include` selects the applicable specs. `priority` and `inherit` only affect merging. There is no separate review declaration.
 
 Batch collection first drops files that no spec matches. Files matched by a spec without numbered rules are reported by the review pipeline. Write review, batch review and post-merge re-review share this decision.
 
@@ -139,31 +157,51 @@ Binary files such as images, archives, fonts and build output skip review. Detec
 
 When the model writes a file through the wrapped `write` or `edit` tool, it must declare `human_facing`. Pass true for content meant for people, false for pure code or data. Writes marked true enter review. The rest are skipped. Writes through other tools, such as shell commands, are outside this check. A programmatic call that omits the field is treated as false and logs a warning.
 
-### How reviews run
+### When reviews run
 
 After each review, the next write review waits one minute by default. Writes during the interval join the next review.
 
-A write review of an existing file only looks at the regions changed in this write. A new file is reviewed in full.
+A write review of an existing file only looks at the regions changed in this write. A new file is reviewed in full. The review call still receives the full file. Markers only limit where new annotations may point.
 
 Reviews of the same file run serially. Writes from different sessions or subagents queue separately, and queued reviews are kept per agent without overwriting each other. While a merge runs, the reviews of the agent that started it are aborted or discarded. Reviews from other agents on the same target files are treated the same way. Batch reviews and merge re-reviews skip the interval and run immediately.
 
-### Final turn outputs
+### Concurrency and retries
 
-`saveTurnOutputs` is off by default. When enabled, the end of each main-session turn writes the last assistant message with visible text to `dsh-humanize-<uid>/output/<session-title>--<short-id>.md` under the system temp directory. Each write replaces the previous version, keeping only the latest response. Reasoning, tool calls, empty messages and internal subagent responses are not saved. No output file is actually created in the project directory.
+All review calls share `reviewConcurrency`. A batch is also capped by the number of files it has to review. High concurrency can hit the model provider's rate limit.
 
-The filename uses the session title from the first saved turn. Path separators and other filesystem-unsafe characters become underscores, and an empty title falls back to `untitled-session`. The short ID suffix keeps same-title sessions separate. Later turns keep using the original file after a rename, and the suffix finds it after a plugin reload. Saving a new output cleans temporary outputs that have not been updated for 24 hours. The cleanup scan runs at most once an hour.
+Rate limits and review timeouts are recorded as failed and retried. Every retry waits longer than the previous one. After the retry budget is spent, the review is marked failed. Write review and batch review share this retry behavior.
+
+When a batch review ends, it lists the files that still failed and why, up to three entries. The rest are counted only. If write reviews keep failing, a failed record appears in the task list and points at the review model configuration.
+
+### Review records
+
+Review request records are stored separately in the system temp directory. The exact path appears at the bottom of the settings page. When a review response cannot be parsed, the raw response is written next to the review request record for comparison.
+
+## Final turn outputs
+
+### Saving
+
+`saveTurnOutputs` is off by default. When enabled, the end of each main-session turn writes the last assistant message with visible text to `dsh-humanize-<uid>/output/<session-title>--<short-id>.md` under the system temp directory. Each write replaces the previous version, keeping only the latest response.
+
+Reasoning, tool calls, empty messages and internal subagent responses are not saved. No output file is actually created in the project directory.
+
+### Files and cleanup
+
+The filename uses the session title from the first saved turn. Path separators and other filesystem-unsafe characters become underscores, and an empty title falls back to `untitled-session`. The short ID suffix keeps same-title sessions separate. Later turns keep using the original file after a rename, and the suffix finds it after a plugin reload.
+
+Saving a new output cleans temporary outputs that have not been updated for 24 hours. The cleanup scan runs at most once an hour.
 
 PROSE rules are still discovered and matched against the logical path `.agents/output/<session-title>--<short-id>.md` under the current working directory. This path is only a rule-matching label and need not exist. Review and merge share it, while all file I/O uses the real temp path. The first write also removes this session's project outputs that an older version left behind, along with their staged annotations.
 
+### Polishing
+
 Each write saves only the original output and clears annotations from the previous turn. Review starts only when the user clicks the polish icon. Clicking the icon in the action row of the latest eligible turn immediately runs a full review, without waiting for `reviewIntervalSeconds`. If no rules apply or review produces no annotations, polishing ends without dispatching a merge.
 
-When review produces annotations, one merge round runs silently and polishing finishes as soon as that merge completes, without a re-review.
+When review produces annotations, one merge round runs silently and polishing finishes as soon as that merge completes, without a re-review. The merge round stays out of the task list and sends no completion notice to the main session.
 
-The merge round stays out of the task list and sends no completion notice to the main session.
+Manual `/humanize` and `/humanize-loop` progress, results and re-review are unchanged. Saving, review and merge are serial within one session, and merges of final turn outputs from different sessions are dispatched one at a time.
 
-Manual `/humanize` and `/humanize-loop` progress, results and re-review are unchanged.
-
-Saving, review and merge are serial within one session, and merges of final turn outputs from different sessions are dispatched one at a time.
+### Action row
 
 After saving, the latest eligible turn shows a polish icon in its assistant action row, immediately after Fork. Clicking it shows a loading icon while polishing.
 
@@ -173,41 +211,61 @@ Unchanged and failed outputs show only their status icon, and hover text explain
 
 Older turns have no entry, preventing them from opening newer content that replaced their output.
 
-### Staged annotations
+## Staged annotations
 
-Annotations are staged under `~/.dsh/humanize/annotations/`. The path mirrors the reviewed file. Annotations can be edited directly. The storage location can be changed on the settings page.
+### Staging files
+
+By default, annotations are staged under `~/.dsh/humanize/annotations/`. The path mirrors the reviewed file. Annotations can be edited directly. The storage location can be changed on the settings page.
 
 Staging groups them by complete rule text, and rule headings contain only that text. Global rule numbers validate the current review output and are not stored in staging. Staging content omits the file name. The next review matches rules by text.
 
-Before overwriting or removing a staging file, the plugin appends its current contents to `history/`, beside the review request records in the system temp directory. The exact path appears on the settings page. History paths mirror the reviewed file. Every operation adds a new file and keeps older snapshots, and each filename records the archive time and operation.
+### History
 
-Review clearing, merge clearing, and orphan cleanup each use a distinct label.
+Before overwriting or removing a staging file, the plugin appends its current contents to `history/`, beside the review request records in the system temp directory. The exact path appears on the settings page. History paths mirror the reviewed file.
+
+Every operation adds a new file and keeps older snapshots, and each filename records the archive time and operation. Review clearing, merge clearing, and orphan cleanup each use a distinct label.
 
 History serves troubleshooting only, and merging proceeds independently. The plugin leaves history files in place. The system may clean the temp directory according to its own policy.
 
-### Merge and re-review
+## Merging
 
-Run `/humanize <path>` to merge annotations for a file or directory. With no path, it uses the current working directory.
+### Commands and targets
 
-The merge runs in a separate context. Each parent session reuses one merge subagent. Before a continued merge, the previous model-visible merge turns are replaced by one fixed reset marker, so old requests, replies, and tool calls are not sent to the model again. The durable session log is still retained.
-
-A manual merge sends a summary to the main session when it finishes; automatic merges do not inject this notice.
-
-The staged annotations for the merged files are cleared.
-
-The plugin then runs another review over the files it just changed. This is called re-review. New annotations from re-review also stay in the staging files.
-
-The merge result appears in the main session summary. The re-review result appears in the task row. If re-review fails for `/humanize` or `/humanize-loop`, the task ends as failed, no longer counts as converged, and a note is added to the main session.
-
-When a merge starts, running reviews are aborted first. Queued reviews are discarded, and annotations already produced are discarded with them. Reviews from other sessions on the same files also step aside.
-
-If the plugin reloads during a merge or re-review, that run ends. Completed merges still clear their staged annotations. Incomplete merges keep them. Run the command again to continue.
+Run `/humanize <path>` to merge annotations for a file or directory. With no path, it uses the current working directory. A file target merges that file. A directory target merges every staged file under it.
 
 Run `/humanize-loop <path>` to merge and re-review in a loop. After each merge round, every file just merged is re-reviewed. New annotations from re-review feed the next merge round. The loop ends when re-review produces no new annotations or the round limit is reached.
 
-The merge target, round and files awaiting re-review stay in memory. If staged annotations are empty mid-run, the loop waits for re-review before deciding whether new annotations remain. Only one merge run is allowed at a time, across sessions.
+Manual merges send a summary to the main session when they finish. Automatic merges do not inject this notice.
 
-If the plugin reloads during a loop, that run ends. Completed merges still clear their staged annotations. Incomplete merges keep them.
+### Merge subagent
+
+The merge runs in a separate context. Each parent session reuses one merge subagent. Before a continued merge, the previous model-visible merge turns are replaced by one fixed reset marker, so old requests, replies, and tool calls are not sent to the model again. The durable session log is still retained.
+
+The merge subagent model follows the merge settings. The subagent only has file read/write, search and persona tools. Its writes skip review.
+
+### Merge lifecycle
+
+When a merge starts, running reviews are aborted first. Queued reviews are discarded, and annotations already produced are discarded with them. Reviews from other sessions on the same files also step aside.
+
+The staged annotations for the merged files are cleared on success. A failed merge keeps them.
+
+After a successful manual merge, the plugin runs another review over the files it just changed. This is called re-review. New annotations from re-review also stay in the staging files. The merge result appears in the main session summary. The re-review result appears in the task row.
+
+If re-review fails for `/humanize` or `/humanize-loop`, the task ends as failed, no longer counts as converged, and a note is added to the main session.
+
+Only one merge run is allowed at a time, across sessions. Before dispatch, the plugin checks for a live merge subagent from the same session and refuses to start another.
+
+If the plugin reloads during a merge or re-review, that run ends. Completed merges still clear their staged annotations. Incomplete merges keep them. For a manual merge, run the command again to continue.
+
+### Loop merge
+
+The merge target, round and files awaiting re-review stay in memory. If staged annotations are empty mid-run, the loop waits for re-review before deciding whether new annotations remain.
+
+### Automatic merges
+
+`mergeOnCompaction` defaults to true. When context compaction ends, the plugin merges all staged annotations under the session working directory. When the setting is off, compaction does not trigger a merge; other triggers are unaffected. These merges run silently, without a task row or result notice. They still re-review the files they changed.
+
+The merge that follows output polishing is also silent. It runs one round and does not re-review. See [Final turn outputs](#final-turn-outputs).
 
 ### Background tasks
 
@@ -215,31 +273,37 @@ Only manual `/humanize` and `/humanize-loop` runs register merge tasks. The loop
 
 `/humanize` and `/humanize-loop` tasks can be cancelled from the task list. Cancelling a loop takes effect before the next round. Completed merges still clear their staged annotations.
 
-If the profile watches this plugin's directory with HMR, changing the plugin's own source triggers a plugin reload. Reload ends a running merge. Run the command again to continue.
+If the profile watches this plugin's directory with HMR, changing the plugin's own source triggers a plugin reload. Reload ends a running merge. For a manual merge, run the command again to continue.
 
-### Batch review
+## Batch review
 
-Run `/humanize-review <path>` to dispatch a batch review. By default, it reviews every git-tracked file under the target.
+### Modes
 
-Run `/humanize-review --changed <path>` to review only files changed since HEAD. The flag can come before or after the path. Omit the path to use the current working directory.
+Run `/humanize-review <path>` to dispatch a batch review. `path` defaults to the current working directory. Flags can come before or after the path.
 
-Changed files include working-tree modifications, staged changes, and untracked files that git does not ignore. Deleted files are skipped.
+| Mode | Files checked | Review scope |
+| --- | --- | --- |
+| Default | Git-tracked files under the path. | Full file. |
+| `--changed` | Files changed since HEAD, plus untracked files git does not ignore. | Changed regions. New files are reviewed in full. |
+| `--recent N` | Files touched by the last N commits and still present in the working tree. | Full current content. |
 
-The full file is still sent, but annotations are limited to the changed regions. New files get a full review. When nothing changed, the task ends as completed and says so.
+`--changed` and `--recent` skip deleted files. The default mode works from git-tracked paths, so a missing tracked file can be reported as a read failure. `--recent` and `--changed` are mutually exclusive.
 
-Run `/humanize-review --recent N <path>` to re-review files touched by the last N commits. The commits only select the file set. Review uses the current working-tree content and covers the whole file.
+### Selection details
 
-If the repository has fewer than N commits, it falls back to all files at HEAD. Files missing from the working tree are skipped. `--recent` and `--changed` are mutually exclusive.
+For `--changed`, changed files include working-tree modifications and staged changes, as well as untracked files that git does not ignore. The full file is still sent, but annotations are limited to the changed regions. When nothing changed, the task ends as completed and says so.
+
+For `--recent N`, the commits only select the file set. Review uses the current working-tree content and covers the whole file. If the repository has fewer than N commits, it falls back to all files at HEAD. Files missing from the working tree are skipped.
+
+### Runtime and completion
 
 Review runs in the background as a task. The progress bar updates above the input box. The task list in the session header shows the same task. Review runs in a separate context. What it reads stays separate from the session.
 
 The target must be inside a git repository whose status can be read. If either condition is missing, the task ends as failed with a reason. If there is nothing to review, the task ends as completed and says so.
 
-All three modes keep only files matched by at least one spec. The pipeline then requires at least one numbered rule. The modes differ in which files they check:
+All three modes keep only files matched by at least one spec. The pipeline then requires at least one numbered rule. Binary files skip review, and the batch completion note reports how many files were skipped.
 
-- The default mode checks git-tracked files.
-- The incremental mode checks changed files.
-- The recent mode checks the files touched by the last N commits and their presence in the working tree.
+Batch review uses the shared review concurrency and retry behavior. Failures are summarized as described in [Concurrency and retries](#concurrency-and-retries).
 
 ## Prompts
 
