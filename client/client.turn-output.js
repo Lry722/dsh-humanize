@@ -224,7 +224,6 @@ window.__ModuleLoader__.load({
           color: var(--dsw-alias-label-secondary);
         }
         [data-clock="end"] > span:last-child { order: 2; }
-        [data-actions-reveal="hover"]:has([data-dsh-humanize-output]) > [data-clock="end"] { opacity: 1; }
         [data-dsh-humanize-output-spinner] { animation: dsh-humanize-output-spin 1s linear infinite; }
         @keyframes dsh-humanize-output-spin { to { transform: rotate(360deg); } }
         @media (prefers-reduced-motion: reduce) {

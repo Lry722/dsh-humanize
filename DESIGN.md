@@ -324,7 +324,7 @@ sidecar 串行更新并校验所属会话和路径，插件重载后可以恢复
 
 `output/routes.js` 在认证 Connection 内注册 GET 查询和 POST 手动润色路由。GET 只接受一个 sessionId，POST 另带一个正整数 turn，均不接受 path 或 filePath，响应带 no-store。路由只返回元数据，正文仍由 GUI 已有的授权文件读取服务打开。
 
-浏览器在 conversation.chat.assistant-actions 注册懒加载入口。设置镜像里的 saveTurnOutputs 开启且消息就是最新含可见正文、已结束 turn 的收尾消息时才挂载，入口因此只出现一次。插件把这个扩展项排到 Fork 后、用量和时间前，用与内置操作按钮一致的图标占位，不再在回复下方单独占一行。进入下一轮后，平台会把上一轮的操作栏改成悬停才显示；入口存在时插件保持整行可见，直到下一轮结束并保存新输出后才切换。
+浏览器在 conversation.chat.assistant-actions 注册懒加载入口。设置镜像里的 saveTurnOutputs 开启且消息就是最新含可见正文、已结束 turn 的收尾消息时才挂载，入口因此只出现一次。插件把这个扩展项排到 Fork 后、用量和时间前，用与内置操作按钮一致的图标占位，不再在回复下方单独占一行。
 
 pending 显示润色图标，点击后通过 POST 触发当前 turn；saving/processing 显示加载图标，ready 显示查看图标，unchanged 显示检查图标，no-spec 显示信息图标，failed 显示警告图标，文字含义放在悬停提示里，错误时显示重试图标。它只在可见且保存或润色处理中时轮询，pending 和其他终态不轮询；隐藏、切轮和卸载都会取消计时器或作废请求。
 
