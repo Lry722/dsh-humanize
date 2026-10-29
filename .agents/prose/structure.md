@@ -3,6 +3,7 @@ include:
   - "*.md"
   - "!prompts/"
   - "!.agents/prose/"
+priority: 100
 ---
 
 # Rules
