@@ -44,22 +44,22 @@ test('每份规则的 include 独立筛选，其他来源命中的规则照常�
     { path: '/proj/docs/PROSE.md', kind: 'directory', base: '/proj/docs', include: undefined },
   ]
   const docs = resolveSpecChain(candidates, '/proj/docs/a.md')
-  assert.deepEqual(docs.map((entry) => entry.path), candidates.map((entry) => entry.path))
+  assert.deepEqual(docs.map((entry) => entry.path), candidates.map((entry) => entry.path).reverse())
   assert.deepEqual(resolveSpecChain(candidates, '/proj/src/a.md'), [])
   assert.deepEqual(resolveSpecChain(candidates, '/proj/README.md'), [candidates[0]])
 })
 
-test('base.md 和其他同层规则一样，按 priority 和路径排列', () => {
+test('base.md 和其他同层规则一样，按 priority 和路径降序排列', () => {
   const base = { path: '/proj/.agents/prose/base.md', kind: 'project', base: '/proj' }
   const alpha = { path: '/proj/.agents/prose/alpha.md', kind: 'project', base: '/proj' }
   const result = resolveSpecChain([base, alpha], '/proj/a.md')
-  assert.deepEqual(result.map((entry) => entry.path), [alpha.path, base.path])
+  assert.deepEqual(result.map((entry) => entry.path), [base.path, alpha.path])
 
   const prioritized = resolveSpecChain([{ ...base, priority: -1 }, alpha], '/proj/a.md')
-  assert.deepEqual(prioritized.map((entry) => entry.path), [base.path, alpha.path])
+  assert.deepEqual(prioritized.map((entry) => entry.path), [alpha.path, base.path])
 })
 
-test('缺省 priority 保持用户、项目、目录从浅到深的合并顺序', () => {
+test('缺省 priority 按目录从深到浅、项目、用户的顺序交给模型', () => {
   const candidates = [
     { path: '/proj/docs/PROSE.md', kind: 'directory', depth: 1 },
     { path: '/proj/.agents/prose/base.md', kind: 'project', base: '/proj' },
@@ -68,14 +68,14 @@ test('缺省 priority 保持用户、项目、目录从浅到深的合并顺序'
   ]
   const result = resolveSpecChain(candidates, '/proj/docs/a.md')
   assert.deepEqual(result.map((entry) => entry.path), [
-    '/global/PROSE.md',
-    '/proj/.agents/prose/base.md',
-    '/proj/PROSE.md',
     '/proj/docs/PROSE.md',
+    '/proj/PROSE.md',
+    '/proj/.agents/prose/base.md',
+    '/global/PROSE.md',
   ])
 })
 
-test('inherit: false 丢弃此前命中的规则，后续规则继续合并', () => {
+test('inherit: false 丢弃较低优先级规则，结果按高优先级在前排列', () => {
   const candidates = [
     { path: '/global/PROSE.md', kind: 'user', scope: null },
     { path: '/proj/.agents/prose/base.md', kind: 'project', base: '/proj' },
@@ -84,13 +84,13 @@ test('inherit: false 丢弃此前命中的规则，后续规则继续合并', ()
   ]
   const result = resolveSpecChain(candidates, '/proj/docs/a.md')
   assert.deepEqual(result.map((entry) => entry.path), [
-    '/proj/.agents/prose/special.md',
     '/proj/docs/PROSE.md',
+    '/proj/.agents/prose/special.md',
   ])
   const unrelated = resolveSpecChain(candidates, '/proj/other.md')
   assert.deepEqual(unrelated.map((entry) => entry.path), [
-    '/global/PROSE.md',
     '/proj/.agents/prose/base.md',
+    '/global/PROSE.md',
   ])
 })
 

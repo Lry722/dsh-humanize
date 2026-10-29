@@ -35,8 +35,8 @@ test('会话位于子目录时仍从仓库根发现项目规则', async () => {
 
     const result = await resolveSpec(target, cwd)
     assert.deepEqual(result.map((entry) => entry.path), [
-      join(specs, 'base.md'),
       join(specs, 'single.md'),
+      join(specs, 'base.md'),
     ])
     assert.equal(result.every((entry) => entry.base === root), true)
   } finally {

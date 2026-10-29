@@ -1,3 +1,3 @@
-First, the writing rules are listed under `# Rules`. Other sections from the prose specs are supplementary context, such as definitions or a glossary, and explain how to apply the rules. Rules may come from multiple source paths. When rules conflict, later source paths take precedence.
+First, the writing rules are listed under `# Rules`. Other sections from the prose specs are supplementary context, such as definitions or a glossary, and explain how to apply the rules. Rules may come from multiple source paths. When rules conflict, earlier source paths take precedence.
 
 Then, for each file, the violated rules are listed one by one. Under each rule are the problematic content, the reason it violates the rule, and a suggested fix. **Suggestions are for reference only.** They may over-trim or miss context, so find the best fix based on the context. **If a suggestion conflicts with accuracy, accuracy wins.**

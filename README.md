@@ -124,9 +124,9 @@ Anchored patterns in project specs resolve from the project root. In directory s
 
 ### Priority and inheritance
 
-Specs merge in ascending numeric `priority` order, defaulting to 0. Ties put the user spec first, then project specs sorted by path, then directory specs from shallower to deeper. Later rules take precedence when they conflict.
+`priority` defaults to 0. Higher values take precedence and appear earlier in the spec chain sent to the model. Ties put directory specs first, then project specs, then the user spec. Project specs are sorted by descending path, and directory specs from deeper to shallower. Earlier rules take precedence when they conflict.
 
-If a matching spec declares `inherit: false`, it clears all previously accepted specs before adding itself. Matching specs later in the order are still added.
+Inheritance is still evaluated from lower to higher priority. If a matching spec declares `inherit: false`, it clears all previously accepted specs before adding itself, and matching specs later in that evaluation order are still added. The final chain is then reversed to put higher-priority specs first.
 
 ### Rule format
 
