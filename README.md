@@ -63,7 +63,7 @@ Open the dsh-humanize row in the Plugins list and edit its configuration. All se
 | `mergeReasoningEffort` | Session effort | Reasoning effort for polish subagents, picked from the efforts the model publishes. |
 | `reviewConcurrency` | `3` | Maximum concurrent review calls. Minimum 1. |
 | `reviewRuleShardSize` | `3` | Maximum rules in each review shard. Minimum 1. |
-| `reviewRetries` | `1` | Retries after a failed review. Range 0 to 3. |
+| `reviewRetries` | `1` | Retries after a failed shard model call. Range 0 to 3. |
 | `reviewIntervalSeconds` | `60` | Minimum gap before the next write review, counted from the end of the previous review. Range 0 to 3600. Set 0 to review immediately. |
 | `loopMaxRounds` | `3` | Maximum rounds for `/humanize-loop`. Range 1 to 10. |
 | `saveTurnOutputs` | `false` | Keep the latest main-session response in a system temp file. |
@@ -174,13 +174,13 @@ Review splits rules in global order, with at most three rules per shard by defau
 
 Every shard receives the complete file under review and the same review scope. When a shard includes any rule from a spec source, it also receives all non-rule content from that source, preserving definitions and supplementary context. Numbered rules not selected for the shard are omitted.
 
-Existing annotations are assigned to shards by rule text, so shards do not each retain another copy. Staging is replaced only after every shard succeeds. If any shard fails, results from other shards are not written and the previous staging remains intact.
+Existing annotations are assigned to shards by rule text, so shards do not each retain another copy. Staging is replaced only after every shard succeeds. If any shard exhausts its retries, results from other shards are not written and the previous staging remains intact.
 
 ### Concurrency and retries
 
 All shard calls share `reviewConcurrency`, including shards reviewing the same file. A batch is also capped by the number of files it has to review. High concurrency can hit the model provider's rate limit.
 
-Rate limits and review timeouts are recorded as failed and retried. Every retry waits longer than the previous one. After the retry budget is spent, the review is marked failed. Write review and batch review share this retry behavior.
+Each shard uses `reviewRetries` independently, and a successful shard is not rerun because another shard failed. Rate limits and review timeouts are recorded as failed and retried, with a longer wait after each retry. After the retry budget is spent, the review is marked failed. This budget applies only to shard model calls; spec loading and staging I/O are not retried. Write review and batch review share this retry behavior.
 
 When a batch review ends, it lists the files that still failed and why, up to three entries. The rest are counted only. If write reviews keep failing, a failed record appears in the task list and points at the review model configuration.
 

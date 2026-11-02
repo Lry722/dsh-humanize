@@ -490,6 +490,42 @@ test('规则分片汇总新批注，已有批注只进入对应分片', async ()
   }
 })
 
+test('只重试失败分片，成功分片不重复调用', async () => {
+  const storage = await mkdtemp(join(tmpdir(), 'humanize-pipeline-shard-retry-'))
+  setStorageRootResolver(() => storage)
+  const project = join(storage, 'project')
+  await mkdir(join(project, '.git'), { recursive: true })
+  await writeFile(join(project, 'PROSE.md'), '# Rules\n1. one\n2. two\n3. three\n4. four\n', 'utf8')
+  const target = join(project, 'doc.md')
+  await writeFile(target, '正文\n', 'utf8')
+
+  const calls = [0, 0]
+  const ctx = {
+    ...fakeContext(),
+    llm: {
+      stream(options) {
+        const prompt = options.messages[0].content[0].text
+        const shard = prompt.includes('1. one') ? 0 : 1
+        calls[shard] += 1
+        if (shard === 1 && calls[shard] === 1) throw new Error('temporary shard failure')
+        return submitStream({
+          annotations: [{ rule: shard === 0 ? 1 : 3, quote: `分片 ${shard}`, problem: 'p', suggestion: 's' }],
+        })
+      },
+    },
+  }
+  const pipeline = createReviewPipeline(ctx, fakeConfig({ reviewRuleShardSize: 2, reviewRetries: 1 }), { info() {}, warn() {} })
+  try {
+    const outcome = await pipeline.scheduleReview(fakeAgent(), target, undefined, '正文\n')
+    assert.deepEqual(outcome, { kind: 'ok', annotations: 2 })
+    assert.deepEqual(calls, [1, 2])
+  } finally {
+    await pipeline.shutdown()
+    setStorageRootResolver(() => '')
+    await rm(storage, { recursive: true, force: true })
+  }
+})
+
 test('任一分片失败时保留完整旧暂存，不写入其他分片的新批注', async () => {
   const storage = await mkdtemp(join(tmpdir(), 'humanize-pipeline-shard-failure-'))
   setStorageRootResolver(() => storage)
@@ -501,23 +537,28 @@ test('任一分片失败时保留完整旧暂存，不写入其他分片的新�
   const previous = '## one\n1. "旧批注"\n'
   await writeStaging(target, previous)
 
+  const calls = [0, 0]
   const ctx = {
     ...fakeContext(),
     llm: {
       stream(options) {
         const prompt = options.messages[0].content[0].text
-        if (!prompt.includes('1. one')) throw new Error('second shard failed')
+        const shard = prompt.includes('1. one') ? 0 : 1
+        calls[shard] += 1
+        if (shard === 1) throw new Error('second shard failed')
         return submitStream({
           annotations: [{ rule: 2, quote: '不应写入', problem: 'p', suggestion: 's' }],
         })
       },
     },
   }
-  const pipeline = createReviewPipeline(ctx, fakeConfig({ reviewRuleShardSize: 2 }), { info() {}, warn() {} })
+  const pipeline = createReviewPipeline(ctx, fakeConfig({ reviewRuleShardSize: 2, reviewRetries: 1 }), { info() {}, warn() {} })
   try {
     const outcome = await pipeline.scheduleReview(fakeAgent(), target, undefined, '正文\n')
     assert.equal(outcome.kind, 'failed')
     assert.match(outcome.message, /second shard failed/)
+    // 成功片只调用一次，失败片用完自己的首次尝试和一次重试。
+    assert.deepEqual(calls, [1, 2])
     assert.equal(await readFile(stagingPathFor(target), 'utf8'), previous)
   } finally {
     await pipeline.shutdown()
@@ -947,18 +988,17 @@ test('合并或卸载会丢弃倒计时中的写入审查', async () => {
 })
 
 test('runSlot 在内部 try 之前抛错时按失败结算等待方', async () => {
-  const config = fakeConfig()
-  // 读取重试次数发生在 runSlot 的 try 之前，这里模拟设置读取抛错。
-  Object.defineProperty(config, 'reviewRetries', {
+  const pipeline = createReviewPipeline(fakeContext(), fakeConfig(), { info() {}, warn() {} })
+  // 审查代次发生在 runSlot 的 try 之前，用它模拟同步的管线状态错误。
+  pipeline.state.reviewGen = {
     get() {
-      throw new Error('配置读取失败')
+      throw new Error('状态读取失败')
     },
-  })
-  const pipeline = createReviewPipeline(fakeContext(), config, { info() {}, warn() {} })
+  }
   const target = '/tmp/humanize-pump-reject-doc.md'
 
   const outcome = await pipeline.scheduleReview(fakeAgent(), target, undefined, '写给人看的文档。\n')
-  assert.deepEqual(outcome, { kind: 'failed', message: '配置读取失败' })
+  assert.deepEqual(outcome, { kind: 'failed', message: '状态读取失败' })
   // 失败结算后排队位置被摘掉。
   await waitFor(() => !pipeline.state.reviewQueues.has(target))
   await pipeline.shutdown()
