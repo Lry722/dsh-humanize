@@ -180,9 +180,9 @@ Existing annotations are assigned to shards by rule text, so shards do not each 
 
 All shard calls share `reviewConcurrency`, including shards reviewing the same file. A batch is also capped by the number of files it has to review. High concurrency can hit the model provider's rate limit.
 
-Each shard uses `reviewRetries` independently, and a successful shard is not rerun because another shard failed. Rate limits and review timeouts are recorded as failed and retried, with a longer wait after each retry. After the retry budget is spent, the review is marked failed. This budget applies only to shard model calls; spec loading and staging I/O are not retried. Write review and batch review share this retry behavior.
+Each shard uses `reviewRetries` independently, and a successful shard stays finished even if another shard fails. Rate limits and review timeouts are recorded as failed and retried, with a longer wait after each retry. After the retry budget is spent, the review is marked failed. This budget applies only to shard model calls. Spec loading and staging I/O errors fail the review on the first attempt. Write review and batch review share this retry behavior.
 
-When a batch review ends, it lists the files that still failed and why, up to three entries. The rest are counted only. If write reviews keep failing, a failed record appears in the task list and points at the review model configuration.
+When a batch review ends, it lists the files that still failed and why, up to three entries. For the remaining files, only the count is reported. If write reviews keep failing, a failed task row appears in the task list and points at the review model configuration.
 
 ### Review records
 
@@ -208,7 +208,7 @@ PROSE rules are still discovered and matched against the logical path `.agents/o
 
 Each write saves only the original output and clears annotations from the previous turn. Review starts only when the user clicks the polish icon. Clicking the icon in the action row of the latest eligible turn immediately runs a full review, bypassing `reviewIntervalSeconds`. If no rules apply, polishing ends with a separate no-rule state. If rules apply but review produces no annotations, output polishing stops before a prose-polish run starts.
 
-When review produces annotations, one prose-polish round runs silently. Output polishing finishes as soon as that round completes, and a re-review is skipped. The polish round runs without a task-list entry or a result notice to the main session.
+When review produces annotations, one prose-polish round runs silently. Output polishing finishes as soon as that round completes, and a re-review is skipped. The polish round runs without a task row or a result notice to the main session.
 
 Manual `/humanize` and `/humanize-loop` runs show progress and results in the task list, and re-review the polished files. Saving, review and prose polishing are serial within one session, and polish runs for final turn outputs from different sessions are dispatched one at a time.
 
