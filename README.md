@@ -159,11 +159,13 @@ When the model writes a file through the wrapped `write` or `edit` tool, it must
 
 ### When reviews run
 
-After each review, the next write review waits one minute by default. Writes during the interval join the next review.
+After each review, the next write review waits one minute by default. Writes during the interval join the next review. Batch reviews and polish re-reviews skip the interval and run immediately.
 
 A write review of an existing file only looks at the regions changed in this write. A new file is reviewed in full. The review call still receives the full file. Markers only limit where new annotations may point.
 
-Reviews of the same file run serially. Writes from different sessions or subagents queue separately, and each agent keeps its own pending review entry. While a polish run is in progress, the reviews of the agent that started it are aborted or discarded. Reviews from other agents on the same target files are treated the same way. Batch reviews and polish re-reviews skip the interval and run immediately.
+Reviews of the same file run serially. Writes from different sessions or subagents queue separately, and each agent keeps its own pending review entry.
+
+While a polish run is in progress, the reviews of the agent that started it are aborted or discarded. Reviews from other agents on the same target files are treated the same way.
 
 ### Concurrency and retries
 
@@ -195,7 +197,7 @@ PROSE rules are still discovered and matched against the logical path `.agents/o
 
 ### Polishing
 
-Each write saves only the original output and clears annotations from the previous turn. Review starts only when the user clicks the polish icon. Clicking the icon in the action row of the latest eligible turn immediately runs a full review, without waiting for `reviewIntervalSeconds`. If no rules apply, polishing ends with a separate no-rule state instead of reporting unchanged output. If rules apply but review produces no annotations, output polishing ends without dispatching a prose-polish run.
+Each write saves only the original output and clears annotations from the previous turn. Review starts only when the user clicks the polish icon. Clicking the icon in the action row of the latest eligible turn immediately runs a full review, bypassing `reviewIntervalSeconds`. If no rules apply, polishing ends with a separate no-rule state. If rules apply but review produces no annotations, output polishing stops before a prose-polish run starts.
 
 When review produces annotations, one prose-polish round runs silently. Output polishing finishes as soon as that round completes, and a re-review is skipped. The polish round runs without a task-list entry or a result notice to the main session.
 

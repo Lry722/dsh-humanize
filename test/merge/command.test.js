@@ -22,7 +22,7 @@ function makeCtx(agents, activation, llm, jobs) {
   const listeners = new Map()
   return {
     logger: () => log,
-    // 测试默认没有 jobs；需要验证进度时显式注入。
+    // 测试默认没有 jobs，需要验证进度时显式注入。
     get: (name) => name === 'jobs' ? jobs : undefined,
     agents: {
       get: (id) => byId.get(id) ?? bySession.get(id),
@@ -317,7 +317,7 @@ test('合并子代理还在运行时拒绝新的派发', async () => {
 
     const result = await ctx.commands.get('humanize-loop').handler({ agent, rawInput: '' })
     assert.equal(result.kind, 'error')
-    assert.match(result.text, /子代理还在运行/)
+    assert.match(result.text, /行文润色还在运行/)
     assert.equal(state.running.size, 0)
   } finally {
     await removeStorage(storage)
@@ -496,7 +496,7 @@ test('压缩结束触发静默合并，不创建进度或结果通知', async ()
   }
 })
 
-test('自动输出合并使用逻辑规则路径，不复审且不创建进度或完成通知', async () => {
+test('自动输出合并使用逻辑规则路径，不复审且不创建进度或结果通知', async () => {
   const storage = await mkdtemp(join(tmpdir(), 'humanize-merge-quiet-'))
   setStorageRootResolver(() => storage)
   try {

@@ -23,7 +23,7 @@ test('成对配置优先，只配一半时跟随主会话最近一次请求的�
     resolveModelTarget({ reviewProvider: 'q', reviewModel: 'cheap' }, agent, 'review'),
     { provider: 'q', model: 'cheap' },
   )
-  // 只配一半时整对跟随会话模型。
+  // 只配一半时成对跟随会话模型。
   assert.deepEqual(
     resolveModelTarget({ reviewProvider: 'q' }, agent, 'review'),
     { provider: 'p', model: 'm' },
@@ -60,7 +60,7 @@ test('agent 自身的模型设置只在显式兜底时成对取用', () => {
   assert.equal(resolveModelTarget({}, agent, 'review'), undefined)
   // agent.options 缺失时返回 undefined。
   assert.equal(resolveModelTarget({}, makeAgent(undefined), 'review', { fallbackToAgentOptions: true }), undefined)
-  // 只有一半时整对不可用。
+  // 只有一半时成对配置不可用。
   assert.equal(
     resolveModelTarget({}, makeAgent(undefined, { provider: 'a' }), 'review', { fallbackToAgentOptions: true }),
     undefined,
@@ -99,7 +99,7 @@ test('成对配置覆盖会话模型，推理等级单独覆盖', () => {
   )
 })
 
-test('只配一半时整对跟随会话，成对配置在没有会话模型时也能用', () => {
+test('只配一半时成对跟随会话，成对配置在没有会话模型时也能用', () => {
   const agent = makeAgent({ provider: 'p', model: 'm', reasoningEffort: 'high' })
   assert.deepEqual(
     mergeAgentOptions({ mergeProvider: 'q' }, agent),

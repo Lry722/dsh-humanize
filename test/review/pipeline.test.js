@@ -234,7 +234,7 @@ test('合并目标上的其他 agent 审查会被丢弃或中止', async () => {
   const second = pipeline.scheduleReview(secondAgent, target, '第一版。\n', '第二版。\n')
   await tick()
 
-  // 模拟第三个 agent 开始合并这个文件。它要丢掉排队项，并中止在途审查。
+  // 模拟第三个 agent 开始合并这个文件。它要丢弃待办，并中止在途审查。
   pipeline.discardReviews('agent-c', [target])
   assert.equal(pipeline.state.reviewQueues.get(target).pending.size, 0)
 
@@ -731,7 +731,7 @@ test('合并或卸载会丢弃倒计时中的写入审查', async () => {
   pipeline.discardReviews('agent-2', [firstTarget])
   assert.deepEqual(await discarded, { kind: 'discarded' })
   assert.equal(pipeline.state.reviewQueues.has(firstTarget), false)
-  // 卸载时丢弃另一条倒计时里的待办。
+  // 关门时丢弃另一条倒计时里的待办。
   await pipeline.shutdown()
   assert.deepEqual(await skipped, { kind: 'discarded' })
   assert.equal(pipeline.state.reviewQueues.size, 0)

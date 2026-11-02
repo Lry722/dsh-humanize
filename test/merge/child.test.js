@@ -343,7 +343,7 @@ test('续用应用本轮模型路由，并保留子代理错误明细', async ()
   await run.dispose()
 })
 
-test('续用保留同路由父 agent 的推理等级和输出上限', async () => {
+test('续用保留同路由父代理的推理等级和输出上限', async () => {
   const child = makeChild()
   const harness = makeHarness({
     entries: [{ id: child.id, mode: 'continuable', label: MERGE_LABEL }],

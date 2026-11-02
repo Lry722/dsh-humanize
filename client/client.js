@@ -23,7 +23,7 @@ window.__ModuleLoader__.load({
 
     const LazyRowCard = lazy(async () => ({ default: (await require.async('./client.settings.js')).RowCard }))
     const LazyConfigSection = lazy(async () => ({ default: (await require.async('./client.settings.js')).ConfigSection }))
-    /** 进度条 chunk，只在首次出现审查任务时请求。 */
+    /** 进度条 chunk，只在首次出现审查任务时加载。 */
     const LazyProgressDock = lazy(async () => ({ default: (await require.async('./client.progress.js')).ProgressDock }))
     /** 输出入口只在最新有效 turn 首次出现时加载。 */
     const LazyTurnOutputAction = lazy(async () => ({ default: (await require.async('./client.turn-output.js')).TurnOutputAction }))

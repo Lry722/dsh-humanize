@@ -251,7 +251,7 @@ test('文件名里的方括号不会被当成通配符', async () => {
     await commitAll(dir)
     await writeFile(join(dir, 'a[1].md'), '新文件\n')
 
-    // 通配符解释下，a[1].md 会命中已跟踪的 a1.md，把未跟踪的新文件放进来。
+    // 如果按通配符解释，a[1].md 会命中已跟踪的 a1.md，把未跟踪的新文件放进来。
     assert.deepEqual(await collectTargets(join(dir, 'a[1].md'), dir), [])
 
     await execFileAsync('git', ['add', 'a[1].md'], { cwd: dir })
@@ -284,7 +284,7 @@ test('目录名里的方括号不会被当成通配符', async () => {
     await writeFile(join(dir, 'd[1]', 'f.md'), 'v3\n')
     await writeFile(join(dir, 'd1'), 'v3 sibling\n')
 
-    // 通配符解释下，d[1] 会同时命中根目录里的 d1。
+    // 如果按通配符解释，d[1] 会同时命中根目录里的 d1。
     const changed = await collectTargets(join(dir, 'd[1]'), dir, { changed: true })
     assert.deepEqual(paths(changed), [join(dir, 'd[1]', 'f.md')])
 

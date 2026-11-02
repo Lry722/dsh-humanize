@@ -121,7 +121,7 @@ test('真实输出在临时根目录，规则路径只在项目内逻辑上映�
   )
 })
 
-test('设置关闭时不写输出也不审查', async () => {
+test('设置关闭时跳过输出与审查', async () => {
   const root = await mkdtemp(join(tmpdir(), 'humanize-output-disabled-'))
   const outputRoot = join(root, 'output')
   setTurnOutputRootResolver(() => outputRoot)
@@ -145,7 +145,7 @@ test('设置关闭时不写输出也不审查', async () => {
   }
 })
 
-test('开启后覆盖为最新回复，项目目录不写文件且旧批注被清除', async () => {
+test('开启后覆盖为最新回复，项目目录保持为空，旧批注同步清除', async () => {
   const root = await mkdtemp(join(tmpdir(), 'humanize-output-latest-'))
   const initialCwd = join(root, 'initial')
   const currentCwd = join(root, 'current')

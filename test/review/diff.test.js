@@ -75,7 +75,7 @@ test('波浪线围栏同样按完整围栏扩展区段', () => {
 })
 
 test('未闭合围栏只扩展起点，终点止于改动处', () => {
-  // 改动在未闭合围栏内部，起点扩到围栏开头，终点只覆盖改动本身。
+  // 改动落在第 7 行（下标 6），区段因此从围栏起点算到改动行。
   const lines = ['l0', 'l1', 'l2', 'l3', 'l4', '```js', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j']
   const after = lines.map((line, index) => (index === 6 ? 'A' : line)).join('\n')
   assert.deepEqual(changedRegions(lines.join('\n'), after, 0), [{ startLine: 6, endLine: 7 }])
