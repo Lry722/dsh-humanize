@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { countAnnotations, normalizeAnnotations, parseAnnotations, renderStaging } from '../../lib/review/annotations.js'
+import { countAnnotations, normalizeAnnotations, parseAnnotations, partitionExistingAnnotations, renderStaging } from '../../lib/review/annotations.js'
 
 const rules = new Map([[1, 'rule one'], [2, 'rule two']])
 
@@ -61,6 +61,44 @@ test('暂存标题只写规则条文，批注里的换行也压成一行', () =>
   assert.match(rendered, /Problem: p 3\. also/)
   assert.doesNotMatch(rendered, /\n2\. injected/)
   assert.equal(countAnnotations('# 没有批注\n'), 0)
+})
+
+test('已有批注按规则条文分派，无法匹配的内容单独标记', () => {
+  const existing = [
+    '## rule one',
+    '1. "a"',
+    '   - Problem: old a',
+    '',
+    '## removed rule',
+    '1. "orphan"',
+    '',
+    '## rule two',
+    '1. "b"',
+    '',
+  ].join('\n')
+  const result = partitionExistingAnnotations(existing, [
+    { index: 1, text: 'rule one' },
+    { index: 2, text: 'rule two' },
+  ])
+  assert.equal(result.orphaned, true)
+  assert.match(result.byRule.get(1), /^## rule one\n1\. "a"/)
+  assert.doesNotMatch(result.byRule.get(1), /orphan|rule two/)
+  assert.match(result.byRule.get(2), /^## rule two\n1\. "b"/)
+  assert.equal(result.byRule.size, 2)
+
+  const empty = partitionExistingAnnotations('', [{ index: 1, text: 'rule one' }])
+  assert.equal(empty.orphaned, false)
+  assert.equal(empty.byRule.size, 0)
+})
+
+test('相同条文出现多次时，已有批注只分派给第一条匹配规则', () => {
+  const result = partitionExistingAnnotations('## same\n1. "a"\n', [
+    { index: 1, text: 'same' },
+    { index: 2, text: 'same' },
+  ])
+  assert.match(result.byRule.get(1), /"a"/)
+  assert.equal(result.byRule.has(2), false)
+  assert.equal(result.orphaned, false)
 })
 
 test('规则条文相同的批注合并成一组', () => {

@@ -397,6 +397,172 @@ test('空批注清除当前暂存时保留审查前的版本', async () => {
   }
 })
 
+test('规则分片汇总新批注，已有批注只进入对应分片', async () => {
+  const storage = await mkdtemp(join(tmpdir(), 'humanize-pipeline-shards-'))
+  const previousRequestRoot = requestRoot()
+  setStorageRootResolver(() => storage)
+  setRequestRootResolver(() => join(storage, 'requests'))
+  const project = join(storage, 'project')
+  await mkdir(join(project, '.git'), { recursive: true })
+  await writeFile(join(project, 'PROSE.md'), [
+    '# Rules',
+    '1. one',
+    '2. two',
+    '3. three',
+    '4. four',
+    '# Notes',
+    '这份说明在每个相关分片里都完整保留。',
+    '1. 说明里的编号不是规则。',
+  ].join('\n'), 'utf8')
+  const target = join(project, 'doc.md')
+  await writeFile(target, '旧一\n新二\n旧三\n新四\n', 'utf8')
+  await writeStaging(target, [
+    '## one',
+    '1. "旧一"',
+    '',
+    '## three',
+    '1. "旧三"',
+    '',
+    '## removed',
+    '1. "孤立批注"',
+    '',
+  ].join('\n'))
+
+  const prompts = []
+  const ctx = {
+    ...fakeContext(),
+    llm: {
+      stream(options) {
+        const prompt = options.messages[0].content[0].text
+        prompts.push(prompt)
+        return submitStream({
+          annotations: prompt.includes('1. one')
+            ? [
+                { rule: 1, quote: '旧一', problem: '', suggestion: '' },
+                { rule: 2, quote: '新二', problem: 'p2', suggestion: 's2' },
+              ]
+            : [
+                { rule: 3, quote: '旧三', problem: '', suggestion: '' },
+                { rule: 4, quote: '新四', problem: 'p4', suggestion: 's4' },
+              ],
+        })
+      },
+    },
+  }
+  const warnings = []
+  const pipeline = createReviewPipeline(ctx, fakeConfig({ reviewRuleShardSize: 2 }), {
+    info() {}, warn: (...args) => warnings.push(args),
+  })
+  try {
+    const outcome = await pipeline.scheduleReview(fakeAgent(), target, undefined, '旧一\n新二\n旧三\n新四\n')
+    assert.deepEqual(outcome, { kind: 'ok', annotations: 4 })
+    assert.equal(prompts.length, 2)
+    const first = prompts.find((prompt) => prompt.includes('1. one'))
+    const second = prompts.find((prompt) => prompt.includes('3. three'))
+    assert.ok(first.includes('2. two'))
+    assert.ok(!first.includes('3. three'))
+    assert.ok(first.includes('这份说明在每个相关分片里都完整保留。'))
+    assert.ok(first.includes('1. 说明里的编号不是规则。'))
+    const firstExisting = first.split('## Existing annotations\n')[1] ?? ''
+    const secondExisting = second.split('## Existing annotations\n')[1] ?? ''
+    // 全文本身包含这些引用，所以只检查 Existing annotations 小节。
+    assert.ok(firstExisting.includes('旧一') && !firstExisting.includes('旧三') && !firstExisting.includes('孤立批注'))
+    assert.ok(second.includes('4. four') && !second.includes('1. one'))
+    assert.ok(second.includes('这份说明在每个相关分片里都完整保留。'))
+    assert.ok(secondExisting.includes('旧三') && !secondExisting.includes('旧一') && !secondExisting.includes('孤立批注'))
+
+    const staged = await readFile(stagingPathFor(target), 'utf8')
+    assert.equal(staged.match(/^\d+\./gm)?.length, 4)
+    for (const quote of ['旧一', '新二', '旧三', '新四']) assert.ok(staged.includes(quote))
+    assert.ok(!staged.includes('孤立批注'))
+    assert.ok(warnings.some((args) => String(args[0]).includes('run /humanize before changing rules')))
+
+    const dumps = (await readdir(requestRoot(), { recursive: true }))
+      .filter((path) => path.endsWith('.request.md'))
+    assert.equal(dumps.length, 2)
+    assert.ok(dumps.some((path) => path.endsWith('doc.md.shard-1.request.md')))
+    assert.ok(dumps.some((path) => path.endsWith('doc.md.shard-2.request.md')))
+  } finally {
+    await pipeline.shutdown()
+    setStorageRootResolver(() => '')
+    setRequestRootResolver(() => previousRequestRoot)
+    await rm(storage, { recursive: true, force: true })
+  }
+})
+
+test('任一分片失败时保留完整旧暂存，不写入其他分片的新批注', async () => {
+  const storage = await mkdtemp(join(tmpdir(), 'humanize-pipeline-shard-failure-'))
+  setStorageRootResolver(() => storage)
+  const project = join(storage, 'project')
+  await mkdir(join(project, '.git'), { recursive: true })
+  await writeFile(join(project, 'PROSE.md'), '# Rules\n1. one\n2. two\n3. three\n4. four\n', 'utf8')
+  const target = join(project, 'doc.md')
+  await writeFile(target, '正文\n', 'utf8')
+  const previous = '## one\n1. "旧批注"\n'
+  await writeStaging(target, previous)
+
+  const ctx = {
+    ...fakeContext(),
+    llm: {
+      stream(options) {
+        const prompt = options.messages[0].content[0].text
+        if (!prompt.includes('1. one')) throw new Error('second shard failed')
+        return submitStream({
+          annotations: [{ rule: 2, quote: '不应写入', problem: 'p', suggestion: 's' }],
+        })
+      },
+    },
+  }
+  const pipeline = createReviewPipeline(ctx, fakeConfig({ reviewRuleShardSize: 2 }), { info() {}, warn() {} })
+  try {
+    const outcome = await pipeline.scheduleReview(fakeAgent(), target, undefined, '正文\n')
+    assert.equal(outcome.kind, 'failed')
+    assert.match(outcome.message, /second shard failed/)
+    assert.equal(await readFile(stagingPathFor(target), 'utf8'), previous)
+  } finally {
+    await pipeline.shutdown()
+    setStorageRootResolver(() => '')
+    await rm(storage, { recursive: true, force: true })
+  }
+})
+
+test('一片编号全部无效时不能被另一片的有效批注掩盖', async () => {
+  const storage = await mkdtemp(join(tmpdir(), 'humanize-pipeline-shard-unknown-'))
+  setStorageRootResolver(() => storage)
+  const project = join(storage, 'project')
+  await mkdir(join(project, '.git'), { recursive: true })
+  await writeFile(join(project, 'PROSE.md'), '# Rules\n1. one\n2. two\n3. three\n4. four\n', 'utf8')
+  const target = join(project, 'doc.md')
+  await writeFile(target, '正文\n', 'utf8')
+  const previous = '## three\n1. "第二片的旧批注"\n'
+  await writeStaging(target, previous)
+
+  const ctx = {
+    ...fakeContext(),
+    llm: {
+      stream(options) {
+        const prompt = options.messages[0].content[0].text
+        return submitStream({
+          annotations: prompt.includes('1. one')
+            ? [{ rule: 1, quote: '第一片的有效批注', problem: 'p', suggestion: 's' }]
+            : [{ rule: 999, quote: '未知编号', problem: 'p', suggestion: 's' }],
+        })
+      },
+    },
+  }
+  const pipeline = createReviewPipeline(ctx, fakeConfig({ reviewRuleShardSize: 2 }), { info() {}, warn() {} })
+  try {
+    const outcome = await pipeline.scheduleReview(fakeAgent(), target, undefined, '正文\n')
+    assert.equal(outcome.kind, 'failed')
+    assert.match(outcome.message, /unknown rule number/)
+    assert.equal(await readFile(stagingPathFor(target), 'utf8'), previous)
+  } finally {
+    await pipeline.shutdown()
+    setStorageRootResolver(() => '')
+    await rm(storage, { recursive: true, force: true })
+  }
+})
+
 test('二进制文件跳过审查', async () => {
   const storage = await mkdtemp(join(tmpdir(), 'humanize-pipeline-binary-'))
   setStorageRootResolver(() => storage)
@@ -467,6 +633,48 @@ test('写入审查共用 reviewConcurrency 上限', async () => {
     }
     await Promise.allSettled(reviews)
     await pipeline.shutdown()
+    await rm(storage, { recursive: true, force: true })
+  }
+})
+
+test('同一文件的规则分片也受 reviewConcurrency 上限约束', async () => {
+  const storage = await mkdtemp(join(tmpdir(), 'humanize-pipeline-shard-limit-'))
+  setStorageRootResolver(() => storage)
+  const project = join(storage, 'project')
+  await mkdir(join(project, '.git'), { recursive: true })
+  await writeFile(join(project, 'PROSE.md'), '# Rules\n1. one\n2. two\n3. three\n4. four\n', 'utf8')
+  const target = join(project, 'doc.md')
+  const content = '正文\n'
+  await writeFile(target, content, 'utf8')
+
+  const held = heldStreams()
+  const ctx = { ...fakeContext(), llm: { stream: held.stream } }
+  const pipeline = createReviewPipeline(
+    ctx,
+    fakeConfig({ reviewConcurrency: 2, reviewRuleShardSize: 1 }),
+    { info() {}, warn() {} },
+  )
+  const review = pipeline.scheduleReview(fakeAgent(), target, undefined, content)
+  try {
+    await waitFor(() => held.started() === 2)
+    assert.equal(held.active(), 2)
+    assert.equal(held.peak(), 2)
+    for (let attempt = 0; attempt < 20 && (held.started() < 4 || held.active() > 0); attempt += 1) {
+      while (held.releases.length > 0) held.releases.shift()()
+      await tick()
+    }
+    while (held.releases.length > 0) held.releases.shift()()
+    assert.deepEqual(await review, { kind: 'ok', annotations: 0 })
+    assert.equal(held.started(), 4)
+    assert.equal(held.peak(), 2)
+  } finally {
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      while (held.releases.length > 0) held.releases.shift()()
+      await tick()
+    }
+    await Promise.allSettled([review])
+    await pipeline.shutdown()
+    setStorageRootResolver(() => '')
     await rm(storage, { recursive: true, force: true })
   }
 })

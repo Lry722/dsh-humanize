@@ -62,6 +62,7 @@ Open the dsh-humanize row in the Plugins list and edit its configuration. All se
 | `mergeProvider`, `mergeModel` | Session model | Provider and model for polish subagents, picked with the same controls. They apply to every polish trigger. |
 | `mergeReasoningEffort` | Session effort | Reasoning effort for polish subagents, picked from the efforts the model publishes. |
 | `reviewConcurrency` | `3` | Maximum concurrent review calls. Minimum 1. |
+| `reviewRuleShardSize` | `3` | Maximum rules in each review shard. Minimum 1. |
 | `reviewRetries` | `1` | Retries after a failed review. Range 0 to 3. |
 | `reviewIntervalSeconds` | `60` | Minimum gap before the next write review, counted from the end of the previous review. Range 0 to 3600. Set 0 to review immediately. |
 | `loopMaxRounds` | `3` | Maximum rounds for `/humanize-loop`. Range 1 to 10. |
@@ -167,9 +168,17 @@ Reviews of the same file run serially. Writes from different sessions or subagen
 
 While a polish run is in progress, the reviews of the agent that started it are aborted or discarded. Reviews from other agents on the same target files are treated the same way.
 
+### Rule shards
+
+Review splits rules in global order, with at most three rules per shard by default. Adjust `reviewRuleShardSize` to change the limit. A shard may contain only part of one spec or rules from adjacent spec files. Rule numbers remain global across shards.
+
+Every shard receives the complete file under review and the same review scope. When a shard includes any rule from a spec source, it also receives all non-rule content from that source, preserving definitions and supplementary context. Numbered rules not selected for the shard are omitted.
+
+Existing annotations are assigned to shards by rule text, so shards do not each retain another copy. Staging is replaced only after every shard succeeds. If any shard fails, results from other shards are not written and the previous staging remains intact.
+
 ### Concurrency and retries
 
-All review calls share `reviewConcurrency`. A batch is also capped by the number of files it has to review. High concurrency can hit the model provider's rate limit.
+All shard calls share `reviewConcurrency`, including shards reviewing the same file. A batch is also capped by the number of files it has to review. High concurrency can hit the model provider's rate limit.
 
 Rate limits and review timeouts are recorded as failed and retried. Every retry waits longer than the previous one. After the retry budget is spent, the review is marked failed. Write review and batch review share this retry behavior.
 
@@ -177,7 +186,7 @@ When a batch review ends, it lists the files that still failed and why, up to th
 
 ### Review records
 
-Review request records are stored separately in the system temp directory. The exact path appears at the bottom of the settings page. When a review response cannot be parsed, the raw response is written next to the review request record for comparison.
+Review request records are stored separately in the system temp directory. The exact path appears at the bottom of the settings page. Multi-shard reviews save requests and responses by shard number so parallel calls do not overwrite one another. When a review response cannot be parsed, the raw response is written next to the review request record for comparison.
 
 ## Final turn outputs
 
@@ -220,6 +229,8 @@ Older turns have no entry, preventing them from opening newer content that repla
 By default, annotations are staged under `~/.dsh/humanize/annotations/`. The path mirrors the reviewed file. Annotations can be edited directly. The storage location can be changed on the settings page.
 
 Staging groups them by complete rule text, and rule headings contain only that text. Global rule numbers validate the current review output and are not stored in staging. Staging content omits the file name. The next review matches rules by text.
+
+If staged changes still need to be preserved, run `/humanize` to merge them before editing or removing their rules. The next successful review drops old annotations that no longer match a current rule and logs a warning. A failed review leaves them intact.
 
 ### History
 

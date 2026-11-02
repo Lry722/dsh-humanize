@@ -27,6 +27,7 @@ window.__ModuleLoader__.load({
     // 数值字段按表单顺序排列。标签和说明从文案表取，默认值和边界由宿主字段表提供。
     const NUMBER_FIELDS = [
       { key: 'reviewConcurrency', labelKey: 'settings.reviewConcurrency', hintKey: 'settings.reviewConcurrencyHint' },
+      { key: 'reviewRuleShardSize', labelKey: 'settings.reviewRuleShardSize', hintKey: 'settings.reviewRuleShardSizeHint' },
       { key: 'reviewRetries', labelKey: 'settings.reviewRetries', hintKey: 'settings.reviewRetriesHint' },
       { key: 'reviewIntervalSeconds', labelKey: 'settings.reviewIntervalSeconds', hintKey: 'settings.reviewIntervalSecondsHint' },
       { key: 'loopMaxRounds', labelKey: 'settings.loopMaxRounds', hintKey: 'settings.loopMaxRoundsHint' },

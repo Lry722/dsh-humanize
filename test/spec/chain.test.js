@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { buildSpecRules, loadSpecCandidates, renderSpecChain, resolveSpecChain } from '../../lib/spec/chain.js'
+import { buildSpecRuleShards, buildSpecRules, loadSpecCandidates, renderSpecChain, resolveSpecChain } from '../../lib/spec/chain.js'
 
 test('规范链渲染把编号重排成全局连续，缩进与 CRLF 都保留', () => {
   const chain = [
@@ -18,6 +18,52 @@ test('规范链渲染把编号重排成全局连续，缩进与 CRLF 都保留',
   assert.deepEqual(rules.map((rule) => rule.text), ['one', 'nested', 'two', 'three'])
   assert.equal(rules[3].source, '/proj/docs/PROSE.md')
   assert.equal(renderSpecChain(chain), text)
+})
+
+test('规则分片保留全局编号，并完整保留入选来源的非规则内容', () => {
+  const chain = [
+    {
+      path: '/proj/a.md',
+      content: [
+        '# Rules',
+        '1. a1',
+        '2. a2',
+        '3. a3',
+        '4. a4',
+        '```md',
+        '1. fenced sample',
+        '```',
+        '# Notes',
+        'A 的完整说明。',
+        '1. 说明里的编号不重排。',
+      ].join('\n'),
+    },
+    {
+      path: '/proj/b.md',
+      content: '# Rules\n1. b1\n2. b2\n3. b3\n# Explanation\nB 的完整说明。',
+    },
+  ]
+  const shards = buildSpecRuleShards(chain, 3)
+  assert.deepEqual(shards.map((shard) => shard.rules.map((rule) => rule.index)), [[1, 2, 3], [4, 5, 6], [7]])
+
+  assert.match(shards[0].text, /1\. a1[\s\S]*3\. a3/)
+  assert.doesNotMatch(shards[0].text, /4\. a4/)
+  assert.match(shards[0].text, /1\. fenced sample/)
+  assert.match(shards[0].text, /# Notes\nA 的完整说明。\n1\. 说明里的编号不重排。/)
+  assert.doesNotMatch(shards[0].text, /Spec source: \/proj\/b\.md/)
+
+  // 第二片把 A 的最后一条和 B 的前两条拼在一起，两份说明都完整保留。
+  assert.match(shards[1].text, /4\. a4/)
+  assert.match(shards[1].text, /5\. b1[\s\S]*6\. b2/)
+  assert.doesNotMatch(shards[1].text, /1\. a1|7\. b3/)
+  assert.match(shards[1].text, /A 的完整说明。[\s\S]*B 的完整说明。/)
+
+  assert.match(shards[2].text, /7\. b3/)
+  assert.doesNotMatch(shards[2].text, /5\. b1|6\. b2/)
+  assert.match(shards[2].text, /B 的完整说明。/)
+
+  // 只有一片时，文本与原来的完整规范渲染完全一致。
+  assert.equal(buildSpecRuleShards(chain, 99)[0].text, buildSpecRules(chain).text)
 })
 
 test('代码围栏里的编号保持原样，规则列表只收正文编号', () => {
