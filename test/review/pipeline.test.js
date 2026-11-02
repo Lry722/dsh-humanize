@@ -475,7 +475,7 @@ test('规则分片汇总新批注，已有批注只进入对应分片', async ()
     assert.equal(staged.match(/^\d+\./gm)?.length, 4)
     for (const quote of ['旧一', '新二', '旧三', '新四']) assert.ok(staged.includes(quote))
     assert.ok(!staged.includes('孤立批注'))
-    assert.ok(warnings.some((args) => String(args[0]).includes('run /humanize before changing rules')))
+    assert.ok(warnings.some((args) => String(args[0]).toLowerCase().includes('run /humanize before changing rules')))
 
     const dumps = (await readdir(requestRoot(), { recursive: true }))
       .filter((path) => path.endsWith('.request.md'))

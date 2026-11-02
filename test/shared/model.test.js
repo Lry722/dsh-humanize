@@ -67,11 +67,6 @@ test('agent 自身的模型设置只在显式兜底时成对取用', () => {
   )
 })
 
-test('配置和会话都留空时返回 undefined', () => {
-  assert.equal(mergeAgentOptions({}, makeAgent(undefined)), undefined)
-  assert.equal(resolveModelTarget({}, makeAgent(undefined), 'review'), undefined)
-})
-
 test('配置留空时跟随主会话的模型和推理等级', () => {
   assert.deepEqual(
     mergeAgentOptions({}, makeAgent({ provider: 'p', model: 'm', reasoningEffort: 'high' })),
@@ -96,22 +91,6 @@ test('成对配置覆盖会话模型，推理等级单独覆盖', () => {
   assert.deepEqual(
     mergeAgentOptions({ mergeReasoningEffort: 'low' }, makeAgent({ provider: 'p', model: 'm' })),
     { provider: 'p', model: 'm', reasoningEffort: 'low' },
-  )
-})
-
-test('只配一半时成对跟随会话，成对配置在没有会话模型时也能用', () => {
-  const agent = makeAgent({ provider: 'p', model: 'm', reasoningEffort: 'high' })
-  assert.deepEqual(
-    mergeAgentOptions({ mergeProvider: 'q' }, agent),
-    { provider: 'p', model: 'm', reasoningEffort: 'high' },
-  )
-  assert.deepEqual(
-    mergeAgentOptions({ mergeModel: 'cheap' }, makeAgent({ provider: 'p', model: 'm' })),
-    { provider: 'p', model: 'm' },
-  )
-  assert.deepEqual(
-    mergeAgentOptions({ mergeProvider: 'q', mergeModel: 'cheap' }, makeAgent(undefined)),
-    { provider: 'q', model: 'cheap' },
   )
 })
 

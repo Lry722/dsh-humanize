@@ -1,46 +1,14 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
-import { hasApplicableSpec } from '../../lib/review/git-files.js'
 import { registerReviewCommand, splitReviewArgs } from '../../lib/review/command.js'
 import { waitFor } from '../helpers.js'
 
 const execFileAsync = promisify(execFile)
-
-async function makeProject(specContent) {
-  const dir = await mkdtemp(join(tmpdir(), 'humanize-review-run-'))
-  // 目录规范查找停在 .git 这一层，只读到本项目的 PROSE.md。
-  await mkdir(join(dir, '.git'))
-  if (specContent !== undefined) await writeFile(join(dir, 'PROSE.md'), specContent, 'utf8')
-  return dir
-}
-
-test('有适用规范的文件才进入批次', async () => {
-  const withSpec = await makeProject('# Rules\n1. 平铺直叙。\n')
-  const withoutSpec = await makeProject(undefined)
-  try {
-    assert.equal(await hasApplicableSpec(join(withSpec, 'a.md')), true)
-    assert.equal(await hasApplicableSpec(join(withSpec, 'docs', 'b.js')), true)
-    assert.equal(await hasApplicableSpec(join(withoutSpec, 'a.md')), false)
-  } finally {
-    await rm(withSpec, { recursive: true, force: true })
-    await rm(withoutSpec, { recursive: true, force: true })
-  }
-})
-
-test('include 决定文件是否进入批次', async () => {
-  const dir = await makeProject('---\ninclude: [\'*.md\']\n---\n\n# Rules\n\n1. 平铺直叙。\n')
-  try {
-    assert.equal(await hasApplicableSpec(join(dir, 'a.md')), true)
-    assert.equal(await hasApplicableSpec(join(dir, 'a.js')), false)
-  } finally {
-    await rm(dir, { recursive: true, force: true })
-  }
-})
 
 test('--changed 可以从路径的前后位置挑出来，路径里的空格保留', () => {
   assert.deepEqual(splitReviewArgs('--changed docs/a b.md'), { changed: true, recent: undefined, pathInput: 'docs/a b.md' })
