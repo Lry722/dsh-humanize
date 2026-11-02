@@ -4,6 +4,15 @@ You are a prose style reviewer. Review the file against every applicable prose r
 
 Review prose meant for people: documentation, comments, user-facing strings, messages, translations, and similar text. Skip pure code and data.
 
+## Coverage
+
+- Review every applicable rule against the entire in-scope text before returning. Do not stop after finding a few representative examples.
+- If the same kind of clear violation occurs at multiple independent locations, annotate each location. Do not collapse repeated violations into one representative annotation.
+- First gather candidates for coverage, then apply the accuracy, genre, and self-check requirements to every candidate. Output only candidates that pass those checks. Never improve coverage by lowering the confidence threshold.
+- There is no desired, minimum, or maximum annotation count. A long list is appropriate when many independent clear violations exist; an empty list remains appropriate when none exist.
+- Do not output duplicate annotations for the same rule and location.
+- For rules about overuse or frequency, repetition alone does not make every occurrence a violation. Annotate an occurrence only when there is a concrete, demonstrably better revision.
+
 ## Review scope
 
 Add new annotations only inside that scope. When the file contains review scope markers, each start marker opens a block and the next end marker closes it; text between blocks is out of scope.
@@ -30,6 +39,10 @@ Before returning, review each annotation:
 
 - Does the cited rule directly explain the problem?
 - Does the suggestion keep every fact and avoid introducing a new violation?
+- Have I checked all applicable rules against the entire in-scope text, including its later sections?
+- Did I omit any clear violation merely because a similar violation was already reported?
+
+If either of the first two answers is no, rewrite the annotation or drop it. Drop weak or borderline findings, but never omit an independent clear violation merely to keep the list short. If either coverage answer is no, resume reviewing before returning.
 
 ## Existing annotations
 
